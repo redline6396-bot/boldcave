@@ -1,0 +1,232 @@
+/* Professional Minimal Notification Toast Stack - Modern SaaS Style */
+
+.notification-stack {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.notification-stack .notification {
+  pointer-events: auto;
+}
+
+.notification {
+  width: 360px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  animation-fill-mode: forwards;
+}
+
+/* Entry Animation */
+.notification-enter {
+  animation: slideInRight 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Exit Animation */
+.notification-exit {
+  animation: slideOutRight 0.25s cubic-bezier(0.23, 1, 0.320, 1);
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(400px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(400px);
+  }
+}
+
+.notification-container {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  position: relative;
+}
+
+.notification-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-icon {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.notification-icon-success {
+  color: #10B981;
+}
+
+.notification-icon-error {
+  color: #EF4444;
+}
+
+.notification-icon-warning {
+  color: #F59E0B;
+}
+
+.notification-icon-info {
+  color: #6366F1;
+}
+
+.notification-text-wrapper {
+  flex: 1;
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.notification-message {
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #374151;
+  word-break: break-word;
+}
+
+.notification-close-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #D1D5DB;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.15s ease-out;
+  margin: -2px -4px 0 0;
+}
+
+.notification-close-btn:hover {
+  background-color: #F3F4F6;
+  color: #9CA3AF;
+}
+
+.notification-close-btn:active {
+  transform: scale(0.95);
+}
+
+/* Progress bar */
+.notification-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 0 0 8px 8px;
+  animation: progressAnimation 2.5s ease-out forwards;
+  display: none;
+  opacity: 0.6;
+}
+
+@keyframes progressAnimation {
+  from {
+    width: 100%;
+    opacity: 0.6;
+  }
+  to {
+    width: 0;
+    opacity: 0;
+  }
+}
+
+/* TYPE-SPECIFIC STYLING */
+
+/* Success */
+.notification[data-type="success"] {
+  border-color: #D1FAE5;
+  background: #FAFBF9;
+}
+
+.notification[data-type="success"] .notification-message {
+  color: #065F46;
+}
+
+.notification[data-type="success"] .notification-progress {
+  background: #10B981;
+}
+
+/* Error */
+.notification[data-type="error"] {
+  border-color: #FECACA;
+  background: #FAFBF9;
+}
+
+.notification[data-type="error"] .notification-message {
+  color: #7F1D1D;
+}
+
+.notification[data-type="error"] .notification-progress {
+  background: #EF4444;
+}
+
+/* Warning */
+.notification[data-type="warning"] {
+  border-color: #FDE68A;
+  background: #FAFBF9;
+}
+
+.notification[data-type="warning"] .notification-message {
+  color: #78350F;
+}
+
+.notification[data-type="warning"] .notification-progress {
+  background: #F59E0B;
+}
+
+/* Info */
+.notification[data-type="info"] {
+  border-color: #BFDBFE;
+  background: #FAFBF9;
+}
+
+.notification[data-type="info"] .notification-message {
+  color: #1E40AF;
+}
+
+.notification[data-type="info"] .notification-progress {
+  background: #6366F1;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .notification-stack {
+    bottom: 16px;
+    right: 16px;
+    gap: 12px;
+  }
+
+  .notification {
+    width: calc(100vw - 32px);
+    max-width: 320px;
+  }
+}
