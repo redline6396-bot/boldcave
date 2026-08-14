@@ -255,7 +255,7 @@ export default function MainNavbar() {
       <aside
         className={[
           "fixed left-0 top-0 z-[102] h-dvh w-screen max-w-none bg-white text-neutral-950 transition-transform duration-300 ease-out sm:top-[93px] sm:h-[calc(100dvh-93px)] sm:w-[410px] sm:max-w-[410px]",
-          isDrawerOpen ? "translate-x-0" : "-translate-x-full",
+          isDrawerOpen ? "translate-x-0" : "-translate-x-[calc(100%+2px)]",
         ].join(" ")}
         aria-hidden={!isDrawerOpen}
       >

@@ -44,39 +44,23 @@ export default function CollectionPage() {
   const activeCategory =
     categoryLinks.find((category) => category.value === selectedCategory) ||
     categoryLinks[0];
-  const productLabel =
-    visibleProducts.length === 1 ? "1 fragrance" : `${visibleProducts.length} fragrances`;
 
   return (
-    <main className="min-h-screen bg-[#fdfcfb] text-neutral-950">
-      <section className="border-b border-[#e8e2d9] bg-white px-4 pb-7 pt-8 sm:px-6 sm:pb-9 sm:pt-10 lg:px-8 lg:pb-10 lg:pt-12">
+    <main className="min-h-screen bg-[#ffffff] text-neutral-950">
+      <section className="bg-[#ffffff] px-4 pb-3 pt-7 sm:px-6 sm:pb-7 sm:pt-11 lg:px-8 lg:pb-8 lg:pt-12">
         <div className="mx-auto max-w-[1240px]">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="mb-4 flex items-center justify-center gap-2 text-[10px] font-medium uppercase leading-none tracking-[0.18em] text-neutral-500 lg:justify-start">
-                <Link href="/" className="transition-colors hover:text-neutral-950">
-                  Home
-                </Link>
-                <span>/</span>
-                <span>Collection</span>
-              </div>
-
-              <h1 className="text-center text-[28px] font-semibold uppercase leading-[0.98] tracking-[0.06em] sm:text-[40px] lg:text-left lg:text-[52px] lg:tracking-[0.055em]">
-                Shop the Collection
-              </h1>
-              <p className="mx-auto mt-4 max-w-[560px] text-center text-[14px] leading-6 text-neutral-500 sm:text-[16px] lg:mx-0 lg:text-left">
-                Five fragrances. Five distinct personalities.
-              </p>
-            </div>
-
-            <p className="text-center text-[11px] font-medium uppercase leading-none tracking-[0.16em] text-neutral-500 lg:pb-1 lg:text-right">
-              {productLabel}
+          <div className="text-center">
+            <h1 className="text-[28px] font-semibold uppercase leading-[1.05] tracking-[0.08em] sm:text-[40px] lg:text-[48px] lg:tracking-[0.075em]">
+              Shop the Collection
+            </h1>
+            <p className="mx-auto mt-3 max-w-[560px] text-[14px] leading-6 text-neutral-500 sm:mt-4 sm:text-[16px]">
+              Five fragrances. Five distinct personalities.
             </p>
           </div>
 
           <nav
             aria-label="Collection categories"
-            className="mt-7 flex items-center gap-2 overflow-x-auto border-y border-[#e8e2d9] py-2.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:mt-9 sm:justify-center sm:gap-3 [&::-webkit-scrollbar]:hidden"
+            className="mt-5 flex items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] sm:mt-8 sm:justify-center sm:gap-3 [&::-webkit-scrollbar]:hidden"
           >
             {categoryLinks.map((category) => {
               const isActive = activeCategory.value === category.value;
@@ -89,8 +73,8 @@ export default function CollectionPage() {
                   className={[
                     "flex h-9 shrink-0 items-center justify-center px-4 text-[11px] font-semibold uppercase leading-none tracking-[0.11em] transition-colors duration-200 sm:h-10 sm:px-5 sm:text-[12px]",
                     isActive
-                      ? "bg-[#f3f1ee] text-neutral-950"
-                      : "text-neutral-500 hover:bg-[#f7f5f2] hover:text-neutral-950",
+                      ? "bg-[#ffffff] text-neutral-950 underline decoration-neutral-950 decoration-1 underline-offset-[6px]"
+                      : "bg-[#ffffff] text-neutral-500 hover:text-neutral-950",
                   ].join(" ")}
                 >
                   {category.label}
@@ -101,7 +85,7 @@ export default function CollectionPage() {
         </div>
       </section>
 
-      <section className="bg-[#fdfcfb] px-2.5 py-8 sm:px-6 sm:py-11 lg:px-8 lg:py-14">
+      <section className="bg-[#ffffff] px-2.5 pb-8 pt-5 sm:px-6 sm:py-11 lg:px-8 lg:py-14">
         <div className="mx-auto max-w-[1240px]">
           {visibleProducts.length > 0 ? (
             <>

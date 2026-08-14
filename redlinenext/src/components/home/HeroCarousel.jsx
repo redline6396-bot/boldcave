@@ -190,15 +190,15 @@ export default function HeroCarousel() {
             aria-hidden={index !== activeIndex}
             tabIndex={index === activeIndex ? 0 : -1}
             onClick={handleSlideClick}
-            className="block w-full shrink-0 snap-start"
+            className="block w-full min-w-full shrink-0 snap-start overflow-hidden"
           >
-            <picture>
+            <picture className="block w-full">
               <source media="(max-width: 767px)" srcSet={slide.mobileImage} />
               <source media="(min-width: 768px)" srcSet={slide.desktopImage} />
               <img
                 src={slide.desktopImage}
                 alt=""
-                className="block h-auto w-full"
+                className="block h-auto w-full max-w-none"
                 loading={index === 0 ? "eager" : "lazy"}
                 fetchPriority={index === 0 ? "high" : "auto"}
                 decoding={index === 0 ? "sync" : "async"}
