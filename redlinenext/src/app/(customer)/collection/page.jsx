@@ -47,7 +47,7 @@ export default function CollectionPage() {
 
   return (
     <main className="min-h-screen bg-[#ffffff] text-neutral-950">
-      <section className="bg-[#ffffff] px-4 pb-3 pt-7 sm:px-6 sm:pb-7 sm:pt-11 lg:px-8 lg:pb-8 lg:pt-12">
+      <section className="bg-[#ffffff] px-4 pb-3 pt-7 sm:px-6 sm:pb-6 sm:pt-11 lg:px-8 lg:pb-5 lg:pt-12">
         <div className="mx-auto max-w-[1240px]">
           <div className="text-center">
             <h1 className="text-[28px] font-semibold uppercase leading-[1.05] tracking-[0.08em] sm:text-[40px] lg:text-[48px] lg:tracking-[0.075em]">
@@ -60,7 +60,7 @@ export default function CollectionPage() {
 
           <nav
             aria-label="Collection categories"
-            className="mt-5 flex items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] sm:mt-8 sm:justify-center sm:gap-3 [&::-webkit-scrollbar]:hidden"
+            className="mx-auto mt-5 flex max-w-[620px] flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:mt-8 sm:gap-x-8 lg:gap-x-10"
           >
             {categoryLinks.map((category) => {
               const isActive = activeCategory.value === category.value;
@@ -71,7 +71,7 @@ export default function CollectionPage() {
                   href={category.href}
                   aria-current={isActive ? "page" : undefined}
                   className={[
-                    "flex h-9 shrink-0 items-center justify-center px-4 text-[11px] font-semibold uppercase leading-none tracking-[0.11em] transition-colors duration-200 sm:h-10 sm:px-5 sm:text-[12px]",
+                    "flex h-8 shrink-0 items-center justify-center px-1 text-[11px] font-semibold uppercase leading-none tracking-[0.11em] transition-colors duration-200 sm:h-9 sm:text-[12px]",
                     isActive
                       ? "bg-[#ffffff] text-neutral-950 underline decoration-neutral-950 decoration-1 underline-offset-[6px]"
                       : "bg-[#ffffff] text-neutral-500 hover:text-neutral-950",
@@ -85,7 +85,7 @@ export default function CollectionPage() {
         </div>
       </section>
 
-      <section className="bg-[#ffffff] px-2.5 pb-8 pt-5 sm:px-6 sm:py-11 lg:px-8 lg:py-14">
+      <section className="bg-[#ffffff] px-2.5 pb-8 pt-4 sm:px-6 sm:pb-11 sm:pt-7 lg:px-8 lg:pb-14 lg:pt-8">
         <div className="mx-auto max-w-[1240px]">
           {visibleProducts.length > 0 ? (
             <>
