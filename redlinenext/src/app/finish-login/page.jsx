@@ -14,9 +14,7 @@ const FinishLoginPage = () => {
 
   useEffect(() => {
     const completeLogin = async () => {
-      const url = window.location.href;
-      const params = new URLSearchParams(window.location.search);
-      const redirectParam = params.get('redirect');
+      const redirectParam = searchParams.get('redirect');
       if (redirectParam) {
         localStorage.setItem('redirectAfterLogin', redirectParam);
       }

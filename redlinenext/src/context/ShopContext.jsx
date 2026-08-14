@@ -8,6 +8,8 @@ import { auth } from '../Config';
 
 export const ShopContext = createContext();
 
+const cloneCartItems = (items) => JSON.parse(JSON.stringify(items || {}));
+
 const ShopContextProvider = (props) => {
     const router = useRouter();
     const currency = '₹';
@@ -45,7 +47,7 @@ const ShopContextProvider = (props) => {
     // Add To Cart - returns a promise that resolves after local update and server sync (if logged in)
     const addToCart = async (itemId, quantity = 1, variantWeight = null) => {
         try {
-            let cartData = structuredClone(cartItems);
+            let cartData = cloneCartItems(cartItems);
             
             // Normalize variantWeight by trimming whitespace
             const normalizedWeight = variantWeight ? String(variantWeight).trim() : null;
@@ -94,7 +96,7 @@ const ShopContextProvider = (props) => {
 
     // Update Quantity
     const updateQuantity = async (itemId, quantity, variantWeight = null) => {
-        let cartData = structuredClone(cartItems);
+        let cartData = cloneCartItems(cartItems);
         
         // Normalize variantWeight by trimming whitespace
         const normalizedWeight = variantWeight ? String(variantWeight).trim() : null;
@@ -142,7 +144,10 @@ const ShopContextProvider = (props) => {
                     try {
                         const saved = localStorage.getItem('cartItems');
                         return saved ? JSON.parse(saved) : {};
-                    } catch (e) { return {}; }
+                    } catch (error) {
+                        console.log('Failed to parse local cart:', error);
+                        return {};
+                    }
                 })();
                 // Only keep items that exist in the current products list
                 const validProductIds = new Set(products.map(p => String(p._id)));
@@ -269,7 +274,11 @@ const ShopContextProvider = (props) => {
             }
 
             if (hasChanges) {
-                try { localStorage.setItem('cartItems', JSON.stringify(validatedCart)); } catch (e) {}
+                try {
+                    localStorage.setItem('cartItems', JSON.stringify(validatedCart));
+                } catch (error) {
+                    console.log('Failed to persist validated cart:', error);
+                }
                 return { ...validatedCart };
             }
             return prevCart;
@@ -286,7 +295,11 @@ const ShopContextProvider = (props) => {
             // If the user was logged in, clear their local cart on logout
             if (wasLoggedIn) {
                 setCartItems({});
-                try { localStorage.removeItem('cartItems'); } catch (e) {}
+                try {
+                    localStorage.removeItem('cartItems');
+                } catch (error) {
+                    console.log('Failed to remove cart from storage:', error);
+                }
             }
             // Restore previous behavior: redirect to last visited path (or homepage), not forced /login
             const redirectPath = localStorage.getItem('lastVisitedPath');
@@ -309,7 +322,9 @@ const ShopContextProvider = (props) => {
                 } else {
                     totalCount += Number(val) || 0;
                 }
-            } catch (error) {}
+            } catch (error) {
+                console.log('Failed to count cart item:', error);
+            }
         }
         return totalCount;
     };
@@ -333,7 +348,9 @@ const ShopContextProvider = (props) => {
                         }
                     });
                 }
-            } catch (error) {}
+            } catch (error) {
+                console.log('Failed to calculate cart item amount:', error);
+            }
         }
         return totalAmount;
     };

@@ -114,7 +114,7 @@ const ReviewSection = ({ productId }) => {
 
   // Handle review deletion via API
   const handleDeleteReview = async (reviewId) => {
-    if (!confirm('Are you sure you want to delete this review?')) {
+    if (!window.confirm('Are you sure you want to delete this review?')) {
       return;
     }
 
