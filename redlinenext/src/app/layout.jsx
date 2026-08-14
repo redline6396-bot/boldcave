@@ -1,5 +1,6 @@
 import React from 'react';
 import ShopContextProvider from '@/context/ShopContext';
+import CartProvider from '@/context/CartContext';
 import NotificationProvider from '@/context/NotificationContext';
 import DeliveryContextProvider from '@/context/DeliveryContext';
 import RootLayoutClient from '@/components/RootLayoutClient';
@@ -22,9 +23,11 @@ export default function RootLayout({ children }) {
       <body>
         <NotificationProvider>
           <ShopContextProvider>
-            <DeliveryContextProvider>
-              <RootLayoutClient>{children}</RootLayoutClient>
-            </DeliveryContextProvider>
+            <CartProvider>
+              <DeliveryContextProvider>
+                <RootLayoutClient>{children}</RootLayoutClient>
+              </DeliveryContextProvider>
+            </CartProvider>
           </ShopContextProvider>
         </NotificationProvider>
       </body>

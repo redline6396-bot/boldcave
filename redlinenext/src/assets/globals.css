@@ -2,9 +2,8 @@
 
 @import "tailwindcss";
 
-/* Override Tailwind's default fonts with Outfit */
-html, body, * {
-  font-family: Outfit, sans-serif !important;
+body {
+  font-family: Outfit, sans-serif;
 }
 
 a.active hr{

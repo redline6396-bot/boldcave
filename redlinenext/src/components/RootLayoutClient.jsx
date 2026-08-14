@@ -2,15 +2,19 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import AnnouncementBar from '@/components/layout/AnnouncementBar';
+import MainNavbar from '@/components/layout/MainNavbar';
+import Footer from '@/components/layout/Footer';
 import Notification from '@/components/Notification';
 
 export default function RootLayoutClient({ children }) {
   const pathname = usePathname();
   const isBackNavigation = useRef(false);
   const isLoginPage = ['/login', '/auth/login', '/newlogin', '/finish-login'].includes(pathname);
-  const isHomePage = pathname === '/';
+  const isNavbarPreviewPage = pathname === '/navbar-preview';
+  const isForHimPreviewPage = pathname === '/for-him-preview';
+  const isFooterPreviewPage = pathname === '/footer-preview';
+  const shouldShowSiteChrome = !isLoginPage && !isNavbarPreviewPage && !isForHimPreviewPage && !isFooterPreviewPage;
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
@@ -77,9 +81,7 @@ export default function RootLayoutClient({ children }) {
   }
 
   const paddingTop = isLoginPage ? '0px' : isSmallScreen ? '0px' : '0px';
-  const backgroundStyle = isHomePage && !isLoginPage
-    ? 'linear-gradient(#000 0, #000 80px, transparent 80px)'
-    : 'transparent';
+  const backgroundStyle = 'transparent';
 
   return (
     <div
@@ -90,9 +92,14 @@ export default function RootLayoutClient({ children }) {
       }}
     >
       <Notification />
-      {!isLoginPage && <Navbar />}
+      {shouldShowSiteChrome && (
+        <>
+          <AnnouncementBar />
+          <MainNavbar />
+        </>
+      )}
       <main>{children}</main>
-      {!isLoginPage && <Footer />}
+      {shouldShowSiteChrome && <Footer />}
     </div>
   );
 }
