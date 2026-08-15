@@ -1,12 +1,14 @@
 {
-  "name": "greenvalleynext",
+  "name": "perfume-store-project",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
@@ -23,6 +25,8 @@
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4"
+    "@opennextjs/cloudflare": "1.18.0",
+    "tailwindcss": "^4",
+    "wrangler": "^4.65.0"
   }
 }
