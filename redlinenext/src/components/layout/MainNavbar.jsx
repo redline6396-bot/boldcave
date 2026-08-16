@@ -248,13 +248,13 @@ export default function MainNavbar() {
           type="button"
           aria-label="Close menu overlay"
           onClick={closeDrawer}
-          className="fixed bottom-0 left-0 right-0 top-[93px] z-[101] hidden bg-black/50 sm:block"
+          className="fixed bottom-0 left-0 right-0 top-[65px] z-[101] hidden bg-black/50 sm:block"
         />
       )}
 
       <aside
         className={[
-          "fixed left-0 top-0 z-[102] h-dvh w-screen max-w-none bg-white text-neutral-950 transition-transform duration-300 ease-out sm:top-[93px] sm:h-[calc(100dvh-93px)] sm:w-[410px] sm:max-w-[410px]",
+          "fixed left-0 top-0 z-[102] h-dvh w-screen max-w-none bg-white text-neutral-950 transition-transform duration-300 ease-out sm:top-[65px] sm:h-[calc(100dvh-65px)] sm:w-[410px] sm:max-w-[410px]",
           isDrawerOpen ? "translate-x-0" : "-translate-x-[calc(100%+2px)]",
         ].join(" ")}
         aria-hidden={!isDrawerOpen}
