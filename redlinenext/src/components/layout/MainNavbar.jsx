@@ -124,7 +124,7 @@ function DrawerLinks({ activePathname, onNavigate }) {
 
 function DrawerUtility({ activePathname, onNavigate }) {
   return (
-    <div className="mt-16 sm:mt-auto sm:pt-8">
+    <div className="mt-8 sm:mt-10 sm:pt-0">
       <div className="w-full border-t border-neutral-200/70">
         {utilityItems.map((item) => (
           (() => {
@@ -154,8 +154,8 @@ function DrawerUtility({ activePathname, onNavigate }) {
         ))}
       </div>
 
-      <div className="mt-10 pb-2 sm:mt-7">
-        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-neutral-700 sm:text-[10px]">
+      <div className="mt-10 pb-2 sm:mt-15">
+        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-neutral-700 sm:text-[12px]">
           FOLLOW US
         </p>
 
