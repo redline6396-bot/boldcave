@@ -56,7 +56,7 @@ export default function Footer() {
         <div className="pb-9 text-center md:pb-14 lg:pb-16">
           <Link
             href="/"
-            className="inline-block text-[34px] font-semibold uppercase leading-none tracking-[0.2em] text-black md:text-[64px] lg:text-[88px]"
+            className="inline-block text-[28px] font-semibold uppercase leading-none tracking-[0.2em] text-black md:text-[56px] lg:text-[78px]"
             style={{ textShadow: brandTextShadow }}
           >
             {brandName}
@@ -69,7 +69,7 @@ export default function Footer() {
           ))}
 
           <div className="border-b border-[#ececec] py-6">
-            <h3 className="text-center text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
+            <h3 className="text-center text-[9px] font-semibold uppercase tracking-[0.2em] text-black">
               FOLLOW US
             </h3>
             <div className="mx-auto mt-5 flex max-w-[270px] items-center justify-between">
@@ -88,7 +88,7 @@ export default function Footer() {
 
         <div className="hidden grid-cols-[0.9fr_0.9fr_0.9fr_1.12fr] gap-x-12 pb-14 md:grid lg:gap-x-20">
           <div>
-            <h3 className="inline-block border-b border-black pb-1 text-[17px] font-semibold uppercase leading-none tracking-[0.12em] text-black">
+            <h3 className="inline-block border-b border-black pb-1 text-[14px] font-semibold uppercase leading-none tracking-[0.12em] text-black">
               FOLLOW US
             </h3>
             <div className="mt-7 flex items-center gap-8">
@@ -110,7 +110,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-[#e8e8e8] py-5 text-center md:py-6">
-          <p className="text-[12px] leading-5 font-normal text-[#777]">
+          <p className="text-[9px] leading-5 font-normal text-[#777]">
             &copy; {year} {brandName}. All rights reserved.
           </p>
         </div>
@@ -122,7 +122,7 @@ export default function Footer() {
 function FooterColumn({ title, links }) {
   return (
     <nav aria-label={title}>
-      <h3 className="text-[12px] font-semibold uppercase tracking-[0.2em] text-black md:inline-block md:border-b md:border-black md:pb-1 md:text-[17px] md:leading-none md:tracking-[0.12em]">
+      <h3 className="text-[9px] font-semibold uppercase tracking-[0.2em] text-black md:inline-block md:border-b md:border-black md:pb-1 md:text-[14px] md:leading-none md:tracking-[0.12em]">
         {title}
       </h3>
       <ul className="mt-4 space-y-3 md:mt-4 md:space-y-1.5">
@@ -139,9 +139,9 @@ function FooterColumn({ title, links }) {
 function FooterAccordion({ title, links }) {
   return (
     <details className="group border-b border-[#ececec] py-5">
-      <summary className="flex cursor-pointer list-none items-center justify-between text-[14px] font-semibold uppercase tracking-[0.18em] text-black [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.18em] text-black [&::-webkit-details-marker]:hidden">
         <span>{title}</span>
-        <span className="text-[22px] font-light leading-none transition-transform duration-200 group-open:rotate-45">
+        <span className="text-[19px] font-light leading-none transition-transform duration-200 group-open:rotate-45">
           +
         </span>
       </summary>
@@ -158,7 +158,7 @@ function FooterAccordion({ title, links }) {
 
 function FooterLink({ href, children }) {
   const className =
-    "inline-block max-w-full break-words text-[14px] leading-6 text-[#555] transition-colors duration-200 hover:text-black hover:underline hover:underline-offset-4 md:text-[20px] md:font-medium md:leading-[1.08]";
+    "inline-block max-w-full break-words text-[11px] leading-6 text-[#555] transition-colors duration-200 hover:text-black hover:underline hover:underline-offset-4 md:text-[17px] md:font-medium md:leading-[1.08]";
 
   if (!href) {
     return <span className={className}>{children}</span>;

@@ -92,7 +92,7 @@ function CartLink({ count, isLight = false, onClick }) {
 
 function DrawerLinks({ activePathname, onNavigate }) {
   return (
-    <nav className="flex flex-col pt-7 sm:pt-8">
+    <nav className="flex flex-col pt-7 sm:pt-6">
       {mainMenuItems.map((item, index) => (
         (() => {
           const itemPathname = item.href.split("?")[0];
@@ -101,20 +101,20 @@ function DrawerLinks({ activePathname, onNavigate }) {
             (itemPathname !== "/" && activePathname.startsWith(`${itemPathname}/`));
 
           return (
-        <Link
-          key={item.label}
-          href={item.href}
-          onClick={onNavigate}
-          className={[
-            "group -mx-9 flex h-14 items-center px-9 text-[15px] font-normal uppercase leading-none tracking-[0.07em] text-neutral-950 transition-colors duration-200 hover:bg-neutral-100 sm:-mx-10 sm:px-10 sm:text-[16px]",
-            index === 4 ? "mt-2" : "",
-            isActive ? "bg-neutral-100" : "",
-          ].join(" ")}
-        >
-          <span className="inline-block transition-transform duration-200 ease-out group-hover:translate-x-1">
-            {item.label}
-          </span>
-        </Link>
+            <Link
+              key={item.label}
+              href={item.href}
+              onClick={onNavigate}
+              className={[
+                "group -mx-9 flex h-14 items-center px-9 text-[14px] font-normal uppercase leading-none tracking-[0.07em] text-neutral-950 transition-colors duration-200 hover:bg-neutral-100 sm:-mx-10 sm:h-[50px] sm:px-10 sm:text-[14px]",
+                index === 4 ? "mt-2 sm:mt-1" : "",
+                isActive ? "bg-neutral-100" : "",
+              ].join(" ")}
+            >
+              <span className="inline-block transition-transform duration-200 ease-out group-hover:translate-x-1">
+                {item.label}
+              </span>
+            </Link>
           );
         })()
       ))}
@@ -124,7 +124,7 @@ function DrawerLinks({ activePathname, onNavigate }) {
 
 function DrawerUtility({ activePathname, onNavigate }) {
   return (
-    <div className="mt-16 sm:mt-auto sm:pt-12">
+    <div className="mt-16 sm:mt-auto sm:pt-8">
       <div className="w-full border-t border-neutral-200/70">
         {utilityItems.map((item) => (
           (() => {
@@ -139,7 +139,7 @@ function DrawerUtility({ activePathname, onNavigate }) {
                 href={item.href}
                 onClick={onNavigate}
                 className={[
-                  "group flex h-[50px] w-full items-center justify-between border-b border-neutral-200/70 text-[12px] font-medium uppercase tracking-[0.08em] text-neutral-800 transition-colors duration-200 hover:bg-neutral-100",
+                  "group flex h-[50px] w-full items-center justify-between border-b border-neutral-200/70 text-[11px] font-medium uppercase tracking-[0.08em] text-neutral-800 transition-colors duration-200 hover:bg-neutral-100 sm:h-[44px] sm:text-[10px]",
                   isActive ? "bg-neutral-100" : "",
                 ].join(" ")}
               >
@@ -154,12 +154,12 @@ function DrawerUtility({ activePathname, onNavigate }) {
         ))}
       </div>
 
-      <div className="mt-10 pb-2">
-        <p className="text-[12px] font-medium uppercase tracking-[0.1em] text-neutral-700">
+      <div className="mt-10 pb-2 sm:mt-7">
+        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-neutral-700 sm:text-[10px]">
           FOLLOW US
         </p>
 
-        <div className="mt-5 flex items-center gap-7">
+        <div className="mt-5 flex items-center gap-7 sm:mt-4">
           {socialItems.map(({ label, Icon }) => (
             <span
               key={label}
@@ -285,7 +285,7 @@ export default function MainNavbar() {
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col px-9 pb-9 sm:px-10 sm:pb-10">
+          <div className="flex min-h-0 flex-1 flex-col px-9 pb-9 sm:px-10 sm:pb-7">
             <DrawerLinks activePathname={pathname} onNavigate={closeDrawer} />
             <DrawerUtility activePathname={pathname} onNavigate={closeDrawer} />
           </div>
