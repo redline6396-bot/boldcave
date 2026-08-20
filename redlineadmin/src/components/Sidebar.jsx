@@ -3,43 +3,48 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { assets } from '@/assets/assets';
+import {
+  LayoutDashboard,
+  PackagePlus,
+  PackageSearch,
+  ShoppingCart,
+  Star,
+  TicketPercent,
+  Users,
+} from 'lucide-react';
+
+const navItems = [
+  { path: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/list', icon: PackageSearch, label: 'Products' },
+  { path: '/add', icon: PackagePlus, label: 'Add Product' },
+  { path: '/orders', icon: ShoppingCart, label: 'Orders' },
+  { path: '/users', icon: Users, label: 'Users' },
+  { path: '/reviews', icon: Star, label: 'Reviews' },
+  { path: '/coupon', icon: TicketPercent, label: 'Coupons' },
+];
 
 const Sidebar = () => {
   const pathname = usePathname();
-
-  const isActive = (path) => {
-    return pathname === path || pathname.startsWith(path + '/');
-  };
-
-  const navItems = [
-    { path: '/admin', icon: assets.order_icon, label: 'Dashboard' },
-    { path: '/add', icon: assets.add_icon, label: 'Add Items' },
-    { path: '/list', icon: assets.order_icon, label: 'List Items' },
-    { path: '/orders', icon: assets.order_icon, label: 'Order Items' },
-    { path: '/reviews', icon: assets.order_icon, label: 'Reviews' },
-    { path: '/coupon', icon: assets.order_icon, label: 'Coupons' }
-  ];
+  const isActive = (path) => pathname === path || pathname.startsWith(`${path}/`);
 
   return (
-    <div className='w-18 md:w-[18%] min-h-screen border-r-2'>
-      <div className='flex flex-col gap-4 pt-6 pl-[20%] text-[15px]'>
+    <aside className='w-16 shrink-0 border-r border-gray-200 bg-white md:w-60'>
+      <div className='flex flex-col gap-2 p-3 text-[15px]'>
         {navItems.map((item) => (
           <Link
             key={item.path}
             href={item.path}
-            className={`flex items-center gap-3 border border-r-0 px-3 py-2 rounded-l transition-colors ${
-              isActive(item.path)
-                ? 'border-gray-600 bg-gray-100'
-                : 'border-gray-300'
+            className={`flex items-center gap-3 rounded px-3 py-2 transition-colors ${
+              isActive(item.path) ? 'bg-black text-white' : 'text-gray-700 hover:bg-gray-100'
             }`}
+            title={item.label}
           >
-            <img className='w-5 h-5' src={item.icon} alt="" />
-            <p className='hidden md:block text-gray-800'>{item.label}</p>
+            <item.icon size={18} />
+            <p className='hidden md:block'>{item.label}</p>
           </Link>
         ))}
       </div>
-    </div>
+    </aside>
   );
 };
 

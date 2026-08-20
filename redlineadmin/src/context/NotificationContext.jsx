@@ -11,6 +11,7 @@ export default function NotificationProvider({ children }) {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), duration);
   };
+  const clearNotification = () => setNotification(null);
 
   const success = (message) => showNotification(message, 'success');
   const error = (message) => showNotification(message, 'error');
@@ -18,7 +19,7 @@ export default function NotificationProvider({ children }) {
   const info = (message) => showNotification(message, 'info');
 
   return (
-    <NotificationContext.Provider value={{ showNotification, success, error, warning, info, notification }}>
+    <NotificationContext.Provider value={{ showNotification, clearNotification, success, error, warning, info, notification }}>
       {children}
     </NotificationContext.Provider>
   );

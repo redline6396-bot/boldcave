@@ -1,72 +1,65 @@
 'use client';
 
-import axios from 'axios';
-import { useState, useContext } from 'react';
-import { NotificationContext } from '@/context/NotificationContext';
+import { useContext, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { NotificationContext } from '@/context/NotificationContext';
+import { api, getErrorMessage } from '@/lib/api';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { error: showError } = useContext(NotificationContext);
+  const { error: showError, success } = useContext(NotificationContext);
   const router = useRouter();
 
-  const onSubmitHandler = async (e) => {
+  const onSubmitHandler = async (event) => {
+    event.preventDefault();
+    setIsLoading(true);
+
     try {
-      e.preventDefault();
-      setIsLoading(true);
-      
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await axios.post(`${backendUrl}/api/user/admin`, { email, password });
-      
-      if (response.data.success) {
-        // Store token in localStorage
-        localStorage.setItem('token', response.data.token);
-        // Redirect to admin
-        router.push('/admin');
-      } else {
-        showError(response.data.message || 'Login failed');
-      }
+      const response = await api.post('/api/admin/auth/login', { email, password });
+      localStorage.setItem('token', response.data.data?.token || 'session');
+      success('Welcome back');
+      router.push('/admin');
     } catch (error) {
-      console.log(error);
-      showError(error.response?.data?.message || 'Unable to login. Please try again');
+      showError(getErrorMessage(error, 'Unable to login. Please try again'));
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className='min-h-screen flex items-center justify-center w-full'>
-      <div className='bg-white shadow-md rounded-lg px-8 py-6 max-w-md'>
-        <h1 className='text-2xl font-bold mb-4'>Admin Panel</h1>
-        <form onSubmit={onSubmitHandler}>
-          <div className='mb-3 min-w-72'>
-            <p className='text-sm font-medium text-gray-700 mb-2'>Email Address</p>
-            <input 
-              onChange={(e) => setEmail(e.target.value)} 
-              value={email} 
-              className='rounded-md w-full px-3 py-2 border border-gray-300 outline-none' 
-              type="email" 
-              placeholder='your@email.com' 
-              required 
+    <div className='flex min-h-screen w-full items-center justify-center bg-gray-50 px-4'>
+      <div className='w-full max-w-md rounded border border-gray-200 bg-white px-8 py-7 shadow-sm'>
+        <h1 className='mb-1 text-2xl font-bold text-gray-950'>REDLINE Admin</h1>
+        <p className='mb-6 text-sm text-gray-500'>Sign in to manage store operations.</p>
+        <form onSubmit={onSubmitHandler} className='space-y-4'>
+          <div>
+            <label className='mb-2 block text-sm font-medium text-gray-700'>Email Address</label>
+            <input
+              onChange={(event) => setEmail(event.target.value)}
+              value={email}
+              className='w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'
+              type='email'
+              placeholder='admin@example.com'
+              required
               disabled={isLoading}
             />
           </div>
-          <div className='mb-3 min-w-72'>
-            <p className='text-sm font-medium text-gray-700 mb-2'>Password</p>
-            <input 
-              onChange={(e) => setPassword(e.target.value)} 
-              value={password} 
-              className='rounded-md w-full px-3 py-2 border border-gray-300 outline-none' 
-              type="password" 
-              placeholder='Enter your password' 
-              required 
+          <div>
+            <label className='mb-2 block text-sm font-medium text-gray-700'>Password</label>
+            <input
+              onChange={(event) => setPassword(event.target.value)}
+              value={password}
+              className='w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'
+              type='password'
+              placeholder='Enter your password'
+              required
               disabled={isLoading}
             />
           </div>
-          <button 
-            className='mt-2 w-full py-2 px-4 rounded-md text-white bg-black disabled:opacity-50 disabled:cursor-not-allowed' 
+          <button
+            className='w-full rounded bg-black px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
             type='submit'
             disabled={isLoading}
           >

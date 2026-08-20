@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { products } from "@/data/products";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { fetchProducts } from "@/lib/clientApi";
 
 const CART_STORAGE_KEY = "perfume_cart";
 
@@ -9,69 +9,84 @@ const CartContext = createContext(undefined);
 
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
 
-const findProduct = (productId) => {
-  const normalizedId = normalizeText(productId);
+const normalizeSize = (size) => {
+  return String(size || "").trim();
+};
 
-  return products.find((product) => {
-    return [product.id, product.slug, product.name].some(
-      (value) => normalizeText(value) === normalizedId
-    );
-  });
+const getProductId = (product) => String(product?.id || product?._id || "").trim();
+
+const getProductKeys = (product) =>
+  [getProductId(product), product?.slug].map((value) => String(value || "").trim()).filter(Boolean);
+
+const clampQuantity = (quantity, stock) => {
+  const safeQuantity = Math.max(1, Number(quantity) || 1);
+  return Math.min(safeQuantity, Math.max(0, Number(stock) || 0));
 };
 
 const findVariant = (product, size) => {
   const normalizedSize = normalizeText(size);
-
   return product?.variants?.find(
     (variant) => normalizeText(variant.size) === normalizedSize
   );
 };
 
-const clampQuantity = (quantity, stock) => {
-  const safeQuantity = Math.max(1, Number(quantity) || 1);
-  return Math.min(safeQuantity, Number(stock) || 0);
-};
-
-const normalizeCartItem = (item) => {
-  const product = findProduct(item?.productId);
-  const variant = findVariant(product, item?.size);
-
-  if (!product || !variant || Number(variant.stock) <= 0) {
-    return null;
-  }
-
-  return {
-    productId: product.id,
-    size: variant.size,
-    quantity: clampQuantity(item.quantity, variant.stock),
-  };
-};
-
-const normalizeCart = (items) => {
+const normalizeStoredCart = (items) => {
   if (!Array.isArray(items)) {
     return [];
   }
 
   return items.reduce((cart, item) => {
-    const normalizedItem = normalizeCartItem(item);
-    if (!normalizedItem) {
+    const productId = String(item?.productId || "").trim();
+    const size = normalizeSize(item?.size);
+    const quantity = Math.max(1, Number(item?.quantity) || 1);
+
+    if (!productId || !size) {
       return cart;
     }
 
     const existingItem = cart.find(
-      (cartItem) =>
-        cartItem.productId === normalizedItem.productId &&
-        cartItem.size === normalizedItem.size
+      (cartItem) => cartItem.productId === productId && cartItem.size === size
     );
 
     if (existingItem) {
-      const variant = findVariant(findProduct(existingItem.productId), existingItem.size);
+      existingItem.quantity += quantity;
+    } else {
+      cart.push({ productId, size, quantity });
+    }
+
+    return cart;
+  }, []);
+};
+
+const normalizeCartWithProducts = (items, productMap) => {
+  if (!productMap.size) {
+    return normalizeStoredCart(items);
+  }
+
+  return normalizeStoredCart(items).reduce((cart, item) => {
+    const product = productMap.get(item.productId);
+    const variant = findVariant(product, item.size);
+
+    if (!product || !variant || Number(variant.stock) <= 0) {
+      return cart;
+    }
+
+    const productId = getProductId(product);
+    const existingItem = cart.find(
+      (cartItem) => cartItem.productId === productId && cartItem.size === variant.size
+    );
+
+    if (existingItem) {
       existingItem.quantity = clampQuantity(
-        existingItem.quantity + normalizedItem.quantity,
+        existingItem.quantity + item.quantity,
         variant.stock
       );
     } else {
-      cart.push(normalizedItem);
+      cart.push({
+        productId,
+        size: variant.size,
+        quantity: clampQuantity(item.quantity, variant.stock),
+      });
     }
 
     return cart;
@@ -80,12 +95,51 @@ const normalizeCart = (items) => {
 
 export function CartProvider({ children }) {
   const [cart, setCart] = useState([]);
+  const [productsById, setProductsById] = useState({});
   const [hasLoadedCart, setHasLoadedCart] = useState(false);
+  const [hasLoadedProductCatalog, setHasLoadedProductCatalog] = useState(false);
+
+  const productMap = useMemo(() => new Map(Object.entries(productsById)), [productsById]);
+
+  const rememberProducts = useCallback((products) => {
+    const nextProducts = Array.isArray(products) ? products : [products];
+
+    setProductsById((currentProducts) => {
+      let didChange = false;
+      const updatedProducts = { ...currentProducts };
+
+      nextProducts.forEach((product) => {
+        const productKeys = getProductKeys(product);
+        if (!productKeys.length) {
+          return;
+        }
+
+        productKeys.forEach((productKey) => {
+          updatedProducts[productKey] = product;
+          didChange = didChange || currentProducts[productKey] !== product;
+        });
+      });
+
+      return didChange ? updatedProducts : currentProducts;
+    });
+  }, []);
+
+  const resolveProduct = useCallback(
+    (productOrId) => {
+      if (typeof productOrId === "object" && productOrId) {
+        rememberProducts(productOrId);
+        return productOrId;
+      }
+
+      return productMap.get(String(productOrId || "").trim());
+    },
+    [productMap, rememberProducts]
+  );
 
   useEffect(() => {
     try {
       const storedCart = window.localStorage.getItem(CART_STORAGE_KEY);
-      setCart(storedCart ? normalizeCart(JSON.parse(storedCart)) : []);
+      setCart(storedCart ? normalizeStoredCart(JSON.parse(storedCart)) : []);
     } catch (error) {
       console.warn("Invalid perfume cart data was cleared.", error);
       window.localStorage.removeItem(CART_STORAGE_KEY);
@@ -96,135 +150,192 @@ export function CartProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    fetchProducts()
+      .then((products) => {
+        if (isMounted) {
+          rememberProducts(products);
+          setHasLoadedProductCatalog(true);
+        }
+      })
+      .catch((error) => {
+        console.warn("Unable to refresh cart product details.", error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [rememberProducts]);
+
+  useEffect(() => {
+    if (!hasLoadedCart || !hasLoadedProductCatalog || !productMap.size) {
+      return;
+    }
+
+    setCart((currentCart) => normalizeCartWithProducts(currentCart, productMap));
+  }, [hasLoadedCart, hasLoadedProductCatalog, productMap]);
+
+  useEffect(() => {
     if (!hasLoadedCart) {
       return;
     }
 
-    if (cart.length === 0) {
+    const storedCart = cart.map(({ productId, size, quantity }) => ({
+      productId,
+      size,
+      quantity,
+    }));
+
+    if (storedCart.length === 0) {
       window.localStorage.removeItem(CART_STORAGE_KEY);
       return;
     }
 
-    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(storedCart));
   }, [cart, hasLoadedCart]);
 
-  const addToCart = (productId, size, quantity = 1) => {
-    const product = findProduct(productId);
-    const variant = findVariant(product, size);
+  const addToCart = useCallback(
+    (productOrId, size, quantity = 1) => {
+      const product = resolveProduct(productOrId);
+      const variant = findVariant(product, size);
 
-    if (!product || !variant || Number(variant.stock) <= 0) {
-      return false;
-    }
+      if (!product || !variant || Number(variant.stock) <= 0) {
+        return false;
+      }
 
-    const safeQuantity = clampQuantity(quantity, variant.stock);
+      const productId = getProductId(product);
+      const safeQuantity = clampQuantity(quantity, variant.stock);
 
-    setCart((currentCart) => {
-      const existingItem = currentCart.find(
-        (item) => item.productId === product.id && item.size === variant.size
-      );
+      setCart((currentCart) => {
+        const existingItem = currentCart.find(
+          (item) => item.productId === productId && item.size === variant.size
+        );
 
-      if (existingItem) {
+        if (existingItem) {
+          return currentCart.map((item) => {
+            if (item.productId !== productId || item.size !== variant.size) {
+              return item;
+            }
+
+            return {
+              ...item,
+              quantity: clampQuantity(item.quantity + safeQuantity, variant.stock),
+            };
+          });
+        }
+
+        return [
+          ...currentCart,
+          {
+            productId,
+            size: variant.size,
+            quantity: safeQuantity,
+          },
+        ];
+      });
+
+      return true;
+    },
+    [resolveProduct]
+  );
+
+  const updateQuantity = useCallback(
+    (productId, size, quantity) => {
+      const product = resolveProduct(productId);
+      const variant = findVariant(product, size);
+
+      if (!product || !variant || Number(variant.stock) <= 0) {
+        return false;
+      }
+
+      setCart((currentCart) => {
+        if (Number(quantity) <= 0) {
+          return currentCart.filter(
+            (item) => item.productId !== getProductId(product) || item.size !== variant.size
+          );
+        }
+
         return currentCart.map((item) => {
-          if (item.productId !== product.id || item.size !== variant.size) {
+          if (item.productId !== getProductId(product) || item.size !== variant.size) {
             return item;
           }
 
           return {
             ...item,
-            quantity: clampQuantity(item.quantity + safeQuantity, variant.stock),
+            quantity: clampQuantity(quantity, variant.stock),
           };
         });
-      }
+      });
 
-      return [
-        ...currentCart,
-        {
-          productId: product.id,
-          size: variant.size,
-          quantity: safeQuantity,
-        },
-      ];
-    });
+      return true;
+    },
+    [resolveProduct]
+  );
 
-    return true;
-  };
+  const removeFromCart = useCallback((productId, size) => {
+    const normalizedProductId = String(productId || "").trim();
+    const normalizedSize = normalizeSize(size);
 
-  const updateQuantity = (productId, size, quantity) => {
-    const product = findProduct(productId);
-    const variant = findVariant(product, size);
-
-    if (!product || !variant || Number(variant.stock) <= 0) {
-      return false;
-    }
-
-    setCart((currentCart) =>
-      currentCart.map((item) => {
-        if (item.productId !== product.id || item.size !== variant.size) {
-          return item;
-        }
-
-        return {
-          ...item,
-          quantity: clampQuantity(quantity, variant.stock),
-        };
-      })
-    );
-
-    return true;
-  };
-
-  const removeFromCart = (productId, size) => {
-    const product = findProduct(productId);
-    const variant = findVariant(product, size);
-
-    if (!product || !variant) {
+    if (!normalizedProductId || !normalizedSize) {
       return false;
     }
 
     setCart((currentCart) =>
       currentCart.filter(
-        (item) => item.productId !== product.id || item.size !== variant.size
+        (item) => item.productId !== normalizedProductId || item.size !== normalizedSize
       )
     );
 
     return true;
-  };
+  }, []);
 
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setCart([]);
 
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(CART_STORAGE_KEY);
     }
-  };
+  }, []);
 
-  const getCartItems = () =>
-    cart
-      .map((item) => {
-        const product = findProduct(item.productId);
-        const variant = findVariant(product, item.size);
+  const getCartItems = useCallback(
+    () =>
+      cart
+        .map((item) => {
+          const product = productMap.get(item.productId);
+          const variant = findVariant(product, item.size);
 
-        if (!product || !variant) {
-          return null;
-        }
+          if (!product || !variant) {
+            return null;
+          }
 
-        return {
-          ...item,
-          product,
-          variant,
-        };
-      })
-      .filter(Boolean);
+          const quantity = clampQuantity(item.quantity, variant.stock);
 
-  const getCartCount = () =>
-    cart.reduce((total, item) => total + (Number(item.quantity) || 0), 0);
+          return {
+            ...item,
+            quantity,
+            product,
+            variant,
+          };
+        })
+        .filter(Boolean),
+    [cart, productMap]
+  );
 
-  const getCartTotal = () =>
-    getCartItems().reduce(
-      (total, item) =>
-        total + (Number(item.variant.sellingPrice) || 0) * item.quantity,
-      0
-    );
+  const getCartCount = useCallback(
+    () => cart.reduce((total, item) => total + (Number(item.quantity) || 0), 0),
+    [cart]
+  );
+
+  const getCartTotal = useCallback(
+    () =>
+      getCartItems().reduce(
+        (total, item) =>
+          total + (Number(item.variant.sellingPrice) || 0) * item.quantity,
+        0
+      ),
+    [getCartItems]
+  );
 
   const value = useMemo(
     () => ({
@@ -236,8 +347,19 @@ export function CartProvider({ children }) {
       getCartCount,
       getCartTotal,
       getCartItems,
+      rememberProducts,
     }),
-    [cart]
+    [
+      addToCart,
+      cart,
+      clearCart,
+      getCartCount,
+      getCartItems,
+      getCartTotal,
+      rememberProducts,
+      removeFromCart,
+      updateQuantity,
+    ]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

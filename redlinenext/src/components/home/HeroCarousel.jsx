@@ -11,21 +11,21 @@ const slides = [
     id: "hero-slide-1",
     desktopImage: "/images/hero/hero-1-desktop.webp",
     mobileImage: "/images/hero/hero-1-mobile.webp",
-    href: "/",
+    href: "/collection",
     active: true,
   },
   {
     id: "hero-slide-2",
     desktopImage: "/images/hero/hero-1-desktop.webp",
     mobileImage: "/images/hero/hero-1-mobile.webp",
-    href: "/",
+    href: "/collection",
     active: false,
   },
   {
     id: "hero-slide-3",
     desktopImage: "/images/hero/hero-1-desktop.webp",
     mobileImage: "/images/hero/hero-1-mobile.webp",
-    href: "/",
+    href: "/collection",
     active: false,
   },
 ];
@@ -74,7 +74,8 @@ export default function HeroCarousel() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const nextIndex = activeIndex === slides.length - 1 ? 0 : activeIndex + 1;
+      const nextIndex =
+        activeIndex === slides.length - 1 ? 0 : activeIndex + 1;
       scrollToSlide(nextIndex);
     }, AUTOPLAY_DELAY);
 
@@ -86,7 +87,8 @@ export default function HeroCarousel() {
       window.cancelAnimationFrame(scrollFrameRef.current);
     }
 
-    scrollFrameRef.current = window.requestAnimationFrame(syncActiveSlide);
+    scrollFrameRef.current =
+      window.requestAnimationFrame(syncActiveSlide);
   };
 
   const handlePointerDown = (event) => {
@@ -149,10 +151,15 @@ export default function HeroCarousel() {
       return;
     }
 
-    const currentIndex = Math.round(carousel.scrollLeft / carousel.clientWidth);
+    const currentIndex = Math.round(
+      carousel.scrollLeft / carousel.clientWidth
+    );
     let nextIndex = currentIndex;
 
-    if (Math.abs(deltaX) >= SWIPE_THRESHOLD && Math.abs(deltaX) > Math.abs(deltaY)) {
+    if (
+      Math.abs(deltaX) >= SWIPE_THRESHOLD &&
+      Math.abs(deltaX) > Math.abs(deltaY)
+    ) {
       nextIndex = deltaX < 0 ? activeIndex + 1 : activeIndex - 1;
     }
 
@@ -192,13 +199,19 @@ export default function HeroCarousel() {
             onClick={handleSlideClick}
             className="block w-full min-w-full shrink-0 snap-start overflow-hidden"
           >
-            <picture className="block w-full">
-              <source media="(max-width: 767px)" srcSet={slide.mobileImage} />
-              <source media="(min-width: 768px)" srcSet={slide.desktopImage} />
+            <picture className="block w-full sm:h-[42vw] sm:max-h-[780px]">
+              <source
+                media="(max-width: 767px)"
+                srcSet={slide.mobileImage}
+              />
+              <source
+                media="(min-width: 768px)"
+                srcSet={slide.desktopImage}
+              />
               <img
                 src={slide.desktopImage}
                 alt=""
-                className="block h-auto w-full max-w-none"
+                className="block h-auto w-full max-w-none sm:h-full sm:object-cover sm:object-center"
                 loading={index === 0 ? "eager" : "lazy"}
                 fetchPriority={index === 0 ? "high" : "auto"}
                 decoding={index === 0 ? "sync" : "async"}
@@ -221,7 +234,7 @@ export default function HeroCarousel() {
                 aria-label={`Show banner ${index + 1}`}
                 aria-current={isActive ? "true" : undefined}
                 className={[
-                  "h-[10px] w-[10px] rounded-full border transition-colors duration-200 sm:h-3 sm:w-3",
+                  "h-[10px] w-[10px] cursor-pointer rounded-full border transition-colors duration-200 sm:h-3 sm:w-3",
                   isActive
                     ? "border-neutral-950 bg-neutral-950"
                     : "border-neutral-400 bg-white hover:border-neutral-950",

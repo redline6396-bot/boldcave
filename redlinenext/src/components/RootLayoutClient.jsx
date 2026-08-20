@@ -6,15 +6,13 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import MainNavbar from '@/components/layout/MainNavbar';
 import Footer from '@/components/layout/Footer';
 import Notification from '@/components/Notification';
+import AuthModal from '@/features/customer/auth/AuthModal';
 
 export default function RootLayoutClient({ children }) {
   const pathname = usePathname();
   const isBackNavigation = useRef(false);
-  const isLoginPage = ['/login', '/auth/login', '/newlogin', '/finish-login'].includes(pathname);
-  const isNavbarPreviewPage = pathname === '/navbar-preview';
-  const isForHimPreviewPage = pathname === '/for-him-preview';
-  const isFooterPreviewPage = pathname === '/footer-preview';
-  const shouldShowSiteChrome = !isLoginPage && !isNavbarPreviewPage && !isForHimPreviewPage && !isFooterPreviewPage;
+  const isLoginPage = ['/login', '/auth/login'].includes(pathname);
+  const shouldShowSiteChrome = !isLoginPage;
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
@@ -61,7 +59,7 @@ export default function RootLayoutClient({ children }) {
 
   // Store last visited path (excluding login pages)
   useEffect(() => {
-    const loginPaths = ['/login', '/auth/login', '/newlogin', '/finish-login'];
+    const loginPaths = ['/login', '/auth/login'];
     if (!loginPaths.includes(pathname)) {
       localStorage.setItem('lastVisitedPath', pathname);
     }
@@ -92,6 +90,7 @@ export default function RootLayoutClient({ children }) {
       }}
     >
       <Notification />
+      <AuthModal />
       {shouldShowSiteChrome && (
         <>
           <AnnouncementBar />

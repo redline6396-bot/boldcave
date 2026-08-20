@@ -1,204 +1,143 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { useRouter } from 'next/navigation';
-import { TrendingUp, ShoppingCart, AlertTriangle, FileText, Package } from 'lucide-react';
+import { useContext, useEffect, useState } from 'react';
+import { AlertTriangle, Package, ShoppingCart, TrendingUp, Users } from 'lucide-react';
+import { NotificationContext } from '@/context/NotificationContext';
+import { api, formatDate, getErrorMessage, money } from '@/lib/api';
+
+const statCards = [
+  { key: 'products', label: 'Products', icon: Package },
+  { key: 'totalOrders', label: 'Orders', icon: ShoppingCart },
+  { key: 'customers', label: 'Customers', icon: Users },
+  { key: 'revenue', label: 'Revenue', icon: TrendingUp, money: true },
+];
 
 const Dashboard = () => {
-  const router = useRouter();
-  const [token, setToken] = useState(null);
-  const [stats, setStats] = useState(null);
+  const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
+  const { error: showError } = useContext(NotificationContext);
 
-  const COLOR_PRIMARY = '#2F6B3F';
-  const COLOR_ACCENT = '#D6524A';
-  const COLOR_BORDER = '#E6E1D8';
-  const COLOR_LIGHT_BG = '#F8F6F2';
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (!storedToken) {
-      router.push('/login');
-      return;
+  const loadDashboard = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const response = await api.get('/api/admin/dashboard');
+      setDashboard(response.data.data);
+    } catch (error) {
+      const message = getErrorMessage(error, 'Unable to load dashboard');
+      setError(message);
+      showError(message);
+    } finally {
+      setLoading(false);
     }
-    setToken(storedToken);
-  }, [router]);
+  };
 
   useEffect(() => {
-    const fetchStats = async () => {
-      if (!token) return;
+    loadDashboard();
+  }, []);
 
-      try {
-        setLoading(true);
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-        const response = await axios.get(
-          `${backendUrl}/api/product/dashboard/stats`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        
-        if (response.data.success) {
-          setStats(response.data.stats);
-        } else {
-          setError(response.data.message || 'Failed to fetch stats');
-        }
-      } catch (err) {
-        console.error('Error fetching dashboard stats:', err);
-        setError(err.message || 'An error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, [token]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p style={{ color: '#999' }}>Loading dashboard stats...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p style={{ color: '#D6524A' }}>Error loading stats: {error}</p>
-      </div>
-    );
-  }
-
-  if (!stats) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p style={{ color: '#999' }}>No stats available</p>
-      </div>
-    );
-  }
-
-  const StatCard = ({ icon: Icon, title, value, subtitle, color, bgColor }) => (
-    <div className="bg-white rounded-lg border p-6" style={{ borderColor: COLOR_BORDER }}>
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <p className="text-sm font-semibold mb-1" style={{ color: '#999' }}>
-            {title}
-          </p>
-          <p className="text-3xl font-bold" style={{ color: color }}>
-            {value}
-          </p>
-          {subtitle && (
-            <p className="text-xs mt-2" style={{ color: '#999' }}>
-              {subtitle}
-            </p>
-          )}
-        </div>
-        <div
-          className="p-3 rounded-lg flex items-center justify-center"
-          style={{ backgroundColor: bgColor }}
-        >
-          <Icon size={24} style={{ color: color }} />
-        </div>
-      </div>
-    </div>
-  );
+  if (loading) return <StateMessage message='Loading dashboard...' />;
+  if (error) return <StateMessage tone='error' message={error} onRetry={loadDashboard} />;
+  if (!dashboard) return <StateMessage message='No dashboard data available' />;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F5F5F5' }}>
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold" style={{ color: COLOR_PRIMARY }}>
-          Dashboard
-        </h1>
-        <p className="text-sm mt-2" style={{ color: '#999' }}>
-          Welcome back! Here's your store overview.
-        </p>
-      </div>
+    <div className='space-y-6'>
+      <header>
+        <h1 className='text-3xl font-bold text-gray-950'>Dashboard</h1>
+        <p className='mt-1 text-sm text-gray-500'>Live overview from the REDLINE API.</p>
+      </header>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        {/* Total Products */}
-        <StatCard
-          icon={Package}
-          title="Total Products"
-          value={stats.totalProducts}
-          subtitle="Published products in store"
-          color={COLOR_PRIMARY}
-          bgColor="#F0F8F4"
-        />
+      <section className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>
+        {statCards.map(({ key, ...card }) => (
+          <StatCard
+            key={key}
+            {...card}
+            value={dashboard[key]}
+          />
+        ))}        
+      </section>
 
-        {/* Total Orders */}
-        <StatCard
-          icon={ShoppingCart}
-          title="Total Orders"
-          value={stats.totalOrders}
-          subtitle="Orders received"
-          color="#2563EB"
-          bgColor="#EFF6FF"
-        />
-
-        {/* Total Revenue */}
-        <StatCard
-          icon={TrendingUp}
-          title="Total Revenue"
-          value={`₹${stats.totalRevenue.toLocaleString('en-IN')}`}
-          subtitle="From paid orders"
-          color="#10B981"
-          bgColor="#ECFDF5"
-        />
-
-        {/* Low Stock Alert */}
-        <StatCard
-          icon={AlertTriangle}
-          title="Low Stock Alert"
-          value={stats.lowStockCount}
-          subtitle="Products with <5 items"
-          color={COLOR_ACCENT}
-          bgColor="#FEF2F2"
-        />
-
-        {/* Draft Products */}
-        <StatCard
-          icon={FileText}
-          title="Draft Products"
-          value={stats.draftProducts}
-          subtitle="Not yet published"
-          color="#8B5CF6"
-          bgColor="#F5F3FF"
-        />
-      </div>
-
-      {/* Quick Info */}
-      <div className="bg-white rounded-lg border p-6" style={{ borderColor: COLOR_BORDER }}>
-        <h2 className="text-lg font-bold mb-4" style={{ color: COLOR_PRIMARY }}>
-          Quick Stats
-        </h2>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center pb-3 border-b" style={{ borderColor: COLOR_BORDER }}>
-            <span style={{ color: '#666' }}>Products Published</span>
-            <span className="font-semibold" style={{ color: COLOR_PRIMARY }}>
-              {stats.totalProducts - stats.draftProducts}
-            </span>
+      <section className='grid gap-6 xl:grid-cols-2'>
+        <div className='rounded border border-gray-200 bg-white'>
+          <div className='border-b border-gray-200 px-5 py-4'>
+            <h2 className='font-semibold text-gray-950'>Recent Orders</h2>
           </div>
-          <div className="flex justify-between items-center pb-3 border-b" style={{ borderColor: COLOR_BORDER }}>
-            <span style={{ color: '#666' }}>Average Order Value</span>
-            <span className="font-semibold" style={{ color: COLOR_PRIMARY }}>
-              {stats.totalOrders > 0 ? `₹${(stats.totalRevenue / stats.totalOrders).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '₹0'}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span style={{ color: '#666' }}>Inventory Alert</span>
-            <span className={`font-semibold px-3 py-1 rounded text-sm`} style={{ 
-              backgroundColor: stats.lowStockCount > 5 ? '#FEF2F2' : '#F0F8F4',
-              color: stats.lowStockCount > 5 ? COLOR_ACCENT : COLOR_PRIMARY
-            }}>
-              {stats.lowStockCount > 5 ? `⚠ ${stats.lowStockCount} items` : `✓ Good stock`}
-            </span>
+          <div className='divide-y divide-gray-100'>
+            {(dashboard.recentOrders || []).length === 0 ? (
+              <p className='px-5 py-6 text-sm text-gray-500'>No orders yet.</p>
+            ) : (
+              dashboard.recentOrders.map((order) => (
+                <div key={order._id} className='flex items-center justify-between gap-4 px-5 py-4 text-sm'>
+                  <div>
+                    <p className='font-semibold text-gray-900'>{order.orderNumber}</p>
+                    <p className='text-gray-500'>{order.customer?.phone || 'No phone'} | {formatDate(order.createdAt)}</p>
+                  </div>
+                  <div className='text-right'>
+                    <p className='font-semibold text-gray-900'>{money(order.amounts?.finalAmount)}</p>
+                    <p className='text-xs uppercase text-gray-500'>{order.orderStatus}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
-      </div>
+
+        <div className='rounded border border-gray-200 bg-white'>
+          <div className='flex items-center gap-2 border-b border-gray-200 px-5 py-4'>
+            <AlertTriangle size={18} className='text-amber-600' />
+            <h2 className='font-semibold text-gray-950'>Low Stock</h2>
+          </div>
+          <div className='divide-y divide-gray-100'>
+            {(dashboard.lowStockProducts || []).length === 0 ? (
+              <p className='px-5 py-6 text-sm text-gray-500'>No low stock products.</p>
+            ) : (
+              dashboard.lowStockProducts.map((product) => (
+                <div key={product._id} className='px-5 py-4 text-sm'>
+                  <p className='font-semibold text-gray-900'>{product.name}</p>
+                  <p className='mt-1 text-gray-500'>
+                    {(product.variants || [])
+                      .filter((variant) => Number(variant.stock) < 5)
+                      .map((variant) => `${variant.size}: ${variant.stock}`)
+                      .join(', ') || 'Check variants'}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
     </div>
   );
 };
+
+function StatCard({ label, value, icon: Icon, money: isMoney }) {
+  return (
+    <div className='rounded border border-gray-200 bg-white p-5'>
+      <div className='flex items-start justify-between gap-4'>
+        <div>
+          <p className='text-sm font-medium text-gray-500'>{label}</p>
+          <p className='mt-2 text-2xl font-bold text-gray-950'>{isMoney ? money(value) : Number(value || 0).toLocaleString('en-IN')}</p>
+        </div>
+        <span className='rounded bg-gray-100 p-2 text-gray-700'>
+          <Icon size={20} />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function StateMessage({ message, tone = 'default', onRetry }) {
+  return (
+    <div className={`rounded border bg-white p-6 text-sm ${tone === 'error' ? 'border-red-200 text-red-700' : 'border-gray-200 text-gray-500'}`}>
+      <p>{message}</p>
+      {onRetry && (
+        <button onClick={onRetry} className='mt-3 rounded border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50'>
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default Dashboard;

@@ -6,7 +6,6 @@ import CollectionSection from '@/components/home/CollectionSection';
 import ForHimSection from '@/components/home/ForHimSection';
 import OurStorySection from '@/components/home/OurStorySection';
 import ForHerSection from '@/components/home/ForHerSection';
-import CartPreview from '@/components/CartPreview';
 export default function Home() {
   return (
     <div>
@@ -15,7 +14,6 @@ export default function Home() {
       <ForHimSection />
       <OurStorySection />
       <ForHerSection />
-      <CartPreview />
     </div>
   );
 }

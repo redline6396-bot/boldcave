@@ -32,7 +32,9 @@ const eslintConfig = defineConfig([
         setInterval: "readonly",
         clearInterval: "readonly",
         FormData: "readonly",
+        fetch: "readonly",
         URL: "readonly",
+        URLSearchParams: "readonly",
       },
     },
     rules: {

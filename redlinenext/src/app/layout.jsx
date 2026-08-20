@@ -1,14 +1,14 @@
 import React from 'react';
-import ShopContextProvider from '@/context/ShopContext';
+import AuthProvider from '@/context/AuthContext';
 import CartProvider from '@/context/CartContext';
+import CouponProvider from '@/context/CouponContext';
 import NotificationProvider from '@/context/NotificationContext';
-import DeliveryContextProvider from '@/context/DeliveryContext';
 import RootLayoutClient from '@/components/RootLayoutClient';
 import '@/assets/globals.css';
 
 export const metadata = {
-  title: 'Green Valley Naturals - 100% Organic Products',
-  description: 'Premium organic products certified by APEDA. Farm to table, 100% pure and authentic.',
+  title: 'Perfume Brand',
+  description: 'Premium perfume.',
 };
 
 export default function RootLayout({ children }) {
@@ -22,13 +22,13 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <NotificationProvider>
-          <ShopContextProvider>
+          <AuthProvider>
             <CartProvider>
-              <DeliveryContextProvider>
+              <CouponProvider>
                 <RootLayoutClient>{children}</RootLayoutClient>
-              </DeliveryContextProvider>
+              </CouponProvider>
             </CartProvider>
-          </ShopContextProvider>
+          </AuthProvider>
         </NotificationProvider>
       </body>
     </html>

@@ -4,6 +4,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 const eslintConfig = defineConfig([
   globalIgnores([
     ".next/**",
+    ".open-next/**",
     "out/**",
     "build/**",
     "node_modules/**",
@@ -36,7 +37,9 @@ const eslintConfig = defineConfig([
         fetch: "readonly",
         FormData: "readonly",
         URL: "readonly",
+        URLSearchParams: "readonly",
         Image: "readonly",
+        Buffer: "readonly",
       },
     },
     rules: {

@@ -111,7 +111,7 @@ export default function AnnouncementBar() {
         : "translateX(-50%)";
 
   return (
-    <div className="flex h-[27px] w-full items-center border-b border-neutral-200 bg-white text-neutral-950 sm:h-7">
+    <div className="flex h-[27px] w-full items-center border-b border-neutral-200 bg-white text-neutral-950 sm:h-6">
       <div className="mx-auto flex h-full w-full max-w-[720px] items-center justify-center gap-3 px-4 sm:gap-5">
         <button
           type="button"
