@@ -20,7 +20,7 @@ export default function OurStorySection() {
           <img
             src={DESKTOP_IMAGE}
             alt=""
-            className="block h-auto w-full sm:h-[470px] sm:object-cover sm:object-center lg:h-[560px] xl:h-[600px]"
+            className="block h-auto w-full sm:h-auto sm:object-contain sm:object-center lg:h-[560px] lg:object-cover xl:h-[600px]"
             loading="lazy"
             decoding="async"
           />

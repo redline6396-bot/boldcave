@@ -310,13 +310,13 @@ export default function HeroCarousel() {
               onClick={(event) => handleSlideClick(event, slide.href)}
               className="block w-full min-w-full shrink-0 snap-start overflow-hidden"
             >
-              <picture className="relative block aspect-square w-full bg-[#f7f5f2] sm:h-[42vw] sm:max-h-[780px] sm:aspect-auto">
+              <picture className="relative block aspect-square w-full bg-[#f7f5f2] sm:h-auto sm:aspect-auto lg:h-[42vw] lg:max-h-[780px]">
                 <source
-                  media="(max-width: 767px)"
+                  media="(max-width: 639px)"
                   srcSet={slide.mobileImage}
                 />
                 <source
-                  media="(min-width: 768px)"
+                  media="(min-width: 640px)"
                   srcSet={slide.desktopImage}
                 />
 
@@ -325,7 +325,7 @@ export default function HeroCarousel() {
                   src={slide.desktopImage}
                   alt=""
                   className={[
-                    "block h-full w-full max-w-none object-cover object-center transition-opacity duration-200",
+                    "block h-full w-full max-w-none object-cover object-center transition-opacity duration-200 sm:h-auto sm:object-contain lg:h-full lg:object-cover",
                     isImageLoaded ? "opacity-100" : "opacity-0",
                   ].join(" ")}
                   loading={index === 0 ? "eager" : "lazy"}

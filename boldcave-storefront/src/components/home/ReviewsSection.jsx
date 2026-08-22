@@ -199,7 +199,7 @@ export default function ReviewsSection() {
               review={review}
               loaded={Boolean(loadedImages[review.id])}
               onImageLoad={() => markImageLoaded(review.id)}
-              className="mx-auto w-full max-w-[700px]"
+              className="mx-auto w-full max-w-[560px]"
               tablet
             />
           ))}
@@ -237,7 +237,7 @@ function ReviewItem({
           mobile
             ? "aspect-[4/5]"
             : tablet
-              ? "h-[520px]"
+              ? "mx-auto"
               : "h-[460px] xl:h-[500px] 2xl:h-[535px]",
         ].join(" ")}
       >
@@ -246,6 +246,7 @@ function ReviewItem({
           alt=""
           className={[
             "h-full w-full object-cover object-center transition-opacity duration-200",
+            tablet ? "h-auto object-contain" : "",
             loaded ? "opacity-100" : "opacity-0",
           ].join(" ")}
           loading="eager"
