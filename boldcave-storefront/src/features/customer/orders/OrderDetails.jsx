@@ -237,8 +237,13 @@ export default function OrderDetails() {
                     {item.name}
                   </p>
                   <p className="mt-1.5 text-[11px] uppercase tracking-[0.07em] text-neutral-500">
-                    {item.size} / Qty {item.quantity}
+                    {item.productType === "combo" ? "Perfume Combo" : item.size} / Qty {item.quantity}
                   </p>
+                  {item.productType === "combo" && item.comboItems?.length > 0 && (
+                    <p className="mt-1 text-[11px] leading-4 text-neutral-500">
+                      Includes {item.comboItems.map((entry) => `${entry.name} ${entry.size} x ${entry.quantity}`).join(", ")}
+                    </p>
+                  )}
                 </div>
                 <p className="col-start-2 self-start whitespace-nowrap text-[13px] font-semibold sm:col-start-auto sm:text-right sm:text-[14px]">
                   {formatPrice(getLineTotal(item))}

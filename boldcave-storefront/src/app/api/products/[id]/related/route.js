@@ -1,6 +1,6 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, success } from "@/lib/api/response";
-import { serializeProduct } from "@/lib/api/products";
+import { serializeProductWithCombos } from "@/lib/api/products";
 import { getReviewStats } from "@/lib/orders/pricing";
 import { isObjectId } from "@/lib/validation";
 import Product from "@/models/Product";
@@ -12,7 +12,7 @@ const RELATED_LIMIT = 4;
 async function serializeProductsWithRatings(products) {
   return Promise.all(
     products.map(async (product) => {
-      const serialized = serializeProduct(product);
+      const serialized = await serializeProductWithCombos(product);
       serialized.rating = await getReviewStats(product._id);
       return serialized;
     })

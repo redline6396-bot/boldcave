@@ -2,10 +2,11 @@ import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
-import { serializeProduct } from "@/lib/api/products";
+import { COMBO_VARIANT_SIZE, findVariantByIdentifier, serializeProductWithCombos } from "@/lib/api/products";
 import { clearProductCache } from "@/lib/productCache";
 import {
   cleanString,
+  isObjectId,
   slugify,
   toPositiveNumber,
   validateCategory,
@@ -84,7 +85,105 @@ function normalizeAudienceTags(tags) {
   return Array.from(new Set(normalized.length ? normalized : ["Unisex"]));
 }
 
-function buildProductPayload(body) {
+async function validateComboItems(comboItems = [], currentProductId = "") {
+  if (!Array.isArray(comboItems) || !comboItems.length) {
+    return { error: "At least one included product is required" };
+  }
+
+  const normalized = comboItems
+    .map((item) => ({
+      productId: cleanString(item.productId || item.id || item._id, 80),
+      variantId: cleanString(item.variantId || item.size, 100),
+      quantity: toPositiveNumber(item.quantity || 1),
+    }))
+    .filter((item) => item.productId && item.variantId && item.quantity > 0);
+
+  if (!normalized.length || normalized.length !== comboItems.length) {
+    return { error: "Each included product must have product, variant and quantity" };
+  }
+
+  const productIds = Array.from(new Set(normalized.map((item) => item.productId)));
+  if (productIds.some((productId) => !isObjectId(productId))) {
+    return { error: "Included product id is invalid" };
+  }
+  if (currentProductId && productIds.includes(String(currentProductId))) {
+    return { error: "A combo cannot include itself" };
+  }
+
+  const products = await Product.find({ _id: { $in: productIds } });
+  const productsById = new Map(products.map((product) => [String(product._id), product]));
+
+  for (const item of normalized) {
+    const product = productsById.get(item.productId);
+    if (!product) return { error: "Included product was not found" };
+    if (product.productType === "combo") return { error: "A combo cannot include another combo" };
+    if (!findVariantByIdentifier(product, item.variantId)) {
+      return { error: `Variant ${item.variantId} was not found for ${product.name}` };
+    }
+  }
+
+  return { comboItems: normalized };
+}
+
+async function buildComboPayload(body, currentProductId = "") {
+  const name = cleanString(body.name, 160);
+  const slug = slugify(body.slug || name);
+  if (!name || !slug) return { error: "Combo name and slug are required" };
+  if (!cleanString(body.description, 5000)) return { error: "Description is required" };
+
+  const comboItemsResult = await validateComboItems(body.comboItems, currentProductId);
+  if (comboItemsResult.error) return comboItemsResult;
+
+  const mrp = toPositiveNumber(body.mrp ?? body.comboMrp ?? body.variants?.[0]?.mrp);
+  const sellingPrice = toPositiveNumber(
+    body.sellingPrice ?? body.comboSellingPrice ?? body.variants?.[0]?.sellingPrice
+  );
+  const costPrice = toPositiveNumber(body.costPrice ?? body.comboCostPrice ?? body.variants?.[0]?.costPrice);
+
+  if (mrp <= 0 || sellingPrice <= 0) {
+    return { error: "MRP and selling price must be greater than zero" };
+  }
+
+  return {
+    payload: {
+      productType: "combo",
+      name,
+      slug,
+      audienceTags: normalizeAudienceTags(body.audienceTags),
+      shortDescription: cleanString(body.shortDescription, 500),
+      description: cleanString(body.description, 5000),
+      images: normalizeImages(body.images),
+      positioning: cleanString(body.positioning, 250),
+      whatYouGet: cleanString(body.whatYouGet, 2000),
+      bestFor: Array.isArray(body.bestFor)
+        ? body.bestFor.map((entry) => cleanString(entry, 100)).filter(Boolean)
+        : [],
+      howToUse: cleanString(body.howToUse, 2000),
+      storagePrecautions: cleanString(body.storagePrecautions, 2000),
+      variants: [
+        {
+          size: COMBO_VARIANT_SIZE,
+          sellingPrice,
+          mrp,
+          costPrice,
+          stock: 0,
+          sku: cleanString(body.sku, 100) || `${slug.toUpperCase()}-COMBO`,
+        },
+      ],
+      comboItems: comboItemsResult.comboItems,
+      legalInformation: {
+        caution: cleanString(body.legalInformation?.caution, 2000),
+      },
+      status: body.status === "published" ? "published" : "draft",
+    },
+  };
+}
+
+async function buildProductPayload(body, currentProductId = "") {
+  if (body.productType === "combo") {
+    return buildComboPayload(body, currentProductId);
+  }
+
   const variantResult = normalizeVariants(body.variants);
   if (variantResult.error) return { error: variantResult.error };
 
@@ -96,6 +195,7 @@ function buildProductPayload(body) {
 
   return {
     payload: {
+      productType: "product",
       name,
       slug,
       audienceTags: normalizeAudienceTags(body.audienceTags),
@@ -118,6 +218,8 @@ function buildProductPayload(body) {
         base: Array.isArray(body.fragranceNotes?.base) ? body.fragranceNotes.base.map((entry) => cleanString(entry, 80)).filter(Boolean) : [],
       },
       variants: variantResult.variants,
+      comboItems: [],
+      whatYouGet: "",
       legalInformation: {
         ingredients: cleanString(body.legalInformation?.ingredients, 2000),
         caution: cleanString(body.legalInformation?.caution, 2000),
@@ -136,7 +238,11 @@ export async function GET(request) {
     const products = await Product.find().sort({ createdAt: -1 });
     return applyAdminCors(
       request,
-      success({ products: products.map((product) => serializeProduct(product, { includeCostPrice: true })) })
+      success({
+        products: await Promise.all(
+          products.map((product) => serializeProductWithCombos(product, { includeCostPrice: true }))
+        ),
+      })
     );
   } catch (error) {
     return applyAdminCors(request, handleRouteError(error));
@@ -149,18 +255,18 @@ export async function POST(request) {
     if (auth.response) return applyAdminCors(request, auth.response);
 
     const body = await readJson(request);
-    const result = buildProductPayload(body);
+    await connectDB();
+    const result = await buildProductPayload(body);
 
     if (result.error) {
       return applyAdminCors(request, failure("VALIDATION_ERROR", result.error, 400));
     }
 
-    await connectDB();
     const product = await Product.create(result.payload);
     clearProductCache();
     return applyAdminCors(
       request,
-      success({ product: serializeProduct(product, { includeCostPrice: true }) }, 201)
+      success({ product: await serializeProductWithCombos(product, { includeCostPrice: true }) }, 201)
     );
   } catch (error) {
     return applyAdminCors(request, handleRouteError(error, "PRODUCT_CREATE_FAILED"));

@@ -10,6 +10,21 @@ const attemptItemSchema = new mongoose.Schema(
     quantity: { type: Number, required: true, min: 1 },
     unitPrice: { type: Number, required: true, min: 0 },
     mrp: { type: Number, min: 0 },
+    productType: { type: String, enum: ["product", "combo"], default: "product" },
+    comboItems: {
+      type: [
+        {
+          productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
+          name: { type: String },
+          slug: { type: String },
+          size: { type: String },
+          variantId: { type: String },
+          quantity: { type: Number, min: 1 },
+          image: { type: String },
+        },
+      ],
+      default: undefined,
+    },
   },
   { _id: false }
 );

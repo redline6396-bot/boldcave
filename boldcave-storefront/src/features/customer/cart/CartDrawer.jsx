@@ -163,6 +163,10 @@ export default function CartDrawer({ isOpen, onClose }) {
                   const sellingPrice = Number(variant.sellingPrice) || 0;
                   const mrp = Number(variant.mrp) || sellingPrice;
                   const showMrp = mrp > sellingPrice;
+                  const isCombo = product.productType === "combo";
+                  const includesText = isCombo
+                    ? (product.comboItems || []).map((entry) => entry.name).filter(Boolean).join(", ")
+                    : "";
 
                   return (
                     <div
@@ -198,8 +202,13 @@ export default function CartDrawer({ isOpen, onClose }) {
                             </Link>
 
                             <p className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-neutral-500">
-                              {size}
+                              {isCombo ? "Perfume Combo" : size}
                             </p>
+                            {includesText && (
+                              <p className="mt-1 text-[11px] leading-4 text-neutral-500">
+                                Includes {includesText}
+                              </p>
+                            )}
                           </div>
 
                           <button

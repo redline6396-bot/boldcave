@@ -81,23 +81,6 @@ const ProductList = () => {
     }
   };
 
-  const createTestCopies = async (product) => {
-    if (!window.confirm('Create 3 temporary test products from this product?')) return;
-
-    const id = getId(product);
-    try {
-      setBusyId(id);
-      const response = await api.post(`/api/admin/products/${id}/test-copies`);
-      const created = response.data.data.created || 0;
-      await loadProducts();
-      success(`${created} test products created`);
-    } catch (error) {
-      showError(getErrorMessage(error, 'Unable to create test products'));
-    } finally {
-      setBusyId('');
-    }
-  };
-
   return (
     <div className='space-y-6'>
       <header className='flex flex-wrap items-center justify-between gap-4'>
@@ -149,6 +132,7 @@ const ProductList = () => {
               <thead className='border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500'>
                 <tr>
                   <th className='px-4 py-3'>Product</th>
+                  <th className='px-4 py-3'>Type</th>
                   <th className='px-4 py-3'>Audience</th>
                   <th className='px-4 py-3'>Variants</th>
                   <th className='px-4 py-3'>Stock</th>
@@ -160,7 +144,10 @@ const ProductList = () => {
               <tbody className='divide-y divide-gray-100'>
                 {visibleProducts.map((product) => {
                   const id = getId(product);
-                  const totalStock = (product.variants || []).reduce((total, variant) => total + Number(variant.stock || 0), 0);
+                  const isCombo = product.productType === 'combo';
+                  const totalStock = isCombo
+                    ? Number(product.comboAvailability ?? product.variants?.[0]?.stock ?? 0)
+                    : (product.variants || []).reduce((total, variant) => total + Number(variant.stock || 0), 0);
                   return (
                     <tr key={id}>
                       <td className='px-4 py-4'>
@@ -176,10 +163,19 @@ const ProductList = () => {
                           </div>
                         </div>
                       </td>
+                      <td className='px-4 py-4'>
+                        <span className={`rounded px-2 py-1 text-xs font-semibold ${isCombo ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'}`}>
+                          {isCombo ? 'COMBO' : 'PRODUCT'}
+                        </span>
+                      </td>
                       <td className='px-4 py-4'>{(product.audienceTags || []).join(', ') || '-'}</td>
                       <td className='px-4 py-4'>
                         <div className='space-y-1'>
-                          {(product.variants || []).map((variant) => (
+                          {isCombo ? (
+                            <p className='text-xs text-gray-600'>
+                              {(product.comboItems || []).map((item) => `${item.name || 'Product'} ${item.size || item.variantId} x ${item.quantity}`).join(', ') || 'Fixed combo'}
+                            </p>
+                          ) : (product.variants || []).map((variant) => (
                             <p key={variant.size} className='text-xs text-gray-600'>
                               {variant.size}: {money(variant.sellingPrice)} / MRP {money(variant.mrp)} / CP {money(variant.costPrice)}
                             </p>
@@ -203,14 +199,6 @@ const ProductList = () => {
                       <td className='px-4 py-4 text-gray-500'>{formatDate(product.createdAt)}</td>
                       <td className='px-4 py-4'>
                         <div className='flex justify-end gap-2'>
-                          <button
-                            onClick={() => createTestCopies(product)}
-                            disabled={busyId === id}
-                            className='rounded border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50'
-                            title='Create test product copies'
-                          >
-                            {busyId === id ? 'CREATING...' : 'CREATE 3 TEST COPIES'}
-                          </button>
                           <Link href={`/edit/${id}`} className='rounded border border-gray-300 p-2 text-gray-700 hover:bg-gray-50' title='Edit product'>
                             <Edit2 size={16} />
                           </Link>

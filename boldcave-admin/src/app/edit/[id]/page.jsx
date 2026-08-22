@@ -52,7 +52,9 @@ const EditProduct = () => {
   return (
     <div className='max-w-6xl space-y-6'>
       <header>
-        <h1 className='text-3xl font-bold text-gray-950'>Edit Product</h1>
+        <h1 className='text-3xl font-bold text-gray-950'>
+          Edit {product.productType === 'combo' ? 'Combo' : 'Product'}
+        </h1>
         <p className='mt-1 text-sm text-gray-500'>{product.name}</p>
       </header>
       <ProductForm product={product} submitLabel='Save Changes' onSubmit={updateProduct} />

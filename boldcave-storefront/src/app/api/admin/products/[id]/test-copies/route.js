@@ -1,7 +1,7 @@
 import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, success } from "@/lib/api/response";
-import { serializeProduct } from "@/lib/api/products";
+import { serializeProductWithCombos } from "@/lib/api/products";
 import { requireAdmin } from "@/lib/auth/session";
 import { clearProductCache } from "@/lib/productCache";
 import { cleanString, isObjectId, slugify } from "@/lib/validation";
@@ -21,6 +21,7 @@ const copyProductFields = (source, copyNumber) => {
   const slug = `${baseSlug}-test-${copyNumber}`;
 
   return {
+    productType: "product",
     name,
     slug,
     audienceTags: [...(sourceObject.audienceTags || [])],
@@ -94,6 +95,12 @@ export async function POST(request, { params }) {
         failure("PRODUCT_NOT_FOUND", "Product not found", 404)
       );
     }
+    if (source.productType === "combo") {
+      return applyAdminCors(
+        request,
+        failure("UNSUPPORTED_PRODUCT_TYPE", "Test copies are only available for normal products", 400)
+      );
+    }
 
     const baseSlug = slugify(source.slug || source.name);
     const targetSlugs = [1, 2, 3].map((number) => `${baseSlug}-test-${number}`);
@@ -129,8 +136,10 @@ export async function POST(request, { params }) {
       success(
         {
           created: copies.length,
-          products: copies.map((product) =>
-            serializeProduct(product, { includeCostPrice: true })
+          products: await Promise.all(
+            copies.map((product) =>
+              serializeProductWithCombos(product, { includeCostPrice: true })
+            )
           ),
         },
         201

@@ -42,6 +42,7 @@ export default function ProductCard({ product }) {
   const { addToCart } = useCart();
 
   const variants = product?.variants || [];
+  const isCombo = product?.productType === "combo";
   const displayVariants = useMemo(() => getDisplayVariants(variants), [variants]);
 
   const defaultVariant = getDefaultVariant(variants);
@@ -87,9 +88,10 @@ export default function ProductCard({ product }) {
 
   const productUrl = `/product/${product.slug}`;
 
-  const profileLine =
-    product.fragranceNotes?.top?.slice(0, 3).join(" | ") ||
-    product.fragranceProfile;
+  const profileLine = isCombo
+    ? product.whatYouGet || `Includes ${(product.comboItems || []).map((item) => item.name).filter(Boolean).slice(0, 3).join(", ")}`
+    : product.fragranceNotes?.top?.slice(0, 3).join(" | ") ||
+      product.fragranceProfile;
 
   const handleNavigate = () => {
     router.push(productUrl);
@@ -190,6 +192,12 @@ export default function ProductCard({ product }) {
           by Bold Cave
         </p>
 
+        {isCombo && (
+          <p className="mt-2 inline-flex border border-neutral-300 px-2 py-1 text-[9px] font-medium uppercase tracking-[0.14em] text-neutral-600">
+            COMBO
+          </p>
+        )}
+
         {/* FRAGRANCE NOTES */}
         <p className="mt-2 min-h-4 truncate text-[12px] font-normal leading-normal text-neutral-500 max-[390px]:text-[10px] sm:mt-2.5 sm:text-[13px] sm:tracking-[0.01em]">
           {profileLine}
@@ -208,32 +216,33 @@ export default function ProductCard({ product }) {
           </span>
         </div>
 
-        {/* SIZE SELECTOR */}
-        <div className="mt-3 grid grid-cols-2 gap-1.5 sm:mx-auto sm:mt-4 sm:w-[92%] sm:gap-2">
-          {displayVariants.map((variant) => {
-            const unavailable = Number(variant.stock) <= 0;
-            const selected = variant.size === selectedSize;
+        {!isCombo && (
+          <div className="mt-3 grid grid-cols-2 gap-1.5 sm:mx-auto sm:mt-4 sm:w-[92%] sm:gap-2">
+            {displayVariants.map((variant) => {
+              const unavailable = Number(variant.stock) <= 0;
+              const selected = variant.size === selectedSize;
 
-            return (
-              <button
-                key={variant.size}
-                type="button"
-                onClick={() => setSelectedSize(variant.size)}
-                className={[
-                  "h-10 border px-1 text-[11px] uppercase tracking-[0.03em] transition max-[390px]:h-8 max-[390px]:text-[9px] max-[390px]:tracking-[0.015em] sm:h-9 sm:px-3 sm:text-xs sm:tracking-[0.05em]",
-                  selected
-                    ? "border-neutral-950 bg-neutral-950 text-white"
-                    : "border-neutral-300 bg-white text-neutral-800",
-                  unavailable && !selected
-                    ? "cursor-pointer border-neutral-200 bg-neutral-50 text-neutral-400"
-                    : "cursor-pointer hover:border-neutral-950",
-                ].join(" ")}
-              >
-                {variant.size}
-              </button>
-            );
-          })}
-        </div>
+              return (
+                <button
+                  key={variant.size}
+                  type="button"
+                  onClick={() => setSelectedSize(variant.size)}
+                  className={[
+                    "h-10 border px-1 text-[11px] uppercase tracking-[0.03em] transition max-[390px]:h-8 max-[390px]:text-[9px] max-[390px]:tracking-[0.015em] sm:h-9 sm:px-3 sm:text-xs sm:tracking-[0.05em]",
+                    selected
+                      ? "border-neutral-950 bg-neutral-950 text-white"
+                      : "border-neutral-300 bg-white text-neutral-800",
+                    unavailable && !selected
+                      ? "cursor-pointer border-neutral-200 bg-neutral-50 text-neutral-400"
+                      : "cursor-pointer hover:border-neutral-950",
+                  ].join(" ")}
+                >
+                  {variant.size}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* ADD TO CART */}
         <button

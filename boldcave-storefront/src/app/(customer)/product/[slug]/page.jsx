@@ -56,6 +56,7 @@ const getDefaultVariant = (variants) =>
   variants.find((variant) => Number(variant.stock) > 0) || variants[0];
 
 const PRODUCT_TITLE_DESCRIPTOR = "EXTRAIT DE PARFUM";
+const COMBO_TITLE_DESCRIPTOR = "PERFUME COMBO";
 
 const DEFAULT_LEGAL_INFORMATION = {
   countryOfOrigin: "India",
@@ -66,6 +67,15 @@ const DEFAULT_HOW_TO_USE =
   "Apply lightly to pulse points such as the wrists, neck and behind the ears. Avoid rubbing the fragrance after application.";
 const DEFAULT_STORAGE_PRECAUTIONS =
   "Store in a cool, dry place away from direct sunlight, excessive heat and moisture.";
+
+function getComboTotalVolume(comboItems = []) {
+  const totalMl = comboItems.reduce((total, item) => {
+    const match = String(item.size || item.variantId || "").match(/(\d+(?:\.\d+)?)\s*ml/i);
+    return match ? total + Number(match[1]) * (Number(item.quantity) || 1) : total;
+  }, 0);
+
+  return totalMl > 0 ? `${totalMl} ML` : "";
+}
 
 export default function ProductPage() {
   const params = useParams();
@@ -226,6 +236,7 @@ export default function ProductPage() {
   }
 
   const galleryImages = getProductImages(product);
+  const isCombo = product.productType === "combo";
 
   const mobileThumbCount = 3;
   const maxMobileThumbStart = Math.max(
@@ -261,7 +272,7 @@ export default function ProductPage() {
   const canBuy = !isSelectedUnavailable && maxAddableQuantity > 0;
   const audienceTags = getAudienceTags(product);
   const audienceTagKeys = new Set(audienceTags.map(normalizeText));
-  const profileTags = getProfileTags(product).filter(
+  const profileTags = (isCombo ? [] : getProfileTags(product)).filter(
     (tag, index, tags) =>
       normalizeText(tag) &&
       !audienceTagKeys.has(normalizeText(tag)) &&
@@ -417,7 +428,7 @@ export default function ProductPage() {
     if (!canBuy) {
       notifications?.error?.(
         isSelectedUnavailable
-          ? "Selected size is out of stock"
+          ? isCombo ? "Combo is out of stock" : "Selected size is out of stock"
           : "Maximum available quantity is already in your cart"
       );
       return;
@@ -439,7 +450,7 @@ export default function ProductPage() {
     }
 
     if (!canBuy) {
-      notifications?.error?.("Selected size is out of stock");
+      notifications?.error?.(isCombo ? "Combo is out of stock" : "Selected size is out of stock");
       return;
     }
 
@@ -679,7 +690,7 @@ export default function ProductPage() {
               {product.name}
             </span>
             <span className="text-[8.5px] font-medium uppercase tracking-[0.22em] text-neutral-500 min-[600px]:text-[8px] min-[600px]:tracking-[0.16em] min-[760px]:text-[9px] min-[760px]:tracking-[0.19em] lg:text-[12px] lg:tracking-[0.24em]">
-              - {PRODUCT_TITLE_DESCRIPTOR}
+              - {isCombo ? COMBO_TITLE_DESCRIPTOR : PRODUCT_TITLE_DESCRIPTOR}
             </span>
           </h1>
 
@@ -733,37 +744,62 @@ export default function ProductPage() {
             )}
           </div>
 
-          <div className="mt-4 border-t border-[#e8e2d9] pt-3.5 sm:mt-4 sm:pt-4 min-[600px]:mt-3 min-[600px]:pt-3 lg:mt-4 lg:pt-4">
-            <p className="text-[12px] font-normal leading-none tracking-0 text-neutral-800 sm:text-[13px] min-[600px]:text-[12px] lg:text-[15px]">
-              Select Size
-            </p>
-
-            <div className="mt-2 flex flex-wrap gap-2 sm:mt-2.5 sm:gap-2.5 min-[600px]:gap-2">
-              {variants.map((variant) => {
-                const unavailable = Number(variant.stock) <= 0;
-                const selected = variant.size === selectedSize;
-
-                return (
-                  <button
-                    key={variant.size}
-                    type="button"
-                    onClick={() => setSelectedSize(variant.size)}
-                    className={[
-                      "h-9 min-w-[94px] border px-3 text-[11px] font-medium uppercase tracking-[0.01em] transition-colors min-[600px]:h-10 min-[600px]:min-w-[108px] min-[600px]:px-4 lg:h-11 lg:min-w-[126px] lg:text-[11px]",
-                      selected
-                        ? "border-neutral-950 bg-neutral-950 text-white"
-                        : "border-neutral-300 bg-white text-neutral-950 hover:border-neutral-950",
-                      unavailable && !selected
-                        ? "cursor-pointer border-neutral-200 bg-neutral-50 text-neutral-400"
-                        : "cursor-pointer",
-                    ].join(" ")}
+          {isCombo ? (
+            <div className="mt-4 border-t border-[#e8e2d9] pt-3.5 sm:mt-4 sm:pt-4 min-[600px]:mt-3 min-[600px]:pt-3 lg:mt-4 lg:pt-4">
+              <p className="text-[12px] font-normal uppercase leading-none tracking-[0.08em] text-neutral-800 sm:text-[13px] lg:text-[15px]">
+                What You Get
+              </p>
+              {product.whatYouGet && (
+                <p className="mt-2 whitespace-pre-line text-[13px] leading-6 text-neutral-600">
+                  {product.whatYouGet}
+                </p>
+              )}
+              <div className="mt-3 space-y-2">
+                {(product.comboItems || []).map((item, index) => (
+                  <Link
+                    key={`${item.productId}-${item.variantId}-${index}`}
+                    href={item.slug ? `/product/${item.slug}` : "#"}
+                    className="flex items-center justify-between border border-neutral-200 px-3 py-2 text-[12px] uppercase tracking-[0.05em] text-neutral-800"
                   >
-                    {variant.size}
-                  </button>
-                );
-              })}
+                    <span>{item.name || "Perfume"}</span>
+                    <span>{item.size || item.variantId} x {item.quantity}</span>
+                  </Link>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="mt-4 border-t border-[#e8e2d9] pt-3.5 sm:mt-4 sm:pt-4 min-[600px]:mt-3 min-[600px]:pt-3 lg:mt-4 lg:pt-4">
+              <p className="text-[12px] font-normal leading-none tracking-0 text-neutral-800 sm:text-[13px] min-[600px]:text-[12px] lg:text-[15px]">
+                Select Size
+              </p>
+
+              <div className="mt-2 flex flex-wrap gap-2 sm:mt-2.5 sm:gap-2.5 min-[600px]:gap-2">
+                {variants.map((variant) => {
+                  const unavailable = Number(variant.stock) <= 0;
+                  const selected = variant.size === selectedSize;
+
+                  return (
+                    <button
+                      key={variant.size}
+                      type="button"
+                      onClick={() => setSelectedSize(variant.size)}
+                      className={[
+                        "h-9 min-w-[94px] border px-3 text-[11px] font-medium uppercase tracking-[0.01em] transition-colors min-[600px]:h-10 min-[600px]:min-w-[108px] min-[600px]:px-4 lg:h-11 lg:min-w-[126px] lg:text-[11px]",
+                        selected
+                          ? "border-neutral-950 bg-neutral-950 text-white"
+                          : "border-neutral-300 bg-white text-neutral-950 hover:border-neutral-950",
+                        unavailable && !selected
+                          ? "cursor-pointer border-neutral-200 bg-neutral-50 text-neutral-400"
+                          : "cursor-pointer",
+                      ].join(" ")}
+                    >
+                      {variant.size}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="mt-3 sm:mt-4 min-[600px]:mt-3 lg:mt-[18px]">
             <p className="flex items-baseline gap-1.5 text-[12px] font-normal leading-none tracking-0 text-neutral-800 sm:text-[13px] min-[600px]:text-[12px] lg:text-[15px]">
@@ -801,11 +837,11 @@ export default function ProductPage() {
 
             {isSelectedUnavailable ? (
               <p className="mt-3 text-[13px] font-medium text-neutral-500 min-[600px]:text-[12px] lg:text-[14px]">
-                This size is currently out of stock.
+                {isCombo ? "This combo is currently out of stock." : "This size is currently out of stock."}
               </p>
             ) : currentCartQuantity >= selectedStock ? (
               <p className="mt-3 text-[13px] font-medium text-neutral-500 min-[600px]:text-[12px] lg:text-[14px]">
-                Maximum available quantity for this size is already in your cart.
+                Maximum available quantity is already in your cart.
               </p>
             ) : null}
           </div>
@@ -846,6 +882,7 @@ export default function ProductPage() {
 }
 
 function ProductInfoDetails({ product, selectedVariant }) {
+  const isCombo = product.productType === "combo";
   const hasCustomLegalInformation =
     product.legalInformation &&
     Object.entries(product.legalInformation).some(([key, value]) =>
@@ -861,6 +898,7 @@ function ProductInfoDetails({ product, selectedVariant }) {
   const audienceTags = getAudienceTags(product);
   const howToUse = product.howToUse || DEFAULT_HOW_TO_USE;
   const storagePrecautions = product.storagePrecautions || DEFAULT_STORAGE_PRECAUTIONS;
+  const comboTotalVolume = getComboTotalVolume(product.comboItems);
 
   const handleShare = async () => {
     const shareData = {
@@ -910,30 +948,43 @@ function ProductInfoDetails({ product, selectedVariant }) {
           </div>
         </div>
 
-        <DetailRow label="Volume" value={selectedVariant?.size || product.variants?.[0]?.size || "Not available"} />
-        <DetailRow label="Concentration" value={product.concentration || "25% Fragrance Oil"} />
+        {isCombo ? (
+          <>
+            <DetailRow label="Product Type" value="Perfume Combo" />
+            <DetailRow label="Set Includes" value={`${product.comboItems?.length || 0} Perfumes`} />
+            {comboTotalVolume && <DetailRow label="Total Volume" value={comboTotalVolume} />}
+          </>
+        ) : (
+          <>
+            <DetailRow label="Volume" value={selectedVariant?.size || product.variants?.[0]?.size || "Not available"} />
+            <DetailRow label="Concentration" value={product.concentration || "25% Fragrance Oil"} />
+          </>
+        )}
         <DetailRow label="Audience" value={audienceTags.join(" / ")} />
-        {product.longevity && <DetailRow label="Longevity" value={product.longevity} />}
-        {product.projection && <DetailRow label="Projection" value={product.projection} />}
+        {!isCombo && product.longevity && <DetailRow label="Longevity" value={product.longevity} />}
+        {!isCombo && product.projection && <DetailRow label="Projection" value={product.projection} />}
         <DetailRow label="Country of Origin" value="India" />
       </div>
 
       <div className="mt-6 max-w-[520px] space-y-4 text-[13px] leading-[1.65] tracking-0 text-neutral-800 sm:mt-7 sm:text-[14px] lg:mt-8 lg:space-y-4 lg:text-[15px] lg:leading-[1.65]">
         <p>{product.description}</p>
-        <p>
-          Designed for a polished daily ritual, this fragrance balances a clear
-          opening with a deeper signature trail that feels modern, confident and
-          refined.
-        </p>
+        {!isCombo && (
+          <p>
+            Designed for a polished daily ritual, this fragrance balances a clear
+            opening with a deeper signature trail that feels modern, confident and
+            refined.
+          </p>
+        )}
         <p className="pt-1 font-medium text-neutral-950">Why you&apos;ll love it:</p>
         <ul className="space-y-2 pl-5 sm:space-y-2.5 lg:space-y-3">
-          {product.fragranceProfile && <li className="list-disc">{product.fragranceProfile}</li>}
+          {isCombo && product.whatYouGet && <li className="list-disc whitespace-pre-line">{product.whatYouGet}</li>}
+          {!isCombo && product.fragranceProfile && <li className="list-disc">{product.fragranceProfile}</li>}
           {product.bestFor?.length > 0 && (
             <li className="list-disc">
               Best for {product.bestFor.slice(0, 4).join(", ").toLowerCase()}
             </li>
           )}
-          {product.bestSeason?.length > 0 && (
+          {!isCombo && product.bestSeason?.length > 0 && (
             <li className="list-disc">
               Best season: {product.bestSeason.join(", ")}
             </li>
@@ -946,13 +997,34 @@ function ProductInfoDetails({ product, selectedVariant }) {
           <p>{product.description}</p>
         </Accordion>
 
-        <Accordion title="FRAGRANCE NOTES">
-          <div className="grid gap-5">
-            <NoteGroup title="Top Notes" notes={product.fragranceNotes?.top} />
-            <NoteGroup title="Heart Notes" notes={product.fragranceNotes?.heart} />
-            <NoteGroup title="Base Notes" notes={product.fragranceNotes?.base} />
-          </div>
-        </Accordion>
+        {isCombo ? (
+          <Accordion title="WHAT YOU GET">
+            <div className="grid gap-4">
+              {(product.comboItems || []).map((item, index) => (
+                <div key={`${item.productId}-${item.variantId}-${index}`}>
+                  <Link
+                    href={item.slug ? `/product/${item.slug}` : "#"}
+                    className="text-[13px] font-semibold uppercase tracking-[0.1em] text-neutral-950 underline-offset-4 hover:underline"
+                  >
+                    {item.name || "Perfume"}
+                  </Link>
+                  <p className="mt-1 text-[13px] leading-6 text-neutral-600">
+                    {item.size || item.variantId} x {item.quantity}
+                    {item.fragranceProfile ? ` - ${item.fragranceProfile}` : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Accordion>
+        ) : (
+          <Accordion title="FRAGRANCE NOTES">
+            <div className="grid gap-5">
+              <NoteGroup title="Top Notes" notes={product.fragranceNotes?.top} />
+              <NoteGroup title="Heart Notes" notes={product.fragranceNotes?.heart} />
+              <NoteGroup title="Base Notes" notes={product.fragranceNotes?.base} />
+            </div>
+          </Accordion>
+        )}
 
         <Accordion title="HOW TO USE">
           <p>{howToUse}</p>

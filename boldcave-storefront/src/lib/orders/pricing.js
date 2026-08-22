@@ -10,7 +10,14 @@ import {
   normalizeCouponCode,
   toPositiveInteger,
 } from "@/lib/validation";
-import { normalizeImage } from "@/lib/api/products";
+import { clearProductCache } from "@/lib/productCache";
+import {
+  COMBO_VARIANT_SIZE,
+  findVariantByIdentifier,
+  getComboAvailability,
+  isComboProduct,
+  normalizeImage,
+} from "@/lib/api/products";
 
 export async function getReviewStats(productId) {
   const productObjectId =
@@ -133,6 +140,107 @@ export function validateAddress(address = {}) {
   return { valid: true };
 }
 
+function addStockRequirement(requirements, { productId, variantId, quantity }) {
+  const normalizedProductId = String(productId || "").trim();
+  const normalizedVariantId = String(variantId || "").trim();
+  const normalizedQuantity = Math.max(1, Number(quantity) || 1);
+
+  if (!normalizedProductId || !normalizedVariantId) return;
+
+  const key = `${normalizedProductId}:${normalizedVariantId.toLowerCase()}`;
+  const current = requirements.get(key) || {
+    productId: normalizedProductId,
+    variantId: normalizedVariantId,
+    quantity: 0,
+  };
+  current.quantity += normalizedQuantity;
+  requirements.set(key, current);
+}
+
+function getStockRequirements(items = []) {
+  const requirements = new Map();
+
+  items.forEach((item) => {
+    if (item.productType === "combo") {
+      (item.comboItems || []).forEach((comboItem) => {
+        addStockRequirement(requirements, {
+          productId: comboItem.productId,
+          variantId: comboItem.variantId || comboItem.size,
+          quantity:
+            Math.max(1, Number(comboItem.quantity) || 1) *
+            Math.max(1, Number(item.quantity) || 1),
+        });
+      });
+      return;
+    }
+
+    addStockRequirement(requirements, {
+      productId: item.productId,
+      variantId: item.size,
+      quantity: item.quantity,
+    });
+  });
+
+  return Array.from(requirements.values());
+}
+
+async function validateStockRequirements(requirements = []) {
+  const result = await getCanonicalStockRequirements(requirements);
+  const stockIssues = result.requirements
+    .filter((requirement) => requirement.availableStock < requirement.quantity)
+    .map((requirement) => ({
+      productId: requirement.productId,
+      size: requirement.size,
+      requestedQuantity: requirement.quantity,
+      availableStock: requirement.availableStock,
+      reason: "INSUFFICIENT_STOCK",
+    }));
+
+  return [...result.issues, ...stockIssues];
+}
+
+async function getCanonicalStockRequirements(requirements = []) {
+  if (!requirements.length) return { requirements: [], issues: [] };
+
+  const productIds = Array.from(new Set(requirements.map((item) => item.productId)));
+  const products = await Product.find({ _id: { $in: productIds } });
+  const productsById = new Map(products.map((product) => [String(product._id), product]));
+  const canonicalRequirements = new Map();
+  const issues = [];
+
+  requirements.forEach((requirement) => {
+    const product = productsById.get(requirement.productId);
+    const variant = findVariantByIdentifier(product, requirement.variantId);
+
+    if (!product || !variant) {
+      issues.push({
+        productId: requirement.productId,
+        size: requirement.variantId,
+        requestedQuantity: requirement.quantity,
+        availableStock: 0,
+        reason: "VARIANT_UNAVAILABLE",
+      });
+      return;
+    }
+
+    const key = `${requirement.productId}:${String(variant.size).toLowerCase()}`;
+    const current = canonicalRequirements.get(key) || {
+      productId: requirement.productId,
+      size: variant.size,
+      quantity: 0,
+      availableStock: Number(variant.stock) || 0,
+    };
+    current.quantity += requirement.quantity;
+    current.availableStock = Number(variant.stock) || 0;
+    canonicalRequirements.set(key, current);
+  });
+
+  return {
+    requirements: Array.from(canonicalRequirements.values()),
+    issues,
+  };
+}
+
 export async function calculateCart({ items = [], couponCode = "" }) {
   if (!Array.isArray(items) || items.length === 0) {
     return {
@@ -177,6 +285,66 @@ export async function calculateCart({ items = [], couponCode = "" }) {
       continue;
     }
 
+    if (isComboProduct(product)) {
+      const referencedIds = Array.from(
+        new Set((product.comboItems || []).map((item) => String(item.productId)).filter(Boolean))
+      );
+      const referencedProducts = referencedIds.length
+        ? await Product.find({ _id: { $in: referencedIds }, productType: { $ne: "combo" } })
+        : [];
+      const productsById = new Map(referencedProducts.map((entry) => [String(entry._id), entry]));
+      const availableStock = getComboAvailability(product.comboItems, productsById);
+      const comboVariant = product.variants?.[0];
+
+      if (!comboVariant) {
+        stockIssues.push({
+          productId,
+          size: COMBO_VARIANT_SIZE,
+          requestedQuantity: quantity,
+          reason: "VARIANT_UNAVAILABLE",
+        });
+        continue;
+      }
+
+      if (availableStock < quantity) {
+        stockIssues.push({
+          productId,
+          size: COMBO_VARIANT_SIZE,
+          requestedQuantity: quantity,
+          availableStock,
+          reason: "INSUFFICIENT_STOCK",
+        });
+        continue;
+      }
+
+      normalizedItems.push({
+        productId: product._id,
+        name: product.name,
+        slug: product.slug,
+        image: normalizeImage(product.images?.[0]),
+        size: COMBO_VARIANT_SIZE,
+        quantity,
+        unitPrice: comboVariant.sellingPrice,
+        mrp: comboVariant.mrp,
+        productType: "combo",
+        comboItems: (product.comboItems || []).map((item) => {
+          const referencedProduct = productsById.get(String(item.productId));
+          const variant = findVariantByIdentifier(referencedProduct, item.variantId);
+          return {
+            productId: item.productId,
+            name: referencedProduct?.name || "",
+            slug: referencedProduct?.slug || "",
+            size: variant?.size || item.variantId,
+            variantId: item.variantId,
+            quantity: Number(item.quantity) || 1,
+            image: normalizeImage(referencedProduct?.images?.[0]),
+          };
+        }),
+        lineTotal: comboVariant.sellingPrice * quantity,
+      });
+      continue;
+    }
+
     const variant = product.variants.find((entry) => entry.size === size);
     if (!variant) {
       stockIssues.push({
@@ -208,6 +376,7 @@ export async function calculateCart({ items = [], couponCode = "" }) {
       quantity,
       unitPrice: variant.sellingPrice,
       mrp: variant.mrp,
+      productType: "product",
       lineTotal: variant.sellingPrice * quantity,
     });
   }
@@ -219,6 +388,21 @@ export async function calculateCart({ items = [], couponCode = "" }) {
         message: "Some cart items are no longer available in the requested quantity",
         status: 409,
         details: { items: stockIssues },
+      },
+    };
+  }
+
+  const aggregateStockIssues = await validateStockRequirements(
+    getStockRequirements(normalizedItems)
+  );
+
+  if (aggregateStockIssues.length) {
+    return {
+      error: {
+        code: "STOCK_CHANGED",
+        message: "Some cart items are no longer available in the requested quantity",
+        status: 409,
+        details: { items: aggregateStockIssues },
       },
     };
   }
@@ -251,31 +435,50 @@ export async function calculateCart({ items = [], couponCode = "" }) {
 }
 
 export async function deductStock(items) {
-  const changed = [];
+  const canonicalResult = await getCanonicalStockRequirements(getStockRequirements(items));
+  const changed = [
+    ...canonicalResult.issues,
+    ...canonicalResult.requirements
+      .filter((requirement) => requirement.availableStock < requirement.quantity)
+      .map((requirement) => ({
+        productId: requirement.productId,
+        size: requirement.size,
+        requestedQuantity: requirement.quantity,
+        availableStock: requirement.availableStock,
+        reason: "INSUFFICIENT_STOCK",
+      })),
+  ];
 
-  for (const item of items) {
+  if (changed.length) {
+    const error = new Error("Stock changed");
+    error.code = "STOCK_CHANGED";
+    error.items = changed;
+    throw error;
+  }
+
+  for (const requirement of canonicalResult.requirements) {
     const result = await Product.updateOne(
       {
-        _id: item.productId,
+        _id: requirement.productId,
         variants: {
           $elemMatch: {
-            size: item.size,
-            stock: { $gte: item.quantity },
+            size: requirement.size,
+            stock: { $gte: requirement.quantity },
           },
         },
       },
       {
         $inc: {
-          "variants.$.stock": -item.quantity,
+          "variants.$.stock": -requirement.quantity,
         },
       }
     );
 
     if (result.modifiedCount !== 1) {
       changed.push({
-        productId: String(item.productId),
-        size: item.size,
-        requestedQuantity: item.quantity,
+        productId: requirement.productId,
+        size: requirement.size,
+        requestedQuantity: requirement.quantity,
       });
     }
   }
@@ -286,6 +489,8 @@ export async function deductStock(items) {
     error.items = changed;
     throw error;
   }
+
+  clearProductCache();
 }
 
 export async function hasVerifiedPurchase(userId, productId) {

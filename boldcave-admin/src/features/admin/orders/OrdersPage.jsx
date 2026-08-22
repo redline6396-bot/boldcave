@@ -174,7 +174,12 @@ export default function OrdersPage() {
                             </div>
                             <div className='min-w-0 flex-1'>
                               <p className='truncate font-semibold text-gray-950'>{displayValue(item.name)}</p>
-                              <p className='text-gray-500'>{displayValue(item.size)} | Qty {item.quantity || 0} | Unit {money(item.unitPrice)}</p>
+                              <p className='text-gray-500'>{item.productType === 'combo' ? 'Perfume Combo' : displayValue(item.size)} | Qty {item.quantity || 0} | Unit {money(item.unitPrice)}</p>
+                              {item.productType === 'combo' && item.comboItems?.length > 0 && (
+                                <p className='mt-1 text-xs text-gray-500'>
+                                  Includes {item.comboItems.map((entry) => `${entry.name || 'Product'} ${entry.size || entry.variantId} x ${entry.quantity}`).join(', ')}
+                                </p>
+                              )}
                             </div>
                             <p className='font-semibold text-gray-950'>{money(Number(item.unitPrice || 0) * Number(item.quantity || 0))}</p>
                           </div>

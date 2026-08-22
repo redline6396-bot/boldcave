@@ -16,6 +16,7 @@ const blankVariant = (size = '') => ({
 });
 
 const emptyForm = {
+  productType: 'product',
   name: '',
   slug: '',
   audienceTags: ['Unisex'],
@@ -29,6 +30,11 @@ const emptyForm = {
   concentration: '',
   personality: '',
   positioning: '',
+  whatYouGet: '',
+  comboMrp: '',
+  comboSellingPrice: '',
+  comboCostPrice: '',
+  comboItems: [{ productId: '', variantId: '', quantity: 1 }],
   bestFor: '',
   bestSeason: '',
   howToUse: '',
@@ -73,6 +79,7 @@ function formFromProduct(product) {
   if (!product) return emptyForm;
 
   return {
+    productType: product.productType === 'combo' ? 'combo' : 'product',
     name: product.name || '',
     slug: product.slug || '',
     audienceTags: product.audienceTags?.length ? product.audienceTags : ['Unisex'],
@@ -86,6 +93,17 @@ function formFromProduct(product) {
     concentration: product.concentration || '',
     personality: product.personality || '',
     positioning: product.positioning || '',
+    whatYouGet: product.whatYouGet || '',
+    comboMrp: product.productType === 'combo' ? product.variants?.[0]?.mrp ?? '' : '',
+    comboSellingPrice: product.productType === 'combo' ? product.variants?.[0]?.sellingPrice ?? '' : '',
+    comboCostPrice: product.productType === 'combo' ? product.variants?.[0]?.costPrice ?? '' : '',
+    comboItems: product.comboItems?.length
+      ? product.comboItems.map((item) => ({
+          productId: item.productId || '',
+          variantId: item.variantId || item.size || '',
+          quantity: item.quantity || 1,
+        }))
+      : emptyForm.comboItems,
     bestFor: (product.bestFor || []).join(', '),
     bestSeason: (product.bestSeason || []).join(', '),
     howToUse: product.howToUse || '',
@@ -128,6 +146,7 @@ async function uploadImage(file) {
 export default function ProductForm({ product, submitLabel = 'Save Product', onSubmit }) {
   const [form, setForm] = useState(() => formFromProduct(product));
   const [files, setFiles] = useState([]);
+  const [catalogProducts, setCatalogProducts] = useState([]);
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState('');
 
@@ -149,8 +168,40 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
   const urlImages = useMemo(() => lines(form.imagesText), [form.imagesText]);
   const totalImageCount = urlImages.length + files.length;
   const remainingImageSlots = Math.max(0, MAX_IMAGES - totalImageCount);
+  const isCombo = form.productType === 'combo';
+  const selectableProducts = useMemo(
+    () =>
+      catalogProducts.filter((entry) => {
+        const id = String(entry._id || entry.id || '');
+        return entry.productType !== 'combo' && id !== String(product?._id || product?.id || '');
+      }),
+    [catalogProducts, product]
+  );
 
   const setField = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+
+  useEffect(() => {
+    if (!isCombo) return;
+
+    let isMounted = true;
+    api.get('/api/admin/products')
+      .then((response) => {
+        if (isMounted) setCatalogProducts(response.data.data.products || []);
+      })
+      .catch((error) => {
+        if (isMounted) setLocalError(error.message || 'Unable to load products for combo');
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isCombo]);
+
+  const setProductType = (productType) => {
+    if (product) return;
+    setForm((current) => ({ ...current, productType }));
+    setLocalError('');
+  };
 
   const handleImageFiles = (event) => {
     const selectedFiles = Array.from(event.target.files || []);
@@ -244,7 +295,81 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
     });
   };
 
+  const setComboItem = (index, field, value) => {
+    setForm((current) => ({
+      ...current,
+      comboItems: current.comboItems.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        const nextItem = { ...item, [field]: value };
+        if (field === 'productId') nextItem.variantId = '';
+        return nextItem;
+      }),
+    }));
+  };
+
+  const addComboItem = () => {
+    setForm((current) => ({
+      ...current,
+      comboItems: [...current.comboItems, { productId: '', variantId: '', quantity: 1 }],
+    }));
+  };
+
+  const removeComboItem = (index) => {
+    setForm((current) => ({
+      ...current,
+      comboItems: current.comboItems.filter((_, itemIndex) => itemIndex !== index),
+    }));
+  };
+
   const buildPayload = async () => {
+    if (!form.name.trim()) throw new Error(isCombo ? 'Combo name is required' : 'Product name is required');
+    if (!form.description.trim()) throw new Error('Description is required');
+    if (urlImages.length + files.length > MAX_IMAGES) {
+      throw new Error(`Maximum ${MAX_IMAGES} product images allowed`);
+    }
+
+    if (isCombo) {
+      const comboItems = (form.comboItems || []).map((item) => ({
+        productId: item.productId,
+        variantId: item.variantId,
+        quantity: Number(item.quantity || 1),
+      }));
+
+      if (!comboItems.length) throw new Error('Add at least one included product');
+      if (comboItems.some((item) => !item.productId || !item.variantId || item.quantity < 1)) {
+        throw new Error('Each included product needs product, size and quantity');
+      }
+      if (Number(form.comboMrp) <= 0 || Number(form.comboSellingPrice) <= 0) {
+        throw new Error('MRP and selling price must be greater than zero');
+      }
+      if (Number(form.comboCostPrice || 0) < 0) {
+        throw new Error('Cost price cannot be negative');
+      }
+
+      const uploadedImages = [];
+      for (const file of files) {
+        uploadedImages.push(await uploadImage(file));
+      }
+
+      return {
+        productType: 'combo',
+        name: form.name,
+        slug: form.slug,
+        audienceTags: form.audienceTags,
+        status: form.status,
+        shortDescription: form.shortDescription,
+        description: form.description,
+        images: [...urlImages.map((url) => ({ url })), ...uploadedImages],
+        whatYouGet: form.whatYouGet,
+        positioning: form.positioning,
+        bestFor: csv(form.bestFor),
+        mrp: Number(form.comboMrp),
+        sellingPrice: Number(form.comboSellingPrice),
+        costPrice: Number(form.comboCostPrice || 0),
+        comboItems,
+      };
+    }
+
     const selectedVariants = form.variants
       .map(({ enabled, ...variant }) => ({
         ...variant,
@@ -258,11 +383,6 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
           generateSku(form.slug || form.name, variant.size),
       }));
 
-    if (!form.name.trim()) throw new Error('Product name is required');
-    if (!form.description.trim()) throw new Error('Description is required');
-    if (urlImages.length + files.length > MAX_IMAGES) {
-      throw new Error(`Maximum ${MAX_IMAGES} product images allowed`);
-    }
     if (selectedVariants.length === 0) throw new Error('Add at least one variant');
     if (selectedVariants.some((variant) => !variant.size)) {
       throw new Error('Variant size label is required');
@@ -284,6 +404,7 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
     }
 
     return {
+      productType: 'product',
       name: form.name,
       slug: form.slug,
       audienceTags: form.audienceTags,
@@ -331,10 +452,35 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
     <form onSubmit={submit} className='space-y-6'>
       {localError && <div className='rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700'>{localError}</div>}
 
+      {!product && (
+        <section className='rounded border border-gray-200 bg-white p-5'>
+          <div className='grid gap-3 sm:grid-cols-2'>
+            {[
+              ['product', 'ADD PRODUCT'],
+              ['combo', 'ADD COMBO'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type='button'
+                onClick={() => setProductType(value)}
+                className={[
+                  'rounded border px-4 py-3 text-sm font-semibold transition',
+                  form.productType === value
+                    ? 'border-black bg-black text-white'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-black',
+                ].join(' ')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className='rounded border border-gray-200 bg-white p-5'>
-        <h2 className='mb-4 font-semibold text-gray-950'>Product Details</h2>
+        <h2 className='mb-4 font-semibold text-gray-950'>{isCombo ? 'Combo Details' : 'Product Details'}</h2>
         <div className='grid gap-4 md:grid-cols-2'>
-          <Field label='Name' value={form.name} onChange={(value) => setField('name', value)} placeholder='NOIR' required />
+          <Field label={isCombo ? 'Combo Name' : 'Name'} value={form.name} onChange={(value) => setField('name', value)} placeholder={isCombo ? 'Discovery Combo' : 'NOIR'} required />
           <Field label='Slug' value={form.slug} onChange={(value) => setField('slug', value)} placeholder='Auto-generated if blank' />
           <Select label='Status' value={form.status} onChange={(value) => setField('status', value)} options={['draft', 'published']} />
         </div>
@@ -370,8 +516,109 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
             placeholder='NOIR opens with bright citrus spice, settles into aromatic warmth, and finishes with a deep woody amber trail.'
             required
           />
+          {isCombo && (
+            <>
+              <Textarea
+                label='What You Get'
+                value={form.whatYouGet}
+                onChange={(value) => setField('whatYouGet', value)}
+                placeholder={'VERTEX 10 ML x 1\nNOIR 10 ML x 1\nBLUE 10 ML x 1'}
+              />
+              <Field
+                label='Best For / Positioning'
+                helper='Simple customer-facing positioning. Separate multiple values with commas if needed.'
+                value={form.bestFor}
+                onChange={(value) => setField('bestFor', value)}
+                placeholder='Gifting, Travel & Discovery'
+              />
+            </>
+          )}
         </div>
       </section>
+
+      {isCombo && (
+        <section className='rounded border border-gray-200 bg-white p-5'>
+          <div className='mb-4 flex flex-wrap items-center justify-between gap-3'>
+            <h2 className='font-semibold text-gray-950'>Included Products</h2>
+            <button
+              type='button'
+              onClick={addComboItem}
+              className='rounded border border-gray-950 px-3 py-2 text-xs font-semibold text-gray-950 hover:bg-gray-950 hover:text-white'
+            >
+              + ADD ANOTHER PRODUCT
+            </button>
+          </div>
+          <div className='space-y-3'>
+            {form.comboItems.map((item, index) => {
+              const selectedProduct = selectableProducts.find((entry) => String(entry._id || entry.id) === String(item.productId));
+              const variants = selectedProduct?.variants || [];
+
+              return (
+                <div key={`combo-item-${index}`} className='grid gap-3 rounded border border-gray-200 p-4 md:grid-cols-[1.2fr_1fr_120px_auto] md:items-end'>
+                  <label className='block text-sm'>
+                    <span className='mb-1 block font-medium text-gray-700'>Select Product</span>
+                    <select
+                      value={item.productId}
+                      onChange={(event) => setComboItem(index, 'productId', event.target.value)}
+                      className='w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'
+                    >
+                      <option value=''>Choose product</option>
+                      {selectableProducts.map((entry) => (
+                        <option key={entry._id || entry.id} value={entry._id || entry.id}>
+                          {entry.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className='block text-sm'>
+                    <span className='mb-1 block font-medium text-gray-700'>Select Variant / Size</span>
+                    <select
+                      value={item.variantId}
+                      onChange={(event) => setComboItem(index, 'variantId', event.target.value)}
+                      className='w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'
+                    >
+                      <option value=''>Choose size</option>
+                      {variants.map((variant) => (
+                        <option key={variant.size} value={variant.size}>
+                          {variant.size} ({variant.stock ?? 0} stock)
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <Field
+                    label='Quantity'
+                    type='number'
+                    value={item.quantity}
+                    onChange={(value) => setComboItem(index, 'quantity', value)}
+                    placeholder='1'
+                  />
+                  {form.comboItems.length > 1 && (
+                    <button
+                      type='button'
+                      onClick={() => removeComboItem(index)}
+                      className='rounded border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50'
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {isCombo && (
+        <section className='rounded border border-gray-200 bg-white p-5'>
+          <h2 className='mb-4 font-semibold text-gray-950'>Pricing</h2>
+          <div className='grid gap-4 md:grid-cols-3'>
+            <Field label='MRP' type='number' value={form.comboMrp} onChange={(value) => setField('comboMrp', value)} placeholder='1999' />
+            <Field label='Selling Price' type='number' value={form.comboSellingPrice} onChange={(value) => setField('comboSellingPrice', value)} placeholder='1499' />
+            <Field label='Cost Price' type='number' value={form.comboCostPrice} onChange={(value) => setField('comboCostPrice', value)} placeholder='700' />
+          </div>
+          <p className='mt-2 text-xs text-gray-500'>Combo stock is derived from included variants. No manual stock is required.</p>
+        </section>
+      )}
 
       <section className='rounded border border-gray-200 bg-white p-5'>
         <div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
@@ -461,6 +708,7 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
         </p>
       </section>
 
+      {!isCombo && (
       <section className='rounded border border-gray-200 bg-white p-5'>
         <div className='mb-4 flex flex-wrap items-center justify-between gap-3'>
           <h2 className='font-semibold text-gray-950'>Variants</h2>
@@ -504,7 +752,9 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
           ))}
         </div>
       </section>
+      )}
 
+      {!isCombo && (
       <section className='rounded border border-gray-200 bg-white p-5'>
         <h2 className='mb-4 font-semibold text-gray-950'>Perfume Attributes</h2>
         <div className='grid gap-4 md:grid-cols-2'>
@@ -601,6 +851,7 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
           />
         </div>
       </section>
+      )}
 
       <section className='rounded border border-gray-200 bg-white p-5'>
         <h2 className='mb-4 font-semibold text-gray-950'>Product Information / Legal</h2>

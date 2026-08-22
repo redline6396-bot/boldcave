@@ -2,7 +2,7 @@ import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
-import { serializeProduct } from "@/lib/api/products";
+import { serializeProductWithCombos } from "@/lib/api/products";
 import { clearProductCache } from "@/lib/productCache";
 import { isObjectId } from "@/lib/validation";
 import Product from "@/models/Product";
@@ -26,7 +26,7 @@ export async function GET(request, { params }) {
     const product = await Product.findById(id);
     if (!product) return applyAdminCors(request, failure("PRODUCT_NOT_FOUND", "Product not found", 404));
 
-    return applyAdminCors(request, success({ product: serializeProduct(product, { includeCostPrice: true }) }));
+    return applyAdminCors(request, success({ product: await serializeProductWithCombos(product, { includeCostPrice: true }) }));
   } catch (error) {
     return applyAdminCors(request, handleRouteError(error));
   }
@@ -41,7 +41,7 @@ export async function PUT(request, { params }) {
     if (!isObjectId(id)) return applyAdminCors(request, failure("INVALID_PRODUCT_ID", "Invalid product id", 400));
 
     const body = await readJson(request);
-    const result = buildProductPayload(body);
+    const result = await buildProductPayload(body, id);
     if (result.error) return applyAdminCors(request, failure("VALIDATION_ERROR", result.error, 400));
 
     await connectDB();
@@ -52,7 +52,7 @@ export async function PUT(request, { params }) {
     if (!product) return applyAdminCors(request, failure("PRODUCT_NOT_FOUND", "Product not found", 404));
 
     clearProductCache();
-    return applyAdminCors(request, success({ product: serializeProduct(product, { includeCostPrice: true }) }));
+    return applyAdminCors(request, success({ product: await serializeProductWithCombos(product, { includeCostPrice: true }) }));
   } catch (error) {
     return applyAdminCors(request, handleRouteError(error, "PRODUCT_UPDATE_FAILED"));
   }

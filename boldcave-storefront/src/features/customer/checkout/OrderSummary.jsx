@@ -73,6 +73,10 @@ export default function OrderSummary({
               const mrp = Number(variant.mrp) || selling;
               const lineSelling = selling * quantity;
               const lineMrp = mrp * quantity;
+              const isCombo = product.productType === "combo";
+              const includesText = isCombo
+                ? (product.comboItems || []).map((entry) => entry.name).filter(Boolean).join(", ")
+                : "";
 
               return (
                 <div
@@ -91,9 +95,14 @@ export default function OrderSummary({
                     <p className="truncate text-[14px] font-medium">
                       {product.name}{" "}
                       <span className="font-normal text-[#65717e]">
-                        ({size})
+                        ({isCombo ? "Combo" : size})
                       </span>
                     </p>
+                    {includesText && (
+                      <p className="mt-1 text-[11px] leading-4 text-[#65717e]">
+                        Includes {includesText}
+                      </p>
+                    )}
                     <p className="mt-1 text-[12px] text-[#526173]">
                       Qty: {quantity}
                     </p>

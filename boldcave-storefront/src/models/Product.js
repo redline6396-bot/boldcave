@@ -32,8 +32,23 @@ const variantSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const comboItemSchema = new mongoose.Schema(
+  {
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
+    variantId: { type: String, required: true, trim: true },
+    quantity: { type: Number, required: true, min: 1 },
+  },
+  { _id: false }
+);
+
 const productSchema = new mongoose.Schema(
   {
+    productType: {
+      type: String,
+      enum: ["product", "combo"],
+      default: "product",
+      index: true,
+    },
     name: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
     audienceTags: [{ type: String, enum: PRODUCT_CATEGORIES, trim: true }],
@@ -46,6 +61,7 @@ const productSchema = new mongoose.Schema(
     concentration: { type: String, trim: true },
     personality: { type: String, trim: true },
     positioning: { type: String, trim: true },
+    whatYouGet: { type: String, trim: true },
     bestFor: [{ type: String, trim: true }],
     bestSeason: [{ type: String, trim: true }],
     howToUse: { type: String, trim: true },
@@ -63,6 +79,7 @@ const productSchema = new mongoose.Schema(
         message: "Product variants must have unique size labels",
       },
     },
+    comboItems: { type: [comboItemSchema], default: [] },
     legalInformation: {
       ingredients: { type: String, trim: true },
       caution: { type: String, trim: true },
@@ -74,8 +91,12 @@ const productSchema = new mongoose.Schema(
 
 productSchema.index({ audienceTags: 1, status: 1 });
 productSchema.index({ "variants.stock": 1 });
+productSchema.index({ productType: 1, status: 1 });
 
-if (mongoose.models.Product?.schema?.path("category")) {
+if (
+  mongoose.models.Product?.schema?.path("category") ||
+  (mongoose.models.Product && !mongoose.models.Product.schema?.path("productType"))
+) {
   delete mongoose.models.Product;
 }
 
