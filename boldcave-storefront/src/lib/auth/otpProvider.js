@@ -17,8 +17,7 @@ function hashOtp(phone, otp) {
 function isMockOtpEnabled() {
   return (
     process.env.OTP_PROVIDER === "mock" &&
-    process.env.OTP_MOCK_ENABLED === "true" &&
-    process.env.NODE_ENV !== "production"
+    process.env.OTP_MOCK_ENABLED === "true"
   );
 }
 

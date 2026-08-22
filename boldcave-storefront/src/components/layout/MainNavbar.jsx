@@ -22,7 +22,7 @@ const ROUTES = {
   unisex: "/collection?category=Unisex",
   about: "/about",
   contact: "/contact",
-  trackOrder: "/orders",
+  trackOrder: "/profile?section=orders",
   orders: "/profile?section=orders",
   login: "/login",
 };
@@ -42,10 +42,22 @@ const utilityItems = [
 ];
 
 const socialItems = [
-  { label: "X", Icon: FaXTwitter },
-  { label: "Facebook", Icon: FaFacebookF },
-  { label: "Instagram", Icon: FaInstagram },
-  { label: "YouTube", Icon: FaYoutube },
+  { label: "X", href: "https://x.com/boldcave", Icon: FaXTwitter },
+  {
+    label: "Facebook",
+    href: "https://www.facebook.com/profile.php?id=61593546664572",
+    Icon: FaFacebookF,
+  },
+  {
+    label: "Instagram",
+    href: "https://www.instagram.com/bold_cave/",
+    Icon: FaInstagram,
+  },
+  {
+    label: "YouTube",
+    href: "https://www.youtube.com/@BoldCave",
+    Icon: FaYoutube,
+  },
 ];
 
 function getActiveCategoryFromLocation() {
@@ -136,7 +148,7 @@ function BrandLogo({ onClick, className = "" }) {
       onClick={onClick}
       aria-label="Bold Cave home"
       className={[
-        "inline-flex h-[48px] w-[150px] cursor-pointer items-center justify-center justify-self-center overflow-hidden sm:absolute sm:left-1/2 sm:top-1/2 sm:h-[85px] sm:w-[290px] sm:-translate-x-1/2 sm:-translate-y-1/2",
+        "inline-flex h-[48px] w-[150px] cursor-pointer items-center justify-center justify-self-center overflow-hidden sm:absolute sm:left-1/2 sm:top-1/2 sm:h-[75px] sm:w-[290px] sm:-translate-x-1/2 sm:-translate-y-1/2",
         className,
       ].join(" ")}
     >
@@ -310,15 +322,17 @@ function DrawerSocials() {
       </p>
 
       <div className="mt-3.5 flex items-center gap-5 sm:gap-8">
-        {socialItems.map(({ label, Icon }) => (
-          <span
+        {socialItems.map(({ label, href, Icon }) => (
+          <a
             key={label}
+            href={href}
             aria-label={label}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex h-7 w-7 cursor-pointer items-center justify-center text-neutral-950"
-            role="img"
           >
             <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
-          </span>
+          </a>
         ))}
       </div>
     </div>

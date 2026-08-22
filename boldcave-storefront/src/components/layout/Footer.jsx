@@ -9,16 +9,6 @@ import { FaXTwitter } from "react-icons/fa6";
 
 const brandName = "BOLD CΛVE";
 
-/*
-  Long, soft directional white shadow inspired by the AE reference.
-  Important: font weight / boldness is unchanged.
-*/
-const brandTextShadow = `
-  0 1px 0 rgba(255,255,255,0.24),
-  0 6px 10px rgba(255,255,255,0.12),
-  6px 14px 18px rgba(255,255,255,0.09),
-  14px 24px 28px rgba(255,255,255,0.06)
-`;
 const footerColumns = [
   {
     title: "SHOP",
@@ -32,8 +22,8 @@ const footerColumns = [
   {
     title: "HELP",
     links: [
-      { label: "Track Order", href: "/orders" },
-      { label: "My Orders", href: "/orders" },
+      { label: "Track Order", href: "/profile?section=orders" },
+      { label: "My Orders", href: "/profile?section=orders" },
       { label: "Contact Us", href: "/contact" },
     ],
   },
@@ -51,25 +41,25 @@ const footerColumns = [
 const socialLinks = [
   {
     label: "X",
-    href: null,
+    href: "https://x.com/boldcave",
     Icon: FaXTwitter,
     className: "h-[19px] w-[19px]",
   },
   {
     label: "Facebook",
-    href: null,
+    href: "https://www.facebook.com/profile.php?id=61593546664572",
     Icon: FaFacebook,
     className: "h-[21px] w-[21px]",
   },
   {
     label: "Instagram",
-    href: null,
+    href: "https://www.instagram.com/bold_cave/",
     Icon: FaInstagram,
     className: "h-[20px] w-[20px]",
   },
   {
     label: "YouTube",
-    href: null,
+    href: "https://www.youtube.com/@BoldCave",
     Icon: FaYoutube,
     className: "h-[22px] w-[22px]",
   },
@@ -82,26 +72,19 @@ export default function Footer() {
     <footer className="w-full border-t border-[#202020] bg-black text-white">
       <div className="mx-auto max-w-[1360px] px-5 pt-10 md:px-10 md:pt-14 lg:px-10 lg:pt-10">
         {/* BRAND */}
-        <div className="pb-9 text-center md:pb-12 lg:pb-14">
-          <Link
-            href="/"
-            className="inline-flex flex-col items-center gap-3 text-[28px] font-bold uppercase leading-none tracking-[0.12em] text-white md:text-[44px] lg:text-[52px]"
-            style={{
-              textShadow: brandTextShadow,
-              transform: "scaleX(1.08)",
-              transformOrigin: "center",
-            }}
-          >
-            BOLD CΛVE
-          </Link>
-
-          <img
-            src="/images/brand/bold-cave-icon.png"
-            alt=""
-            className="mx-auto mt-3 h-9 w-auto object-contain drop-shadow-[0_0_12px_rgba(255,255,255,0.22)] md:h-11 lg:h-12"
-          />
-        </div>
-
+<div className="pb-4 text-center md:pb-12 lg:pb-14">
+  <Link
+    href="/"
+    aria-label="Bold Cave home"
+    className="inline-flex h-[54px] w-[250px] max-w-full items-center justify-center overflow-hidden sm:h-[60px] sm:w-[320px] md:h-[66px] md:w-[380px] lg:h-[70px] lg:w-[430px]"
+  >
+    <img
+      src="/images/brand/bold-cave-logo.png"
+      alt="Bold Cave"
+      className="block h-auto w-full max-w-none translate-y-[4px] sm:translate-y-[5px]"
+    />
+  </Link>
+</div>
         {/* MOBILE */}
         <div className="md:hidden">
           {footerColumns.map((column) => (
@@ -245,7 +228,13 @@ function SocialIcon({
   }
 
   return (
-    <a href={href} aria-label={label} className={className}>
+    <a
+      href={href}
+      aria-label={label}
+      className={className}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
       <Icon className={iconClassName} />
     </a>
   );

@@ -52,8 +52,25 @@ const getProfileTags = (product) =>
     .map((tag) => tag.trim())
     .filter(Boolean);
 
+const isFiftyMlVariant = (variant) =>
+  /^50\s*ml$/i.test(String(variant?.size || "").trim());
+
 const getDefaultVariant = (variants) =>
-  variants.find((variant) => Number(variant.stock) > 0) || variants[0];
+  variants.find(
+    (variant) => isFiftyMlVariant(variant) && Number(variant.stock) > 0
+  ) ||
+  variants.find((variant) => Number(variant.stock) > 0) ||
+  variants.find(isFiftyMlVariant) ||
+  variants[0];
+
+const getDisplayVariants = (variants) =>
+  [...variants].sort((first, second) => {
+    const firstIsFifty = isFiftyMlVariant(first);
+    const secondIsFifty = isFiftyMlVariant(second);
+
+    if (firstIsFifty === secondIsFifty) return 0;
+    return firstIsFifty ? -1 : 1;
+  });
 
 const PRODUCT_TITLE_DESCRIPTOR = "EXTRAIT DE PARFUM";
 const COMBO_TITLE_DESCRIPTOR = "PERFUME COMBO";
@@ -484,25 +501,51 @@ export default function ProductPage() {
       <section className="mx-auto grid max-w-[1180px] gap-5 px-5 pb-10 pt-6 min-[600px]:max-w-[760px] min-[600px]:px-6 min-[600px]:pb-14 min-[600px]:pt-2 min-[820px]:max-w-[1180px] min-[820px]:grid-cols-[minmax(0,1fr)_minmax(260px,0.92fr)] min-[820px]:items-start min-[820px]:gap-5 lg:grid-cols-[minmax(0,600px)_minmax(360px,460px)] lg:gap-10 lg:px-8 lg:pb-14 xl:gap-14">
         <div className="min-w-0 min-[820px]:sticky min-[820px]:top-[92px] lg:top-[104px]">
           <div>
-            <div
-              className="aspect-square w-full touch-pan-y overflow-hidden border border-[#eeeeee] bg-white lg:h-[min(600px,calc(100vh-210px))] lg:min-h-[500px] lg:aspect-auto lg:border-0"
-              onPointerDown={handleGalleryPointerDown}
-              onPointerUp={handleGalleryPointerEnd}
-              onPointerCancel={() => {
-                gallerySwipeStartRef.current = null;
-              }}
-              onWheel={handleGalleryWheel}
-            >
-              <img
-                src={galleryImages[selectedImage]}
-                alt={product.name}
-                className="h-full w-full object-contain transition-opacity duration-200"
-                loading="eager"
-                onError={(event) => {
-                  event.currentTarget.onerror = null;
-                  event.currentTarget.src = FALLBACK_IMAGE;
+            <div className="relative">
+              <div
+                className="aspect-square w-full touch-pan-y overflow-hidden border border-[#eeeeee] bg-white lg:h-[min(600px,calc(100vh-210px))] lg:min-h-[500px] lg:aspect-auto lg:border-0"
+                onPointerDown={handleGalleryPointerDown}
+                onPointerUp={handleGalleryPointerEnd}
+                onPointerCancel={() => {
+                  gallerySwipeStartRef.current = null;
                 }}
-              />
+                onWheel={handleGalleryWheel}
+              >
+                <img
+                  src={galleryImages[selectedImage]}
+                  alt={product.name}
+                  className="h-full w-full object-contain transition-opacity duration-200"
+                  loading="eager"
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = FALLBACK_IMAGE;
+                  }}
+                />
+              </div>
+
+              {galleryImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={showPreviousImage}
+                    disabled={selectedImage === 0}
+                    className="absolute -left-5 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 cursor-pointer items-center justify-center text-neutral-700 transition-opacity duration-200 hover:text-neutral-950 hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-20 lg:flex"
+                    aria-label="Previous product image"
+                  >
+                    <ChevronLeft className="h-9 w-9" strokeWidth={1.2} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={showNextImage}
+                    disabled={selectedImage === galleryImages.length - 1}
+                    className="absolute -right-5 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 cursor-pointer items-center justify-center text-neutral-700 transition-opacity duration-200 hover:text-neutral-950 hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-20 lg:flex"
+                    aria-label="Next product image"
+                  >
+                    <ChevronRight className="h-9 w-9" strokeWidth={1.2} />
+                  </button>
+                </>
+              )}
             </div>
 
             <div
@@ -621,17 +664,7 @@ export default function ProductPage() {
               </button>
             </div>
 
-            <div className="mt-4 hidden grid-cols-[28px_minmax(0,1fr)_28px] items-center gap-3 lg:grid">
-                <button
-                  type="button"
-                  onClick={showPreviousImage}
-                  disabled={selectedImage === 0}
-                  className="flex h-8 w-7 cursor-pointer items-center justify-center text-neutral-950 transition-opacity hover:opacity-55 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:opacity-100"
-                  aria-label="Previous image"
-                >
-                  <ChevronLeft className="h-5 w-5" strokeWidth={1.4} />
-                </button>
-
+            <div className="mt-4 hidden grid-cols-1 items-center lg:grid">
                 <div className="grid min-w-0 grid-cols-4 gap-2 min-[900px]:gap-2.5 sm:gap-3">
                   {visibleDesktopThumbnails.map(({ image, index }) => (
                     <button
@@ -660,15 +693,6 @@ export default function ProductPage() {
                   ))}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={showNextImage}
-                  disabled={selectedImage === galleryImages.length - 1}
-                  className="flex h-8 w-7 cursor-pointer items-center justify-center text-neutral-950 transition-opacity hover:opacity-55 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:opacity-100"
-                  aria-label="Next image"
-                >
-                  <ChevronRight className="h-5 w-5" strokeWidth={1.4} />
-                </button>
             </div>
           </div>
         </div>
@@ -774,7 +798,7 @@ export default function ProductPage() {
               </p>
 
               <div className="mt-2 flex flex-wrap gap-2 sm:mt-2.5 sm:gap-2.5 min-[600px]:gap-2">
-                {variants.map((variant) => {
+                {getDisplayVariants(variants).map((variant) => {
                   const unavailable = Number(variant.stock) <= 0;
                   const selected = variant.size === selectedSize;
 
@@ -1127,7 +1151,7 @@ function DetailRow({ label, value }) {
         {label}
       </div>
       <div className="min-w-0 break-words px-2.5 py-2.5 text-[12px] leading-[1.5] tracking-0 text-neutral-700 sm:px-4 sm:py-3 sm:text-[13px] lg:px-5 lg:py-4 lg:text-[14px] lg:leading-6 lg:tracking-[0.01em]">
-        {value}
+        <span className="block max-w-[19ch] sm:max-w-none">{value}</span>
       </div>
     </div>
   );
@@ -1181,8 +1205,3 @@ function MetaGroup({ title, value }) {
   );
 }
 
-function formatLabel(value) {
-  return String(value)
-    .replace(/([A-Z])/g, " $1")
-    .replace(/^./, (letter) => letter.toUpperCase());
-}
