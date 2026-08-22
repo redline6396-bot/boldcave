@@ -462,7 +462,7 @@ export default function CheckoutPage() {
       } catch (shippingError) {
         const invalid = shippingError.code === "INVALID_PINCODE";
 
-        if (!invalid && process.env.NODE_ENV !== "production") {
+        if (!invalid) {
           const demoLocation = DEMO_PINCODES[pin] || {
             city: candidate.city || "",
             state: candidate.state || "",
@@ -1039,8 +1039,12 @@ export default function CheckoutPage() {
                 className="h-5 w-5"
                 strokeWidth={1.8}
               />
-              <span className="text-[16px] font-semibold tracking-[0.2em]">
-                BRAND
+              <span className="flex h-6 w-[138px] items-center">
+                <img
+                  src="/images/brand/bold-cave-logo.png"
+                  alt="Bold Cave"
+                  className="block h-auto w-full brightness-0"
+                />
               </span>
             </button>
 
