@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 import { requestCartDrawerOpen } from "@/lib/cartEvents";
-import { getProductImageUrl } from "@/lib/clientApi";
+import { getProductImageUrl, getVariantProductImageUrl } from "@/lib/clientApi";
 
 const CURRENCY = "\u20b9";
 const PLACEHOLDER_IMAGE =
@@ -26,8 +26,11 @@ const normalizeSize = (size) =>
 const isDefaultSize = (variant) => normalizeSize(variant?.size) === "50ML";
 
 const getDefaultVariant = (variants) =>
-  variants.find(isDefaultSize) ||
+  variants.find(
+    (variant) => isDefaultSize(variant) && Number(variant.stock) > 0
+  ) ||
   variants.find((variant) => Number(variant.stock) > 0) ||
+  variants.find(isDefaultSize) ||
   variants[0];
 
 const getDisplayVariants = (variants) =>
@@ -79,7 +82,7 @@ export default function ProductCard({ product }) {
   const isSelectedOutOfStock = !selectedVariant || Number(selectedVariant.stock) <= 0;
 
   const productImage =
-    getProductImageUrl(product.images?.[0]) || PLACEHOLDER_IMAGE;
+    getVariantProductImageUrl(product, selectedVariant) || PLACEHOLDER_IMAGE;
 
   const hoverImage =
     getProductImageUrl(product.images?.[1]) || "";

@@ -19,7 +19,7 @@ export async function POST(request) {
       phone,
       expiresAt: result.expiresAt,
       provider: result.provider,
-      ...(result.devOtp ? { devOtp: result.devOtp } : {}),
+      ...(result.demoOtp ? { demoOtp: result.demoOtp } : {}),
     });
   } catch (error) {
     return handleRouteError(error, "OTP_SEND_FAILED");

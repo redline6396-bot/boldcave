@@ -48,7 +48,6 @@ const RAZORPAY_SCRIPT_URL =
   "https://checkout.razorpay.com/v1/checkout.js";
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
-const SHOW_DEV_OTP = process.env.NODE_ENV === "development";
 
 const DEMO_PINCODES = {
   "110017": { city: "SOUTH DELHI", state: "DELHI" },
@@ -196,7 +195,7 @@ export default function CheckoutPage() {
   const [otpDigits, setOtpDigits] = useState(
     Array.from({ length: OTP_LENGTH }, () => "")
   );
-  const [otpDevCode, setOtpDevCode] = useState("");
+  const [otpDemoCode, setOtpDemoCode] = useState("");
   const [otpError, setOtpError] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [resendIn, setResendIn] = useState(RESEND_SECONDS);
@@ -601,7 +600,7 @@ export default function CheckoutPage() {
 
     try {
       const result = await sendLoginOtp(cleanPhone);
-      setOtpDevCode(SHOW_DEV_OTP ? result.devOtp || "" : "");
+      setOtpDemoCode(result.demoOtp || "");
       setCheckoutPhone(result.phone || cleanPhone);
       setResendIn(RESEND_SECONDS);
       resetOtp();
@@ -648,7 +647,7 @@ export default function CheckoutPage() {
       const result = await sendLoginOtp(
         normalizePhone(checkoutPhone)
       );
-      setOtpDevCode(SHOW_DEV_OTP ? result.devOtp || "" : "");
+      setOtpDemoCode(result.demoOtp || "");
       setResendIn(RESEND_SECONDS);
       resetOtp();
     } catch (sendError) {
@@ -692,7 +691,7 @@ export default function CheckoutPage() {
 
       setPhoneVerified(true);
       setOtpOpen(false);
-      setOtpDevCode("");
+      setOtpDemoCode("");
       resetOtp();
     } catch (verifyError) {
       setOtpError(
@@ -704,7 +703,6 @@ export default function CheckoutPage() {
   }, [
     checkoutPhone,
     isAuthenticated,
-    otpDevCode,
     otpDigits,
     refreshUser,
     resetOtp,
@@ -1334,17 +1332,19 @@ export default function CheckoutPage() {
           onEdit={() => {
             setOtpOpen(false);
             setOtpError("");
+            setOtpDemoCode("");
             setPhoneVerified(false);
           }}
           onClose={() => {
             setOtpOpen(false);
             setOtpError("");
+            setOtpDemoCode("");
           }}
           resendIn={resendIn}
           onResend={handleResendOtp}
           loading={otpLoading}
           error={otpError}
-          devOtp={otpDevCode}
+          demoOtp={otpDemoCode}
           onVerify={handleVerifyOtp}
         />
       )}
@@ -1385,7 +1385,7 @@ function OtpSheet({
   onResend,
   loading,
   error,
-  devOtp,
+  demoOtp,
   onVerify,
 }) {
   return (
@@ -1467,9 +1467,9 @@ function OtpSheet({
           </p>
         )}
 
-        {devOtp && (
+        {demoOtp && (
           <p className="mt-1.5 text-[10px] text-[#939ba3]">
-            Dev OTP: {devOtp}
+            Demo OTP: {demoOtp}
           </p>
         )}
 

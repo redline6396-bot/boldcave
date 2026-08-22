@@ -1,7 +1,7 @@
 "use client";
 
 import { ShoppingCart } from "lucide-react";
-import { getProductImageUrl } from "@/lib/clientApi";
+import { getVariantProductImageUrl } from "@/lib/clientApi";
 import CheckoutSheet from "@/features/customer/checkout/CheckoutSheet";
 
 const FALLBACK_IMAGE =
@@ -66,7 +66,7 @@ export default function OrderSummary({
           {items.map(
             ({ productId, size, quantity, product, variant }) => {
               const image =
-                getProductImageUrl(product.images?.[0]) ||
+                getVariantProductImageUrl(product, variant) ||
                 FALLBACK_IMAGE;
 
               const selling = Number(variant.sellingPrice) || 0;

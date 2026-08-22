@@ -8,7 +8,6 @@ import { useAuth } from "@/context/AuthContext";
 
 const RESEND_SECONDS = 30;
 const OTP_LENGTH = 6;
-const SHOW_DEV_OTP = process.env.NODE_ENV === "development";
 
 const normalizePhone = (value) => {
   const digits = String(value || "").replace(/\D/g, "");
@@ -36,7 +35,7 @@ export default function PhoneOtpForm({
     Array.from({ length: OTP_LENGTH }, () => "")
   );
   const [message, setMessage] = useState("");
-  const [devOtp, setDevOtp] = useState("");
+  const [demoOtp, setDemoOtp] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(RESEND_SECONDS);
@@ -103,12 +102,12 @@ export default function PhoneOtpForm({
     setLoading(true);
     setError("");
     setMessage("");
-    setDevOtp("");
+    setDemoOtp("");
 
     try {
       const result = await sendLoginOtp(cleanPhone);
       setPhone(result.phone || cleanPhone);
-      setDevOtp(SHOW_DEV_OTP ? result.devOtp || "" : "");
+      setDemoOtp(result.demoOtp || "");
       setResendIn(RESEND_SECONDS);
       setStep("otp");
       resetOtp();
@@ -125,12 +124,12 @@ export default function PhoneOtpForm({
     setLoading(true);
     setError("");
     setMessage("");
-    setDevOtp("");
+    setDemoOtp("");
 
     try {
       const result = await sendLoginOtp(cleanPhone);
       setPhone(result.phone || cleanPhone);
-      setDevOtp(SHOW_DEV_OTP ? result.devOtp || "" : "");
+      setDemoOtp(result.demoOtp || "");
       setResendIn(RESEND_SECONDS);
       resetOtp();
       setMessage("A new OTP has been sent.");
@@ -168,7 +167,7 @@ export default function PhoneOtpForm({
     setOtpDigits(Array.from({ length: OTP_LENGTH }, () => ""));
     setError("");
     setMessage("");
-    setDevOtp("");
+    setDemoOtp("");
     setResendIn(RESEND_SECONDS);
   };
 
@@ -402,9 +401,9 @@ export default function PhoneOtpForm({
             </p>
           )}
 
-          {SHOW_DEV_OTP && devOtp && (
+          {demoOtp && (
             <p className="mt-2.5 text-center text-[10px] text-neutral-400">
-              Dev OTP: {devOtp}
+              Demo OTP: {demoOtp}
             </p>
           )}
         </div>

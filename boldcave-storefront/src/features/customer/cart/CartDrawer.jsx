@@ -15,7 +15,7 @@ import {
 import { useCart } from "@/context/CartContext";
 import { useCoupon } from "@/context/CouponContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { getProductImageUrl } from "@/lib/clientApi";
+import { getVariantProductImageUrl } from "@/lib/clientApi";
 import CouponSection from "@/features/customer/checkout/CouponSection";
 
 const FALLBACK_IMAGE =
@@ -144,8 +144,11 @@ export default function CartDrawer({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Only products scroll. Coupon + subtotal + checkout remain visible. */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* Products + coupon scroll together. Scrollbar stays hidden visually. */}
+        <div
+          className="cart-drawer-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
           {isResolving ? (
             <div className="flex h-full min-h-[220px] items-center justify-center px-5 text-center">
               <p className="text-[12px] font-medium uppercase tracking-[0.1em] text-neutral-500">
@@ -153,12 +156,12 @@ export default function CartDrawer({ isOpen, onClose }) {
               </p>
             </div>
           ) : items.length > 0 ? (
-            <div className="px-5 sm:px-6">
+            <div className="flex min-h-full flex-col px-5 sm:px-6">
               {items.map(
                 ({ productId, size, quantity, product, variant }, index) => {
                   const stock = Number(variant.stock) || 0;
                   const image =
-                    getProductImageUrl(product.images?.[0]) || FALLBACK_IMAGE;
+                    getVariantProductImageUrl(product, variant) || FALLBACK_IMAGE;
 
                   const sellingPrice = Number(variant.sellingPrice) || 0;
                   const mrp = Number(variant.mrp) || sellingPrice;
@@ -270,6 +273,13 @@ export default function CartDrawer({ isOpen, onClose }) {
                   );
                 }
               )}
+
+              {/* Smart coupon placement:
+                  - few products: uses remaining space and sits at the bottom of the scroll area
+                  - many products: naturally follows the final product and scrolls into view */}
+              <div className="mt-auto border-t border-neutral-200 pb-4 pt-3 sm:pb-5 sm:pt-4">
+                <CouponSection />
+              </div>
             </div>
           ) : (
             <div className="flex h-full min-h-[260px] items-center justify-center px-6 pb-[10dvh] text-center">
@@ -296,14 +306,7 @@ export default function CartDrawer({ isOpen, onClose }) {
 
         {items.length > 0 && (
           <div className="shrink-0 bg-white">
-            {/* Exact same coupon component as checkout */}
-            <div className="border-t border-neutral-200 px-5 py-3 sm:px-5 sm:py-4">
-              <CouponSection />
-            </div>
-
-            {/* Reference-style subtotal dock.
-                Expanded price details are absolutely overlaid upward,
-                so the coupon section never shifts. */}
+            {/* Subtotal + checkout stay in the bottom dock. */}
             <div className="relative bg-[#f3f3f3] px-4 pb-4 pt-3">
               {isSummaryOpen && (
                 <div className="absolute bottom-[118px] left-0 right-0 z-10 border-y border-neutral-200 bg-white px-5 py-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] sm:px-6">
@@ -400,6 +403,14 @@ export default function CartDrawer({ isOpen, onClose }) {
           </div>
         )}
       </aside>
+
+      <style jsx>{`
+        .cart-drawer-scroll::-webkit-scrollbar {
+          width: 0;
+          height: 0;
+          display: none;
+        }
+      `}</style>
     </>
   );
 }

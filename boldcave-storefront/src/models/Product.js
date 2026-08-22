@@ -28,6 +28,7 @@ const variantSchema = new mongoose.Schema(
     costPrice: { type: Number, required: true, min: 0 },
     stock: { type: Number, required: true, min: 0 },
     sku: { type: String, trim: true },
+    image: { type: imageSchema, default: undefined },
   },
   { _id: false }
 );
@@ -95,7 +96,8 @@ productSchema.index({ productType: 1, status: 1 });
 
 if (
   mongoose.models.Product?.schema?.path("category") ||
-  (mongoose.models.Product && !mongoose.models.Product.schema?.path("productType"))
+  (mongoose.models.Product && !mongoose.models.Product.schema?.path("productType")) ||
+  (mongoose.models.Product && !mongoose.models.Product.schema?.path("variants.image"))
 ) {
   delete mongoose.models.Product;
 }

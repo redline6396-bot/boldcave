@@ -6,7 +6,7 @@ import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useCoupon } from "@/context/CouponContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { getProductImageUrl } from "@/lib/clientApi";
+import { getVariantProductImageUrl } from "@/lib/clientApi";
 
 const FALLBACK_IMAGE =
   "https://upload.wikimedia.org/wikipedia/commons/a/a3/Image-not-found.png";
@@ -85,7 +85,7 @@ export default function CartPage() {
           <div className="mt-7 grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
             <section className="space-y-4">
               {items.map(({ productId, size, quantity, product, variant }) => {
-                const image = getProductImageUrl(product.images?.[0]) || FALLBACK_IMAGE;
+                const image = getVariantProductImageUrl(product, variant) || FALLBACK_IMAGE;
                 const stock = Number(variant.stock) || 0;
 
                 return (

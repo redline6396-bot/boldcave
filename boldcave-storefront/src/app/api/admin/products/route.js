@@ -57,6 +57,7 @@ function normalizeVariants(variants = []) {
     costPrice: toPositiveNumber(variant.costPrice),
     stock: toPositiveNumber(variant.stock),
     sku: cleanString(variant.sku, 100),
+    image: normalizeImages(variant.image ? [variant.image] : [])[0],
   }));
 
   const sizes = normalized.map((variant) => variant.size);

@@ -15,6 +15,7 @@ import {
   COMBO_VARIANT_SIZE,
   findVariantByIdentifier,
   getComboAvailability,
+  getVariantProductImage,
   isComboProduct,
   normalizeImage,
 } from "@/lib/api/products";
@@ -337,7 +338,7 @@ export async function calculateCart({ items = [], couponCode = "" }) {
             size: variant?.size || item.variantId,
             variantId: item.variantId,
             quantity: Number(item.quantity) || 1,
-            image: normalizeImage(referencedProduct?.images?.[0]),
+            image: getVariantProductImage(variant, referencedProduct),
           };
         }),
         lineTotal: comboVariant.sellingPrice * quantity,
@@ -371,7 +372,7 @@ export async function calculateCart({ items = [], couponCode = "" }) {
       productId: product._id,
       name: product.name,
       slug: product.slug,
-      image: normalizeImage(product.images?.[0]),
+      image: getVariantProductImage(variant, product),
       size: variant.size,
       quantity,
       unitPrice: variant.sellingPrice,

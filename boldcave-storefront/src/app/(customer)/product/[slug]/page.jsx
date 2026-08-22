@@ -36,8 +36,13 @@ const formatRupees = (value) => `\u20b9${formatPrice(value)}`;
 
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
 
-const getProductImages = (product) => {
-  const images = product?.images?.map(getProductImageUrl).filter(Boolean) || [];
+const getProductImages = (product, selectedVariant) => {
+  const selectedVariantImage = getProductImageUrl(selectedVariant?.image);
+  const productImages = product?.images?.map(getProductImageUrl).filter(Boolean) || [];
+  const images = Array.from(
+    new Set([selectedVariantImage, ...productImages].filter(Boolean))
+  );
+
   return images.length > 0 ? images : [FALLBACK_IMAGE];
 };
 
@@ -214,6 +219,9 @@ export default function ProductPage() {
 
   useEffect(() => {
     setQuantity(1);
+    setSelectedImage(0);
+    setMobileThumbStart(0);
+    setDesktopThumbStart(0);
   }, [selectedSize]);
 
   if (isLoading) {
@@ -252,7 +260,7 @@ export default function ProductPage() {
     );
   }
 
-  const galleryImages = getProductImages(product);
+  const galleryImages = getProductImages(product, selectedVariant);
   const isCombo = product.productType === "combo";
 
   const mobileThumbCount = 3;

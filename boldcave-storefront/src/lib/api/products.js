@@ -4,6 +4,24 @@ export function normalizeImage(image) {
   return image.url || image.secure_url || "";
 }
 
+function serializeImage(image) {
+  if (!image) return undefined;
+  if (typeof image === "string") return image ? { url: image } : undefined;
+
+  const url = image.url || image.secure_url || "";
+  if (!url) return undefined;
+
+  return {
+    url,
+    publicId: image.publicId || image.public_id || "",
+    alt: image.alt || "",
+  };
+}
+
+export function getVariantProductImage(variant, product) {
+  return normalizeImage(variant?.image) || normalizeImage(product?.images?.[0]);
+}
+
 export const COMBO_VARIANT_SIZE = "Combo";
 
 const normalizeVariantKey = (value) =>
@@ -128,7 +146,7 @@ export async function serializeProductWithCombos(product, options = {}) {
           quantity: Number(item.quantity) || 1,
           name: referencedObject?.name || "",
           slug: referencedObject?.slug || "",
-          image: normalizeImage(referencedObject?.images?.[0]),
+          image: getVariantProductImage(variant, referencedObject),
           shortDescription: referencedObject?.shortDescription || "",
           fragranceProfile: referencedObject?.fragranceProfile || "",
         };
@@ -159,14 +177,8 @@ export function serializeProduct(product, { includeCostPrice = false } = {}) {
     shortDescription: object.shortDescription || "",
     description: object.description || "",
     images: (object.images || []).map((image) =>
-      typeof image === "string"
-        ? image
-        : {
-            url: image.url,
-            publicId: image.publicId,
-            alt: image.alt,
-          }
-    ),
+      typeof image === "string" ? image : serializeImage(image)
+    ).filter(Boolean),
     fragranceProfile: object.fragranceProfile || "",
     longevity: object.longevity || "",
     projection: object.projection || "",
@@ -186,6 +198,7 @@ export function serializeProduct(product, { includeCostPrice = false } = {}) {
         mrp: variant.mrp,
         stock: isCombo ? Number(object.comboAvailability) || 0 : variant.stock,
         sku: variant.sku,
+        image: isCombo ? undefined : serializeImage(variant.image),
       };
 
       if (includeCostPrice) {

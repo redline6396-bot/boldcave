@@ -13,6 +13,7 @@ const blankVariant = (size = '') => ({
   costPrice: '',
   stock: '',
   sku: '',
+  image: null,
 });
 
 const emptyForm = {
@@ -119,6 +120,7 @@ function formFromProduct(product) {
       costPrice: variant.costPrice ?? '',
       stock: variant.stock ?? '',
       sku: variant.sku ?? '',
+      image: variant.image || null,
     })) : emptyForm.variants,
   };
 }
@@ -146,6 +148,7 @@ async function uploadImage(file) {
 export default function ProductForm({ product, submitLabel = 'Save Product', onSubmit }) {
   const [form, setForm] = useState(() => formFromProduct(product));
   const [files, setFiles] = useState([]);
+  const [variantImageFiles, setVariantImageFiles] = useState({});
   const [catalogProducts, setCatalogProducts] = useState([]);
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState('');
@@ -159,11 +162,31 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
     [files]
   );
 
+  const variantImagePreviews = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(variantImageFiles).map(([index, file]) => [
+          index,
+          {
+            file,
+            src: URL.createObjectURL(file),
+          },
+        ])
+      ),
+    [variantImageFiles]
+  );
+
   useEffect(() => {
     return () => {
       previews.forEach(({ src }) => URL.revokeObjectURL(src));
     };
   }, [previews]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(variantImagePreviews).forEach(({ src }) => URL.revokeObjectURL(src));
+    };
+  }, [variantImagePreviews]);
 
   const urlImages = useMemo(() => lines(form.imagesText), [form.imagesText]);
   const totalImageCount = urlImages.length + files.length;
@@ -258,6 +281,29 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
     [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
     setField('imagesText', next.join('\n'));
   };
+
+  const handleVariantImageFile = (index, event) => {
+    const [file] = Array.from(event.target.files || []);
+    if (!file) return;
+
+    setVariantImageFiles((current) => ({
+      ...current,
+      [index]: file,
+    }));
+    setLocalError('');
+    event.target.value = '';
+  };
+
+  const removeVariantImage = (index) => {
+    setVariantImageFiles((current) => {
+      const next = { ...current };
+      delete next[index];
+      return next;
+    });
+    setVariant(index, 'image', null);
+    setLocalError('');
+  };
+
   const setVariant = (index, field, value) => {
     setForm((current) => ({
       ...current,
@@ -279,6 +325,14 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
       ...current,
       variants: current.variants.filter((_, itemIndex) => itemIndex !== index),
     }));
+    setVariantImageFiles((current) =>
+      Object.entries(current).reduce((next, [fileIndex, file]) => {
+        const numericIndex = Number(fileIndex);
+        if (numericIndex < index) next[numericIndex] = file;
+        if (numericIndex > index) next[numericIndex - 1] = file;
+        return next;
+      }, {})
+    );
   };
 
   const toggleAudienceTag = (tag) => {
@@ -403,6 +457,15 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
       uploadedImages.push(await uploadImage(file));
     }
 
+    const variantsWithImages = [];
+    for (const [index, variant] of selectedVariants.entries()) {
+      const variantFile = variantImageFiles[index];
+      variantsWithImages.push({
+        ...variant,
+        image: variantFile ? await uploadImage(variantFile) : variant.image || null,
+      });
+    }
+
     return {
       productType: 'product',
       name: form.name,
@@ -427,7 +490,7 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
         heart: csv(form.heartNotes),
         base: csv(form.baseNotes),
       },
-      variants: selectedVariants,
+      variants: variantsWithImages,
       legalInformation: {
         ingredients: form.ingredients,
       },
@@ -747,6 +810,33 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
                   onChange={(value) => setVariant(index, 'sku', value)}
                   placeholder='NOIR-50ML'
                 />
+              </div>
+              <div className='mt-4'>
+                <p className='mb-2 text-sm font-medium text-gray-700'>Variant Image</p>
+                {(variantImagePreviews[index]?.src || variant.image?.url || variant.image) && (
+                  <div className='mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6'>
+                    <ImagePreviewCard
+                      src={variantImagePreviews[index]?.src || variant.image?.url || variant.image}
+                      index={0}
+                      isMain={false}
+                      canMoveLeft={false}
+                      canMoveRight={false}
+                      onMoveLeft={undefined}
+                      onMoveRight={undefined}
+                      onRemove={() => removeVariantImage(index)}
+                    />
+                  </div>
+                )}
+                <label className='flex cursor-pointer items-center justify-center gap-2 rounded border border-dashed border-gray-300 px-4 py-5 text-sm text-gray-600 transition-colors hover:bg-gray-50'>
+                  <Upload size={18} />
+                  {variantImagePreviews[index] || variant.image ? 'Replace variant image' : 'Upload variant image'}
+                  <input
+                    type='file'
+                    accept='image/*'
+                    hidden
+                    onChange={(event) => handleVariantImageFile(index, event)}
+                  />
+                </label>
               </div>
             </div>
           ))}

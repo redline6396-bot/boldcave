@@ -37,7 +37,7 @@ export async function sendOtp(phone) {
     return {
       provider: "mock",
       expiresAt,
-      devOtp: otp,
+      demoOtp: otp,
     };
   }
 

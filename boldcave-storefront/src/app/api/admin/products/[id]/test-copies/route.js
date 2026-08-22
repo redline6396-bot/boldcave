@@ -64,6 +64,13 @@ const copyProductFields = (source, copyNumber) => {
             : `${slug}-${sizeSlug}`.toUpperCase(),
           100
         ),
+        image: variant.image
+          ? {
+              url: variant.image.url,
+              publicId: variant.image.publicId || "",
+              alt: variant.image.alt || "",
+            }
+          : undefined,
       };
     }),
     legalInformation: {

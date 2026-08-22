@@ -6,6 +6,10 @@ export function getProductImageUrl(image) {
   return image.url || image.secure_url || "";
 }
 
+export function getVariantProductImageUrl(product, variant) {
+  return getProductImageUrl(variant?.image) || getProductImageUrl(product?.images?.[0]);
+}
+
 async function requestJson(path, options = {}) {
   const response = await fetch(path, {
     credentials: "same-origin",
