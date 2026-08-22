@@ -974,8 +974,7 @@ export default function CheckoutPage() {
     !phoneVerified ||
     !isAuthenticated ||
     Boolean(addressError) ||
-    serviceability.status !== "serviceable" ||
-    serviceability.pincode !== normalizedAddress.pincode ||
+    serviceability.status === "checking" ||
     (paymentMethod === "cod" && codAvailable === false);
 
   if (!storeSettingsLoading && !acceptingOrders) {
