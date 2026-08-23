@@ -42,7 +42,7 @@ export default function AuthModal() {
         className="fixed inset-0 z-[140] cursor-pointer bg-black/55"
       />
 
-      <div className="fixed left-1/2 top-1/2 z-[141] w-[calc(100%_-_20px)] max-w-[760px] -translate-x-1/2 -translate-y-1/2">
+      <div className="fixed left-1/2 top-1/2 z-[141] flex w-[calc(100%_-_20px)] max-w-[760px] -translate-x-1/2 -translate-y-1/2 justify-center">
         <PhoneOtpForm
           title="Login here!"
           subtitle="Use your verified phone number to continue."
