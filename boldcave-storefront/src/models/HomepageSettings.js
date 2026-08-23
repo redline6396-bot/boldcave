@@ -35,12 +35,18 @@ const homepageSettingsSchema = new mongoose.Schema(
       type: [featuredReviewSchema],
       default: [],
     },
+    collectionFragranceCount: { type: Number, min: 0, default: 5 },
+    collectionPersonalityCount: { type: Number, min: 0, default: 5 },
   },
   { timestamps: true }
 );
 
-const HomepageSettings =
+if (mongoose.models.HomepageSettings && !mongoose.models.HomepageSettings.schema?.path("collectionFragranceCount")) {
+  delete mongoose.models.HomepageSettings;
+}
+
+const ActiveHomepageSettings =
   mongoose.models.HomepageSettings ||
   mongoose.model("HomepageSettings", homepageSettingsSchema);
 
-export default HomepageSettings;
+export default ActiveHomepageSettings;

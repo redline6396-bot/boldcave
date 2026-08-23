@@ -3,6 +3,8 @@ import { cleanString } from "@/lib/validation";
 
 const HOMEPAGE_SETTINGS_KEY = "global";
 const SLOT_COUNT = 3;
+const DEFAULT_COLLECTION_COUNT = 5;
+const MAX_COLLECTION_COUNT = 99;
 
 const defaultHeroSlides = () =>
   Array.from({ length: SLOT_COUNT }, () => ({
@@ -42,10 +44,18 @@ function normalizeFeaturedReviews(reviews) {
   });
 }
 
+function normalizeCollectionCount(value, fallback = DEFAULT_COLLECTION_COUNT) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return fallback;
+  return Math.min(MAX_COLLECTION_COUNT, Math.floor(number));
+}
+
 export function serializeHomepageSettings(settings) {
   return {
     heroSlides: normalizeHeroSlides(settings?.heroSlides),
     featuredReviews: normalizeFeaturedReviews(settings?.featuredReviews),
+    collectionFragranceCount: normalizeCollectionCount(settings?.collectionFragranceCount),
+    collectionPersonalityCount: normalizeCollectionCount(settings?.collectionPersonalityCount),
     updatedAt: settings?.updatedAt || null,
   };
 }
@@ -58,6 +68,8 @@ export async function getHomepageSettings() {
         key: HOMEPAGE_SETTINGS_KEY,
         heroSlides: defaultHeroSlides(),
         featuredReviews: defaultFeaturedReviews(),
+        collectionFragranceCount: DEFAULT_COLLECTION_COUNT,
+        collectionPersonalityCount: DEFAULT_COLLECTION_COUNT,
       },
     },
     {
@@ -72,13 +84,20 @@ export async function getSerializedHomepageSettings() {
   return serializeHomepageSettings(await getHomepageSettings());
 }
 
-export async function updateHomepageSettings({ heroSlides, featuredReviews }) {
+export async function updateHomepageSettings({
+  heroSlides,
+  featuredReviews,
+  collectionFragranceCount,
+  collectionPersonalityCount,
+}) {
   return HomepageSettings.findOneAndUpdate(
     { key: HOMEPAGE_SETTINGS_KEY },
     {
       $set: {
         heroSlides: normalizeHeroSlides(heroSlides),
         featuredReviews: normalizeFeaturedReviews(featuredReviews),
+        collectionFragranceCount: normalizeCollectionCount(collectionFragranceCount),
+        collectionPersonalityCount: normalizeCollectionCount(collectionPersonalityCount),
       },
     },
     {

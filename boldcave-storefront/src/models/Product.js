@@ -29,6 +29,7 @@ const variantSchema = new mongoose.Schema(
     stock: { type: Number, required: true, min: 0 },
     sku: { type: String, trim: true },
     image: { type: imageSchema, default: undefined },
+    images: { type: [imageSchema], default: [] },
   },
   { _id: false }
 );
@@ -85,6 +86,8 @@ const productSchema = new mongoose.Schema(
       ingredients: { type: String, trim: true },
       caution: { type: String, trim: true },
     },
+    featured: { type: Boolean, default: false, index: true },
+    featuredOrder: { type: Number, default: 0, index: true },
     status: { type: String, enum: ["draft", "published"], default: "draft", index: true },
   },
   { timestamps: true }
@@ -93,11 +96,15 @@ const productSchema = new mongoose.Schema(
 productSchema.index({ audienceTags: 1, status: 1 });
 productSchema.index({ "variants.stock": 1 });
 productSchema.index({ productType: 1, status: 1 });
+productSchema.index({ featured: 1, featuredOrder: 1 });
 
 if (
   mongoose.models.Product?.schema?.path("category") ||
   (mongoose.models.Product && !mongoose.models.Product.schema?.path("productType")) ||
-  (mongoose.models.Product && !mongoose.models.Product.schema?.path("variants.image"))
+  (mongoose.models.Product && !mongoose.models.Product.schema?.path("variants.image")) ||
+  (mongoose.models.Product && !mongoose.models.Product.schema?.path("variants.images")) ||
+  (mongoose.models.Product && !mongoose.models.Product.schema?.path("featured")) ||
+  (mongoose.models.Product && !mongoose.models.Product.schema?.path("featuredOrder"))
 ) {
   delete mongoose.models.Product;
 }

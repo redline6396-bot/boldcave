@@ -41,6 +41,8 @@ export async function PATCH(request) {
     const settings = await updateHomepageSettings({
       heroSlides: body.heroSlides,
       featuredReviews: body.featuredReviews,
+      collectionFragranceCount: body.collectionFragranceCount,
+      collectionPersonalityCount: body.collectionPersonalityCount,
     });
 
     return applyAdminCors(

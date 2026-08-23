@@ -227,6 +227,7 @@ export async function GET(request) {
             sku: variant.sku || "",
             stock: Number(variant.stock) || 0,
             image:
+              variant.images?.[0]?.url ||
               variant.image?.url ||
               product.images?.[0]?.url ||
               "",

@@ -4,7 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 import { requestCartDrawerOpen } from "@/lib/cartEvents";
-import { getProductImageUrl, getVariantProductImageUrl } from "@/lib/clientApi";
+import {
+  getProductImageUrl,
+  getVariantProductGalleryUrls,
+  getVariantProductImageUrl,
+} from "@/lib/clientApi";
 
 const CURRENCY = "\u20b9";
 const PLACEHOLDER_IMAGE =
@@ -84,8 +88,12 @@ export default function ProductCard({ product }) {
   const productImage =
     getVariantProductImageUrl(product, selectedVariant) || PLACEHOLDER_IMAGE;
 
+  const selectedVariantGallery = getVariantProductGalleryUrls(product, selectedVariant);
   const hoverImage =
-    getProductImageUrl(product.images?.[1]) || "";
+    getProductImageUrl(selectedVariant?.images?.[1]) ||
+    selectedVariantGallery.find((image) => image !== productImage) ||
+    getProductImageUrl(product.images?.[1]) ||
+    "";
 
   const hasHoverImage = Boolean(hoverImage);
 

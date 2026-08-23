@@ -14,6 +14,8 @@ import {
 import Product from "@/models/Product";
 
 export const runtime = "nodejs";
+const MAX_PRODUCT_IMAGES = 6;
+const MAX_VARIANT_IMAGES = 6;
 
 export function OPTIONS(request) {
   return adminPreflight(request);
@@ -50,15 +52,25 @@ function normalizeVariants(variants = []) {
     return { error: "Variant prices and stock cannot be negative" };
   }
 
-  const normalized = variants.map((variant) => ({
-    size: cleanString(variant.size, 40),
-    sellingPrice: toPositiveNumber(variant.sellingPrice),
-    mrp: toPositiveNumber(variant.mrp),
-    costPrice: toPositiveNumber(variant.costPrice),
-    stock: toPositiveNumber(variant.stock),
-    sku: cleanString(variant.sku, 100),
-    image: normalizeImages(variant.image ? [variant.image] : [])[0],
-  }));
+  const normalized = variants.map((variant) => {
+    const images = normalizeImages(variant.images);
+    const legacyImage = normalizeImages(variant.image ? [variant.image] : [])[0];
+
+    return {
+      size: cleanString(variant.size, 40),
+      sellingPrice: toPositiveNumber(variant.sellingPrice),
+      mrp: toPositiveNumber(variant.mrp),
+      costPrice: toPositiveNumber(variant.costPrice),
+      stock: toPositiveNumber(variant.stock),
+      sku: cleanString(variant.sku, 100),
+      image: legacyImage,
+      images,
+    };
+  });
+
+  if (normalized.some((variant) => variant.images.length > MAX_VARIANT_IMAGES)) {
+    return { error: `Maximum ${MAX_VARIANT_IMAGES} images allowed per variant` };
+  }
 
   const sizes = normalized.map((variant) => variant.size);
   if (!sizes.every(Boolean)) {
@@ -145,6 +157,11 @@ async function buildComboPayload(body, currentProductId = "") {
     return { error: "MRP and selling price must be greater than zero" };
   }
 
+  const images = normalizeImages(body.images);
+  if (images.length > MAX_PRODUCT_IMAGES) {
+    return { error: `Maximum ${MAX_PRODUCT_IMAGES} images allowed` };
+  }
+
   return {
     payload: {
       productType: "combo",
@@ -153,7 +170,9 @@ async function buildComboPayload(body, currentProductId = "") {
       audienceTags: normalizeAudienceTags(body.audienceTags),
       shortDescription: cleanString(body.shortDescription, 500),
       description: cleanString(body.description, 5000),
-      images: normalizeImages(body.images),
+      images,
+      featured: Boolean(body.featured),
+      featuredOrder: toPositiveNumber(body.featuredOrder || 0),
       positioning: cleanString(body.positioning, 250),
       whatYouGet: cleanString(body.whatYouGet, 2000),
       bestFor: Array.isArray(body.bestFor)
@@ -180,7 +199,7 @@ async function buildComboPayload(body, currentProductId = "") {
   };
 }
 
-async function buildProductPayload(body, currentProductId = "") {
+async function buildProductPayload(body, currentProductId = "", existingProduct = null) {
   if (body.productType === "combo") {
     return buildComboPayload(body, currentProductId);
   }
@@ -194,6 +213,14 @@ async function buildProductPayload(body, currentProductId = "") {
     return { error: "Name and slug are required" };
   }
 
+  const images = Array.isArray(body.images)
+    ? normalizeImages(body.images)
+    : normalizeImages(existingProduct?.images);
+
+  if (images.length > MAX_PRODUCT_IMAGES) {
+    return { error: `Maximum ${MAX_PRODUCT_IMAGES} images allowed` };
+  }
+
   return {
     payload: {
       productType: "product",
@@ -202,7 +229,9 @@ async function buildProductPayload(body, currentProductId = "") {
       audienceTags: normalizeAudienceTags(body.audienceTags),
       shortDescription: cleanString(body.shortDescription, 500),
       description: cleanString(body.description, 5000),
-      images: normalizeImages(body.images),
+      images,
+      featured: Boolean(body.featured),
+      featuredOrder: toPositiveNumber(body.featuredOrder || 0),
       fragranceProfile: cleanString(body.fragranceProfile, 250),
       longevity: cleanString(body.longevity, 250),
       projection: cleanString(body.projection, 250),

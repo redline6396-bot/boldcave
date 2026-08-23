@@ -19,7 +19,11 @@ function serializeImage(image) {
 }
 
 export function getVariantProductImage(variant, product) {
-  return normalizeImage(variant?.image) || normalizeImage(product?.images?.[0]);
+  return (
+    normalizeImage(variant?.images?.[0]) ||
+    normalizeImage(variant?.image) ||
+    normalizeImage(product?.images?.[0])
+  );
 }
 
 export const COMBO_VARIANT_SIZE = "Combo";
@@ -176,6 +180,8 @@ export function serializeProduct(product, { includeCostPrice = false } = {}) {
       : [],
     shortDescription: object.shortDescription || "",
     description: object.description || "",
+    featured: Boolean(object.featured),
+    featuredOrder: Number(object.featuredOrder) || 0,
     images: (object.images || []).map((image) =>
       typeof image === "string" ? image : serializeImage(image)
     ).filter(Boolean),
@@ -192,6 +198,10 @@ export function serializeProduct(product, { includeCostPrice = false } = {}) {
     storagePrecautions: object.storagePrecautions || "",
     fragranceNotes: object.fragranceNotes || { top: [], heart: [], base: [] },
     variants: (object.variants || []).map((variant) => {
+      const variantImages = (variant.images || [])
+        .map((image) => (typeof image === "string" ? image : serializeImage(image)))
+        .filter(Boolean);
+
       const publicVariant = {
         size: isCombo ? COMBO_VARIANT_SIZE : variant.size,
         sellingPrice: variant.sellingPrice,
@@ -199,6 +209,7 @@ export function serializeProduct(product, { includeCostPrice = false } = {}) {
         stock: isCombo ? Number(object.comboAvailability) || 0 : variant.stock,
         sku: variant.sku,
         image: isCombo ? undefined : serializeImage(variant.image),
+        images: isCombo ? [] : variantImages,
       };
 
       if (includeCostPrice) {

@@ -7,7 +7,25 @@ export function getProductImageUrl(image) {
 }
 
 export function getVariantProductImageUrl(product, variant) {
-  return getProductImageUrl(variant?.image) || getProductImageUrl(product?.images?.[0]);
+  return (
+    getProductImageUrl(variant?.images?.[0]) ||
+    getProductImageUrl(variant?.image) ||
+    getProductImageUrl(product?.images?.[0])
+  );
+}
+
+export function getVariantProductGalleryUrls(product, variant) {
+  const variantImages = (variant?.images || []).map(getProductImageUrl).filter(Boolean);
+  if (variantImages.length) return Array.from(new Set(variantImages));
+
+  return Array.from(
+    new Set(
+      [
+        getProductImageUrl(variant?.image),
+        ...((product?.images || []).map(getProductImageUrl).filter(Boolean)),
+      ].filter(Boolean)
+    )
+  );
 }
 
 async function requestJson(path, options = {}) {

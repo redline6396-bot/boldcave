@@ -40,16 +40,18 @@ export async function PUT(request, { params }) {
     const { id } = await params;
     if (!isObjectId(id)) return applyAdminCors(request, failure("INVALID_PRODUCT_ID", "Invalid product id", 400));
 
+    await connectDB();
+    const existingProduct = await Product.findById(id);
+    if (!existingProduct) return applyAdminCors(request, failure("PRODUCT_NOT_FOUND", "Product not found", 404));
+
     const body = await readJson(request);
-    const result = await buildProductPayload(body, id);
+    const result = await buildProductPayload(body, id, existingProduct);
     if (result.error) return applyAdminCors(request, failure("VALIDATION_ERROR", result.error, 400));
 
-    await connectDB();
     const product = await Product.findByIdAndUpdate(id, result.payload, {
       new: true,
       runValidators: true,
     });
-    if (!product) return applyAdminCors(request, failure("PRODUCT_NOT_FOUND", "Product not found", 404));
 
     clearProductCache();
     return applyAdminCors(request, success({ product: await serializeProductWithCombos(product, { includeCostPrice: true }) }));

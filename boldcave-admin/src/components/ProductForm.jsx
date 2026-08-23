@@ -14,6 +14,7 @@ const blankVariant = (size = '') => ({
   stock: '',
   sku: '',
   image: null,
+  imagesText: '',
 });
 
 const emptyForm = {
@@ -22,6 +23,8 @@ const emptyForm = {
   slug: '',
   audienceTags: ['Unisex'],
   status: 'draft',
+  featured: false,
+  featuredOrder: 0,
   shortDescription: '',
   description: '',
   imagesText: '',
@@ -76,6 +79,12 @@ function generateSku(value, size) {
   return `${base}-${sizeCode}`;
 }
 
+function imageUrlsFromImages(images = []) {
+  return (Array.isArray(images) ? images : [])
+    .map((image) => image?.url || image)
+    .filter(Boolean);
+}
+
 function formFromProduct(product) {
   if (!product) return emptyForm;
 
@@ -85,9 +94,11 @@ function formFromProduct(product) {
     slug: product.slug || '',
     audienceTags: product.audienceTags?.length ? product.audienceTags : ['Unisex'],
     status: product.status || 'draft',
+    featured: Boolean(product.featured),
+    featuredOrder: Number(product.featuredOrder) || 0,
     shortDescription: product.shortDescription || '',
     description: product.description || '',
-    imagesText: (product.images || []).map((image) => image.url || image).filter(Boolean).join('\n'),
+    imagesText: imageUrlsFromImages(product.images).join('\n'),
     fragranceProfile: product.fragranceProfile || '',
     longevity: product.longevity || '',
     projection: product.projection || '',
@@ -113,15 +124,21 @@ function formFromProduct(product) {
     topNotes: (product.fragranceNotes?.top || []).join(', '),
     heartNotes: (product.fragranceNotes?.heart || []).join(', '),
     baseNotes: (product.fragranceNotes?.base || []).join(', '),
-    variants: product.variants?.length ? product.variants.map((variant) => ({
-      size: variant.size || '',
-      sellingPrice: variant.sellingPrice ?? '',
-      mrp: variant.mrp ?? '',
-      costPrice: variant.costPrice ?? '',
-      stock: variant.stock ?? '',
-      sku: variant.sku ?? '',
-      image: variant.image || null,
-    })) : emptyForm.variants,
+    variants: product.variants?.length ? product.variants.map((variant) => {
+      const variantImages = imageUrlsFromImages(variant.images);
+      const legacyVariantImage = imageUrlsFromImages(variant.image ? [variant.image] : []);
+
+      return {
+        size: variant.size || '',
+        sellingPrice: variant.sellingPrice ?? '',
+        mrp: variant.mrp ?? '',
+        costPrice: variant.costPrice ?? '',
+        stock: variant.stock ?? '',
+        sku: variant.sku ?? '',
+        image: variant.image || null,
+        imagesText: (variantImages.length ? variantImages : legacyVariantImage).join('\n'),
+      };
+    }) : emptyForm.variants,
   };
 }
 
@@ -145,14 +162,16 @@ async function uploadImage(file) {
   return { url: data.secure_url, publicId: data.public_id };
 }
 
-export default function ProductForm({ product, submitLabel = 'Save Product', onSubmit }) {
-  const [form, setForm] = useState(() => formFromProduct(product));
-  const [files, setFiles] = useState([]);
-  const [variantImageFiles, setVariantImageFiles] = useState({});
-  const [catalogProducts, setCatalogProducts] = useState([]);
-  const [saving, setSaving] = useState(false);
-  const [localError, setLocalError] = useState('');
-
+function ImageManager({
+  title = 'Images',
+  imagesText,
+  files,
+  onImagesTextChange,
+  onFilesChange,
+  setLocalError,
+  mainImageLabel = 'product',
+}) {
+  const urlImages = useMemo(() => lines(imagesText), [imagesText]);
   const previews = useMemo(
     () =>
       files.map((file) => ({
@@ -161,20 +180,8 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
       })),
     [files]
   );
-
-  const variantImagePreviews = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(variantImageFiles).map(([index, file]) => [
-          index,
-          {
-            file,
-            src: URL.createObjectURL(file),
-          },
-        ])
-      ),
-    [variantImageFiles]
-  );
+  const totalImageCount = urlImages.length + files.length;
+  const remainingImageSlots = Math.max(0, MAX_IMAGES - totalImageCount);
 
   useEffect(() => {
     return () => {
@@ -182,15 +189,159 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
     };
   }, [previews]);
 
-  useEffect(() => {
-    return () => {
-      Object.values(variantImagePreviews).forEach(({ src }) => URL.revokeObjectURL(src));
-    };
-  }, [variantImagePreviews]);
+  const handleImageFiles = (event) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    if (!selectedFiles.length) return;
+
+    const availableSlots = Math.max(0, MAX_IMAGES - urlImages.length - files.length);
+
+    if (availableSlots === 0) {
+      setLocalError(`Maximum ${MAX_IMAGES} images allowed`);
+      event.target.value = '';
+      return;
+    }
+
+    const acceptedFiles = selectedFiles.slice(0, availableSlots);
+    onFilesChange([...files, ...acceptedFiles]);
+
+    if (selectedFiles.length > availableSlots) {
+      setLocalError(`Only ${MAX_IMAGES} images are allowed. Extra images were not added.`);
+    } else {
+      setLocalError('');
+    }
+
+    event.target.value = '';
+  };
+
+  const removeImageFile = (index) => {
+    onFilesChange(files.filter((_, itemIndex) => itemIndex !== index));
+    setLocalError('');
+  };
+
+  const moveImageFile = (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= files.length) return;
+
+    const next = [...files];
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+    onFilesChange(next);
+  };
+
+  const removeUrlImage = (index) => {
+    const next = urlImages.filter((_, itemIndex) => itemIndex !== index);
+    onImagesTextChange(next.join('\n'));
+    setLocalError('');
+  };
+
+  const moveUrlImage = (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= urlImages.length) return;
+
+    const next = [...urlImages];
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+    onImagesTextChange(next.join('\n'));
+  };
+
+  return (
+    <section className='rounded border border-gray-200 bg-white p-5'>
+      <div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
+        <h2 className='font-semibold text-gray-950'>{title}</h2>
+        <span className='text-xs font-medium text-gray-500'>
+          {totalImageCount}/{MAX_IMAGES} images
+        </span>
+      </div>
+
+      <Textarea
+        label='Image URLs'
+        value={imagesText}
+        onChange={onImagesTextChange}
+        placeholder={'https://res.cloudinary.com/demo/image/upload/noir-main.jpg\nhttps://res.cloudinary.com/demo/image/upload/noir-box.jpg'}
+      />
+
+      {urlImages.length > 0 && (
+        <div className='mt-4'>
+          <p className='mb-2 text-xs font-medium text-gray-600'>URL images</p>
+          <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6'>
+            {urlImages.map((src, index) => (
+              <ImagePreviewCard
+                key={`${src}-${index}`}
+                src={src}
+                index={index}
+                isMain={index === 0}
+                canMoveLeft={index > 0}
+                canMoveRight={index < urlImages.length - 1}
+                onMoveLeft={() => moveUrlImage(index, -1)}
+                onMoveRight={() => moveUrlImage(index, 1)}
+                onRemove={() => removeUrlImage(index)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <label
+        className={[
+          'mt-4 flex items-center justify-center gap-2 rounded border border-dashed border-gray-300 px-4 py-5 text-sm transition-colors',
+          remainingImageSlots > 0
+            ? 'cursor-pointer text-gray-600 hover:bg-gray-50'
+            : 'cursor-not-allowed bg-gray-50 text-gray-400',
+        ].join(' ')}
+      >
+        <Upload size={18} />
+        {remainingImageSlots > 0
+          ? `Upload image files (${remainingImageSlots} slot${remainingImageSlots === 1 ? '' : 's'} left)`
+          : `Maximum ${MAX_IMAGES} images added`}
+        <input
+          type='file'
+          accept='image/*'
+          multiple
+          hidden
+          disabled={remainingImageSlots === 0}
+          onChange={handleImageFiles}
+        />
+      </label>
+
+      {previews.length > 0 && (
+        <div className='mt-4'>
+          <p className='mb-2 text-xs font-medium text-gray-600'>Selected uploads</p>
+          <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6'>
+            {previews.map(({ file, src }, index) => (
+              <ImagePreviewCard
+                key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+                src={src}
+                index={urlImages.length + index}
+                isMain={urlImages.length === 0 && index === 0}
+                canMoveLeft={index > 0}
+                canMoveRight={index < previews.length - 1}
+                onMoveLeft={() => moveImageFile(index, -1)}
+                onMoveRight={() => moveImageFile(index, 1)}
+                onRemove={() => removeImageFile(index)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className='mt-3 text-xs leading-5 text-gray-500'>
+        Maximum {MAX_IMAGES} images. The first image is the main {mainImageLabel} image. Use the arrows to reorder and the trash button to remove an image.
+        URL images are placed before newly uploaded files.
+      </p>
+      <p className='mt-1 text-xs text-gray-500'>
+        Cloudinary credentials are required only for file uploads. URL images can be saved without Cloudinary.
+      </p>
+    </section>
+  );
+}
+
+export default function ProductForm({ product, submitLabel = 'Save Product', onSubmit }) {
+  const [form, setForm] = useState(() => formFromProduct(product));
+  const [files, setFiles] = useState([]);
+  const [variantImageFiles, setVariantImageFiles] = useState({});
+  const [catalogProducts, setCatalogProducts] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [localError, setLocalError] = useState('');
 
   const urlImages = useMemo(() => lines(form.imagesText), [form.imagesText]);
-  const totalImageCount = urlImages.length + files.length;
-  const remainingImageSlots = Math.max(0, MAX_IMAGES - totalImageCount);
   const isCombo = form.productType === 'combo';
   const selectableProducts = useMemo(
     () =>
@@ -226,81 +377,11 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
     setLocalError('');
   };
 
-  const handleImageFiles = (event) => {
-    const selectedFiles = Array.from(event.target.files || []);
-    if (!selectedFiles.length) return;
-
-    const availableSlots = Math.max(0, MAX_IMAGES - urlImages.length - files.length);
-
-    if (availableSlots === 0) {
-      setLocalError(`Maximum ${MAX_IMAGES} product images allowed`);
-      event.target.value = '';
-      return;
-    }
-
-    const acceptedFiles = selectedFiles.slice(0, availableSlots);
-
-    setFiles((current) => [...current, ...acceptedFiles]);
-
-    if (selectedFiles.length > availableSlots) {
-      setLocalError(`Only ${MAX_IMAGES} product images are allowed. Extra images were not added.`);
-    } else {
-      setLocalError('');
-    }
-
-    event.target.value = '';
-  };
-
-  const removeImageFile = (index) => {
-    setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index));
-    setLocalError('');
-  };
-
-  const moveImageFile = (index, direction) => {
-    setFiles((current) => {
-      const targetIndex = index + direction;
-      if (targetIndex < 0 || targetIndex >= current.length) return current;
-
-      const next = [...current];
-      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-      return next;
-    });
-  };
-
-  const removeUrlImage = (index) => {
-    const next = urlImages.filter((_, itemIndex) => itemIndex !== index);
-    setField('imagesText', next.join('\n'));
-    setLocalError('');
-  };
-
-  const moveUrlImage = (index, direction) => {
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= urlImages.length) return;
-
-    const next = [...urlImages];
-    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-    setField('imagesText', next.join('\n'));
-  };
-
-  const handleVariantImageFile = (index, event) => {
-    const [file] = Array.from(event.target.files || []);
-    if (!file) return;
-
+  const setVariantFiles = (index, nextFiles) => {
     setVariantImageFiles((current) => ({
       ...current,
-      [index]: file,
+      [index]: nextFiles,
     }));
-    setLocalError('');
-    event.target.value = '';
-  };
-
-  const removeVariantImage = (index) => {
-    setVariantImageFiles((current) => {
-      const next = { ...current };
-      delete next[index];
-      return next;
-    });
-    setVariant(index, 'image', null);
     setLocalError('');
   };
 
@@ -411,6 +492,8 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
         slug: form.slug,
         audienceTags: form.audienceTags,
         status: form.status,
+        featured: form.featured,
+        featuredOrder: form.featuredOrder,
         shortDescription: form.shortDescription,
         description: form.description,
         images: [...urlImages.map((url) => ({ url })), ...uploadedImages],
@@ -452,17 +535,26 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
       throw new Error('Stock and cost price cannot be negative');
     }
 
-    const uploadedImages = [];
-    for (const file of files) {
-      uploadedImages.push(await uploadImage(file));
-    }
-
     const variantsWithImages = [];
     for (const [index, variant] of selectedVariants.entries()) {
-      const variantFile = variantImageFiles[index];
+      const variantUrlImages = lines(form.variants[index]?.imagesText);
+      const pendingFiles = variantImageFiles[index] || [];
+
+      if (variantUrlImages.length + pendingFiles.length > MAX_IMAGES) {
+        throw new Error(`Maximum ${MAX_IMAGES} images allowed per variant`);
+      }
+
+      const uploadedVariantImages = [];
+      for (const file of pendingFiles) {
+        uploadedVariantImages.push(await uploadImage(file));
+      }
+
+      const { imagesText, image, ...variantPayload } = variant;
+      const legacyImageUrl = image?.url || image || '';
       variantsWithImages.push({
-        ...variant,
-        image: variantFile ? await uploadImage(variantFile) : variant.image || null,
+        ...variantPayload,
+        image: legacyImageUrl && variantUrlImages.includes(legacyImageUrl) ? image : undefined,
+        images: [...variantUrlImages.map((url) => ({ url })), ...uploadedVariantImages],
       });
     }
 
@@ -472,9 +564,11 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
       slug: form.slug,
       audienceTags: form.audienceTags,
       status: form.status,
+      featured: form.featured,
+      featuredOrder: form.featuredOrder,
       shortDescription: form.shortDescription,
       description: form.description,
-      images: [...urlImages.map((url) => ({ url })), ...uploadedImages],
+      images: product ? urlImages.map((url) => ({ url })) : [],
       fragranceProfile: form.fragranceProfile,
       longevity: form.longevity,
       projection: form.projection,
@@ -546,6 +640,14 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
           <Field label={isCombo ? 'Combo Name' : 'Name'} value={form.name} onChange={(value) => setField('name', value)} placeholder={isCombo ? 'Discovery Combo' : 'NOIR'} required />
           <Field label='Slug' value={form.slug} onChange={(value) => setField('slug', value)} placeholder='Auto-generated if blank' />
           <Select label='Status' value={form.status} onChange={(value) => setField('status', value)} options={['draft', 'published']} />
+          <label className='flex cursor-pointer items-center gap-2 self-end text-sm font-medium text-gray-700'>
+            <input
+              type='checkbox'
+              checked={Boolean(form.featured)}
+              onChange={(event) => setField('featured', event.target.checked)}
+            />
+            Featured
+          </label>
         </div>
         <div className='mt-4'>
           <div>
@@ -683,93 +785,17 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
         </section>
       )}
 
-      <section className='rounded border border-gray-200 bg-white p-5'>
-        <div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
-          <h2 className='font-semibold text-gray-950'>Images</h2>
-          <span className='text-xs font-medium text-gray-500'>
-            {totalImageCount}/{MAX_IMAGES} images
-          </span>
-        </div>
-
-        <Textarea
-          label='Image URLs'
-          value={form.imagesText}
-          onChange={(value) => setField('imagesText', value)}
-          placeholder={'https://res.cloudinary.com/demo/image/upload/noir-main.jpg\nhttps://res.cloudinary.com/demo/image/upload/noir-box.jpg'}
+      {isCombo && (
+        <ImageManager
+          title='Images'
+          imagesText={form.imagesText}
+          files={files}
+          onImagesTextChange={(value) => setField('imagesText', value)}
+          onFilesChange={setFiles}
+          setLocalError={setLocalError}
+          mainImageLabel='product'
         />
-
-        {urlImages.length > 0 && (
-          <div className='mt-4'>
-            <p className='mb-2 text-xs font-medium text-gray-600'>URL images</p>
-            <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6'>
-              {urlImages.map((src, index) => (
-                <ImagePreviewCard
-                  key={`${src}-${index}`}
-                  src={src}
-                  index={index}
-                  isMain={index === 0}
-                  canMoveLeft={index > 0}
-                  canMoveRight={index < urlImages.length - 1}
-                  onMoveLeft={() => moveUrlImage(index, -1)}
-                  onMoveRight={() => moveUrlImage(index, 1)}
-                  onRemove={() => removeUrlImage(index)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        <label
-          className={[
-            'mt-4 flex items-center justify-center gap-2 rounded border border-dashed border-gray-300 px-4 py-5 text-sm transition-colors',
-            remainingImageSlots > 0
-              ? 'cursor-pointer text-gray-600 hover:bg-gray-50'
-              : 'cursor-not-allowed bg-gray-50 text-gray-400',
-          ].join(' ')}
-        >
-          <Upload size={18} />
-          {remainingImageSlots > 0
-            ? `Upload image files (${remainingImageSlots} slot${remainingImageSlots === 1 ? '' : 's'} left)`
-            : `Maximum ${MAX_IMAGES} images added`}
-          <input
-            type='file'
-            accept='image/*'
-            multiple
-            hidden
-            disabled={remainingImageSlots === 0}
-            onChange={handleImageFiles}
-          />
-        </label>
-
-        {previews.length > 0 && (
-          <div className='mt-4'>
-            <p className='mb-2 text-xs font-medium text-gray-600'>Selected uploads</p>
-            <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6'>
-              {previews.map(({ file, src }, index) => (
-                <ImagePreviewCard
-                  key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
-                  src={src}
-                  index={urlImages.length + index}
-                  isMain={urlImages.length === 0 && index === 0}
-                  canMoveLeft={index > 0}
-                  canMoveRight={index < previews.length - 1}
-                  onMoveLeft={() => moveImageFile(index, -1)}
-                  onMoveRight={() => moveImageFile(index, 1)}
-                  onRemove={() => removeImageFile(index)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        <p className='mt-3 text-xs leading-5 text-gray-500'>
-          Maximum {MAX_IMAGES} images. The first image is the main product image. Use the arrows to reorder and the trash button to remove an image.
-          URL images are placed before newly uploaded files.
-        </p>
-        <p className='mt-1 text-xs text-gray-500'>
-          Cloudinary credentials are required only for file uploads. URL images can be saved without Cloudinary.
-        </p>
-      </section>
+      )}
 
       {!isCombo && (
       <section className='rounded border border-gray-200 bg-white p-5'>
@@ -812,31 +838,15 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
                 />
               </div>
               <div className='mt-4'>
-                <p className='mb-2 text-sm font-medium text-gray-700'>Variant Image</p>
-                {(variantImagePreviews[index]?.src || variant.image?.url || variant.image) && (
-                  <div className='mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6'>
-                    <ImagePreviewCard
-                      src={variantImagePreviews[index]?.src || variant.image?.url || variant.image}
-                      index={0}
-                      isMain={false}
-                      canMoveLeft={false}
-                      canMoveRight={false}
-                      onMoveLeft={undefined}
-                      onMoveRight={undefined}
-                      onRemove={() => removeVariantImage(index)}
-                    />
-                  </div>
-                )}
-                <label className='flex cursor-pointer items-center justify-center gap-2 rounded border border-dashed border-gray-300 px-4 py-5 text-sm text-gray-600 transition-colors hover:bg-gray-50'>
-                  <Upload size={18} />
-                  {variantImagePreviews[index] || variant.image ? 'Replace variant image' : 'Upload variant image'}
-                  <input
-                    type='file'
-                    accept='image/*'
-                    hidden
-                    onChange={(event) => handleVariantImageFile(index, event)}
-                  />
-                </label>
+                <ImageManager
+                  title='Variant Images'
+                  imagesText={variant.imagesText || ''}
+                  files={variantImageFiles[index] || []}
+                  onImagesTextChange={(value) => setVariant(index, 'imagesText', value)}
+                  onFilesChange={(nextFiles) => setVariantFiles(index, nextFiles)}
+                  setLocalError={setLocalError}
+                  mainImageLabel='variant'
+                />
               </div>
             </div>
           ))}

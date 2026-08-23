@@ -19,6 +19,7 @@ import ProductReviews from "@/features/customer/reviews/ProductReviews";
 import {
   fetchProductBySlug,
   fetchProductReviews,
+  getVariantProductGalleryUrls,
   getProductImageUrl,
 } from "@/lib/clientApi";
 import { requestCartDrawerOpen, requestCheckoutOpen } from "@/lib/cartEvents";
@@ -37,11 +38,7 @@ const formatRupees = (value) => `\u20b9${formatPrice(value)}`;
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
 
 const getProductImages = (product, selectedVariant) => {
-  const selectedVariantImage = getProductImageUrl(selectedVariant?.image);
-  const productImages = product?.images?.map(getProductImageUrl).filter(Boolean) || [];
-  const images = Array.from(
-    new Set([selectedVariantImage, ...productImages].filter(Boolean))
-  );
+  const images = getVariantProductGalleryUrls(product, selectedVariant);
 
   return images.length > 0 ? images : [FALLBACK_IMAGE];
 };

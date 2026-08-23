@@ -2,9 +2,16 @@
 
 import { useContext, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Edit2, Plus, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Edit2, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { NotificationContext } from '@/context/NotificationContext';
 import { api, formatDate, getErrorMessage, getId, money } from '@/lib/api';
+
+const getImageUrl = (image) => image?.url || image || '';
+
+const getProductThumbnail = (product) =>
+  getImageUrl(product.images?.[0]) ||
+  getImageUrl((product.variants || []).find((variant) => variant.images?.[0])?.images?.[0]) ||
+  getImageUrl((product.variants || []).find((variant) => variant.image)?.image);
 
 const ProductList = () => {
   const [products, setProducts] = useState([]);
@@ -14,6 +21,7 @@ const ProductList = () => {
   const [audience, setAudience] = useState('');
   const [status, setStatus] = useState('');
   const [busyId, setBusyId] = useState('');
+  const [savingFeaturedOrder, setSavingFeaturedOrder] = useState(false);
   const { success, error: showError } = useContext(NotificationContext);
 
   const loadProducts = async () => {
@@ -48,6 +56,18 @@ const ProductList = () => {
     });
   }, [products, search, audience, status]);
 
+  const featuredProducts = useMemo(
+    () =>
+      products
+        .filter((product) => product.featured === true)
+        .sort((left, right) => {
+          const leftOrder = Number(left.featuredOrder) || Number.MAX_SAFE_INTEGER;
+          const rightOrder = Number(right.featuredOrder) || Number.MAX_SAFE_INTEGER;
+          return leftOrder - rightOrder || String(left.name || '').localeCompare(String(right.name || ''));
+        }),
+    [products]
+  );
+
   const deleteProduct = async (product) => {
     if (!window.confirm(`Delete ${product.name}?`)) return;
     const id = getId(product);
@@ -78,6 +98,38 @@ const ProductList = () => {
       showError(getErrorMessage(error, 'Unable to update product'));
     } finally {
       setBusyId('');
+    }
+  };
+
+  const moveFeaturedProduct = (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= featuredProducts.length) return;
+
+    const nextFeatured = [...featuredProducts];
+    [nextFeatured[index], nextFeatured[targetIndex]] = [nextFeatured[targetIndex], nextFeatured[index]];
+    const orderById = new Map(nextFeatured.map((product, itemIndex) => [getId(product), itemIndex + 1]));
+
+    setProducts((current) =>
+      current.map((product) =>
+        orderById.has(getId(product))
+          ? { ...product, featuredOrder: orderById.get(getId(product)) }
+          : product
+      )
+    );
+  };
+
+  const saveFeaturedOrder = async () => {
+    try {
+      setSavingFeaturedOrder(true);
+      await api.patch('/api/admin/products/featured-order', {
+        productIds: featuredProducts.map((product) => getId(product)),
+      });
+      success('Homepage featured order saved');
+      await loadProducts();
+    } catch (error) {
+      showError(getErrorMessage(error, 'Unable to save featured order'));
+    } finally {
+      setSavingFeaturedOrder(false);
     }
   };
 
@@ -119,6 +171,73 @@ const ProductList = () => {
         </div>
       </section>
 
+      <section className='rounded border border-gray-200 bg-white p-4'>
+        <div className='flex flex-wrap items-center justify-between gap-3'>
+          <div>
+            <h2 className='text-lg font-semibold text-gray-950'>Homepage Featured</h2>
+            <p className='mt-1 text-sm text-gray-500'>All products marked Featured appear here. Use this order to control storefront placement.</p>
+          </div>
+          <button
+            type='button'
+            onClick={saveFeaturedOrder}
+            disabled={savingFeaturedOrder || featuredProducts.length === 0}
+            className='inline-flex items-center gap-2 rounded bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-50'
+          >
+            <Save size={16} />
+            {savingFeaturedOrder ? 'Saving...' : 'Save Order'}
+          </button>
+        </div>
+
+        <div className='mt-4 divide-y divide-gray-100 rounded border border-gray-200'>
+          {featuredProducts.length === 0 ? (
+            <p className='p-4 text-sm text-gray-500'>No featured products yet.</p>
+          ) : (
+            featuredProducts.map((product, index) => {
+              const id = getId(product);
+              const thumbnail = getProductThumbnail(product);
+
+              return (
+                <div key={`featured-${id}`} className='grid gap-3 p-3 sm:grid-cols-[56px_1fr_110px_96px] sm:items-center'>
+                  <div className='h-14 w-14 overflow-hidden rounded bg-gray-100'>
+                    {thumbnail ? <img src={thumbnail} alt={product.name} className='h-full w-full object-cover' /> : null}
+                  </div>
+                  <div>
+                    <div className='flex flex-wrap items-center gap-2'>
+                      <p className='font-semibold text-gray-950'>{product.name}</p>
+                      <span className={`rounded px-2 py-1 text-[10px] font-semibold ${product.productType === 'combo' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'}`}>
+                        {product.productType === 'combo' ? 'COMBO' : 'PRODUCT'}
+                      </span>
+                    </div>
+                    <p className='mt-1 text-xs text-gray-500'>{product.slug}</p>
+                  </div>
+                  <p className='text-sm font-semibold text-gray-700'>Position {index + 1}</p>
+                  <div className='flex gap-2 sm:justify-end'>
+                    <button
+                      type='button'
+                      onClick={() => moveFeaturedProduct(index, -1)}
+                      disabled={index === 0}
+                      className='rounded border border-gray-300 p-2 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300'
+                      title='Move up'
+                    >
+                      <ChevronUp size={16} />
+                    </button>
+                    <button
+                      type='button'
+                      onClick={() => moveFeaturedProduct(index, 1)}
+                      disabled={index === featuredProducts.length - 1}
+                      className='rounded border border-gray-300 p-2 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300'
+                      title='Move down'
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
+
       {loading ? (
         <StateMessage message='Loading products...' />
       ) : error ? (
@@ -153,8 +272,8 @@ const ProductList = () => {
                       <td className='px-4 py-4'>
                         <div className='flex items-center gap-3'>
                           <div className='h-14 w-14 overflow-hidden rounded bg-gray-100'>
-                            {product.images?.[0]?.url || product.images?.[0] ? (
-                              <img src={product.images?.[0]?.url || product.images?.[0]} alt={product.name} className='h-full w-full object-cover' />
+                            {getProductThumbnail(product) ? (
+                              <img src={getProductThumbnail(product)} alt={product.name} className='h-full w-full object-cover' />
                             ) : null}
                           </div>
                           <div>

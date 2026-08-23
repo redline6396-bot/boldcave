@@ -50,6 +50,8 @@ async function uploadImage(file) {
 export default function HomepagePage() {
   const [heroSlides, setHeroSlides] = useState(() => normalizeSlots([], blankHeroSlide));
   const [featuredReviews, setFeaturedReviews] = useState(() => normalizeSlots([], blankFeaturedReview));
+  const [collectionFragranceCount, setCollectionFragranceCount] = useState('5');
+  const [collectionPersonalityCount, setCollectionPersonalityCount] = useState('5');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [busyField, setBusyField] = useState('');
@@ -72,6 +74,8 @@ export default function HomepagePage() {
         if (!mounted) return;
         setHeroSlides(normalizeSlots(response.data.data?.heroSlides, blankHeroSlide));
         setFeaturedReviews(normalizeSlots(response.data.data?.featuredReviews, blankFeaturedReview));
+        setCollectionFragranceCount(String(response.data.data?.collectionFragranceCount ?? 5));
+        setCollectionPersonalityCount(String(response.data.data?.collectionPersonalityCount ?? 5));
       } catch (error) {
         const message = getErrorMessage(error, 'Unable to load homepage settings');
         setLocalError(message);
@@ -129,9 +133,13 @@ export default function HomepagePage() {
       const response = await api.patch('/api/admin/homepage-settings', {
         heroSlides,
         featuredReviews,
+        collectionFragranceCount,
+        collectionPersonalityCount,
       });
       setHeroSlides(normalizeSlots(response.data.data?.heroSlides, blankHeroSlide));
       setFeaturedReviews(normalizeSlots(response.data.data?.featuredReviews, blankFeaturedReview));
+      setCollectionFragranceCount(String(response.data.data?.collectionFragranceCount ?? 5));
+      setCollectionPersonalityCount(String(response.data.data?.collectionPersonalityCount ?? 5));
       success('Homepage settings saved');
     } catch (error) {
       const message = getErrorMessage(error, 'Unable to save homepage settings');
@@ -217,6 +225,27 @@ export default function HomepagePage() {
               />
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className='rounded border border-gray-200 bg-white p-5'>
+        <h2 className='text-lg font-semibold text-gray-950'>Homepage Collection Copy</h2>
+        <p className='mt-1 text-sm text-gray-500'>These numbers control the Shop The Collection subtitle. They are not product limits.</p>
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <TextField
+            label='Fragrance count'
+            type='number'
+            value={collectionFragranceCount}
+            onChange={setCollectionFragranceCount}
+            placeholder='5'
+          />
+          <TextField
+            label='Personality count'
+            type='number'
+            value={collectionPersonalityCount}
+            onChange={setCollectionPersonalityCount}
+            placeholder='5'
+          />
         </div>
       </section>
 
@@ -320,15 +349,24 @@ function ImageField({ label, value, busy, onUrlChange, onChange }) {
   );
 }
 
-function TextField({ label, value, onChange, placeholder = '' }) {
+function TextField({ label, value, onChange, placeholder = '', type = 'text' }) {
   return (
     <label className='mt-4 block text-sm'>
       <span className='mb-1 block font-medium text-gray-700'>{label}</span>
       <input
+        type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onWheel={(event) => {
+          if (type === 'number') event.currentTarget.blur();
+        }}
         placeholder={placeholder}
-        className='w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'
+        className={[
+          'w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-black',
+          type === 'number'
+            ? '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
+            : '',
+        ].join(' ')}
       />
     </label>
   );

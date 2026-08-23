@@ -71,6 +71,11 @@ const copyProductFields = (source, copyNumber) => {
               alt: variant.image.alt || "",
             }
           : undefined,
+        images: (variant.images || []).map((image) => ({
+          url: image.url,
+          publicId: image.publicId || "",
+          alt: image.alt || "",
+        })),
       };
     }),
     legalInformation: {

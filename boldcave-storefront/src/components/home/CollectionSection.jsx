@@ -2,10 +2,44 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ProductCard from "@/components/product/ProductCard";
-import { fetchProducts } from "@/lib/clientApi";
+import { fetchHomepageSettings, fetchProducts } from "@/lib/clientApi";
+
+const sortFeaturedProducts = (products) =>
+  [...products]
+    .filter((product) => product.featured === true)
+    .sort((left, right) => {
+      const leftOrder = Number(left.featuredOrder) || Number.MAX_SAFE_INTEGER;
+      const rightOrder = Number(right.featuredOrder) || Number.MAX_SAFE_INTEGER;
+
+      return (
+        leftOrder - rightOrder ||
+        String(left.name || "").localeCompare(String(right.name || ""))
+      );
+    });
+
+const buildDesktopRows = (products) => {
+  const rows = [];
+
+  for (let index = 0; index < products.length; index += 3) {
+    rows.push(products.slice(index, index + 3));
+  }
+
+  return rows;
+};
+
+const formatCollectionSubtitle = (fragranceCount, personalityCount) => {
+  const fragranceWord = fragranceCount === 1 ? "fragrance" : "fragrances";
+  const personalityWord =
+    personalityCount === 1
+      ? "distinct personality"
+      : "distinct personalities";
+
+  return `${fragranceCount} ${fragranceWord}. ${personalityCount} ${personalityWord}.`;
+};
 
 export default function CollectionSection() {
   const [products, setProducts] = useState([]);
+  const [settings, setSettings] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -13,10 +47,11 @@ export default function CollectionSection() {
 
     setIsLoading(true);
 
-    fetchProducts()
-      .then((apiProducts) => {
+    Promise.all([fetchProducts(), fetchHomepageSettings().catch(() => null)])
+      .then(([apiProducts, homepageSettings]) => {
         if (isMounted) {
-          setProducts(apiProducts.slice(0, 5));
+          setProducts(sortFeaturedProducts(apiProducts));
+          setSettings(homepageSettings);
         }
       })
       .catch(() => {
@@ -35,9 +70,24 @@ export default function CollectionSection() {
     };
   }, []);
 
-  const topRowProducts = useMemo(() => products.slice(0, 3), [products]);
-  const bottomRowProducts = useMemo(() => products.slice(3, 5), [products]);
+  const desktopRows = useMemo(() => buildDesktopRows(products), [products]);
   const hasOddMobileProduct = products.length % 2 === 1;
+
+  const fallbackCount = products.filter(
+    (product) => product.productType !== "combo"
+  ).length;
+
+  const fragranceCount = Number.isFinite(
+    Number(settings?.collectionFragranceCount)
+  )
+    ? Number(settings.collectionFragranceCount)
+    : fallbackCount;
+
+  const personalityCount = Number.isFinite(
+    Number(settings?.collectionPersonalityCount)
+  )
+    ? Number(settings.collectionPersonalityCount)
+    : fallbackCount;
 
   return (
     <section className="bg-white px-2.5 pb-8 pt-8 sm:px-6 sm:py-10 lg:px-8 lg:py-8">
@@ -48,7 +98,7 @@ export default function CollectionSection() {
           </h2>
 
           <p className="mt-3 text-[15px] font-normal leading-relaxed text-neutral-500 sm:mt-5 lg:mt-4 lg:text-[14px]">
-            Five fragrances. Five distinct personalities.
+            {formatCollectionSubtitle(fragranceCount, personalityCount)}
           </p>
         </div>
 
@@ -76,17 +126,23 @@ export default function CollectionSection() {
             </div>
 
             <div className="mt-14 hidden space-y-10 lg:mt-11 lg:block lg:space-y-8">
-              <div className="grid grid-cols-3 justify-items-center gap-8 lg:gap-7">
-                {topRowProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-
-              <div className="mx-auto grid max-w-[840px] grid-cols-2 justify-items-center gap-8 lg:max-w-[760px] lg:gap-7">
-                {bottomRowProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
+              {desktopRows.map((row, rowIndex) => (
+                <div
+                  key={`featured-row-${rowIndex}`}
+                  className={[
+                    "grid justify-center justify-items-center gap-8 lg:gap-7",
+                    row.length === 1
+                      ? "mx-auto max-w-[388px] grid-cols-1"
+                      : row.length === 2
+                        ? "mx-auto max-w-[840px] grid-cols-[repeat(2,minmax(0,388px))] lg:max-w-[760px]"
+                        : "grid-cols-[repeat(3,minmax(0,388px))]",
+                  ].join(" ")}
+                >
+                  {row.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+              ))}
             </div>
           </>
         ) : isLoading ? (
@@ -112,8 +168,9 @@ function CollectionSkeleton() {
             <ProductCardSkeleton key={index} />
           ))}
         </div>
-        <div className="mx-auto grid max-w-[840px] grid-cols-2 justify-items-center gap-8 lg:max-w-[760px] lg:gap-7">
-          {Array.from({ length: 2 }).map((_, index) => (
+
+        <div className="grid grid-cols-3 justify-items-center gap-8 lg:gap-7">
+          {Array.from({ length: 3 }).map((_, index) => (
             <ProductCardSkeleton key={index} />
           ))}
         </div>

@@ -139,7 +139,7 @@ function CollectionContent() {
             </h1>
 
             <p className="mx-auto mt-3 max-w-[520px] text-[14px] leading-6 text-neutral-500 sm:mt-4 sm:text-[16px] lg:text-[15px]">
-              Five fragrances. Five distinct personalities.
+              Explore the complete Bold Cave collection.
             </p>
           </div>
 
