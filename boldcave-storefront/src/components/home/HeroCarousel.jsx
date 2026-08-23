@@ -12,22 +12,16 @@ const TAP_THRESHOLD = 10;
 const fallbackSlides = [
   {
     id: "hero-slide-1",
-    desktopImage: "/images/hero/hero-1-desktop.webp",
-    mobileImage: "/images/hero/hero-1-mobile.webp",
     href: "/collection",
     active: true,
   },
   {
     id: "hero-slide-2",
-    desktopImage: "/images/hero/hero-1-desktop.webp",
-    mobileImage: "/images/hero/hero-1-mobile.webp",
     href: "/collection",
     active: false,
   },
   {
     id: "hero-slide-3",
-    desktopImage: "/images/hero/hero-1-desktop.webp",
-    mobileImage: "/images/hero/hero-1-mobile.webp",
     href: "/collection",
     active: false,
   },
@@ -55,7 +49,7 @@ const getSlideImageKey = (slide) =>
 
 export default function HeroCarousel() {
   const router = useRouter();
-  const [slides, setSlides] = useState(fallbackSlides);
+  const [slides, setSlides] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
   const initialSlideIndex = Math.max(
     slides.findIndex((slide) => slide.active),
@@ -84,7 +78,7 @@ export default function HeroCarousel() {
         setSlides(buildHeroSlides(settings.heroSlides));
         setActiveIndex(0);
       } catch {
-        // Keep the current hardcoded banners if homepage settings are unavailable.
+        // Keep the hero empty if homepage settings are unavailable.
       }
     }
 
@@ -326,7 +320,7 @@ export default function HeroCarousel() {
       <div
         ref={carouselRef}
         className={[
-          "flex w-full cursor-pointer snap-x snap-mandatory touch-auto select-none overflow-y-hidden overscroll-x-contain scroll-smooth transition-opacity duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          "flex w-full cursor-pointer snap-x snap-mandatory touch-auto select-none overflow-y-hidden overscroll-x-contain scroll-smooth transition-opacity duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden aspect-square sm:h-[45vw] sm:aspect-auto lg:h-[43vw] lg:max-h-[780px]",
           isHeroReady
             ? "overflow-x-auto opacity-100"
             : "pointer-events-none overflow-x-hidden opacity-0",
@@ -358,7 +352,7 @@ export default function HeroCarousel() {
               onClick={(event) => handleSlideClick(event, slide.href)}
               className="block w-full min-w-full shrink-0 snap-start overflow-hidden"
             >
-              <picture className="relative block aspect-square w-full bg-[#f7f5f2] sm:h-[45vw] sm:aspect-auto lg:h-[42vw] lg:max-h-[780px]">
+              <picture className="relative block aspect-square w-full bg-[#f7f5f2] sm:h-[45vw] sm:aspect-auto lg:h-[43vw] lg:max-h-[780px]">
                 <source
                   media="(max-width: 639px)"
                   srcSet={slide.mobileImage}

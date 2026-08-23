@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
-  CirclePower,
+  ChevronRight,
   IndianRupee,
   Package,
   PackagePlus,
@@ -82,22 +82,38 @@ const Dashboard = () => {
   const [dashboard, setDashboard] = useState(null);
   const [range, setRange] = useState('7d');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [storeSettingsSaving, setStoreSettingsSaving] = useState(false);
   const [error, setError] = useState('');
+  const hasLoadedDashboardRef = useRef(false);
   const { error: showError, success: showSuccess } = useContext(NotificationContext);
 
   const loadDashboard = useCallback(async () => {
+    const isInitialLoad = !hasLoadedDashboardRef.current;
+
     try {
-      setLoading(true);
+      if (isInitialLoad) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+
       setError('');
+
       const response = await api.get(`/api/admin/dashboard?range=${range}`);
       setDashboard(response.data.data);
+      hasLoadedDashboardRef.current = true;
     } catch (error) {
       const message = getErrorMessage(error, 'Unable to load dashboard');
-      setError(message);
+
+      if (isInitialLoad) {
+        setError(message);
+      }
+
       showError(message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [range, showError]);
 
@@ -168,7 +184,7 @@ const Dashboard = () => {
   if (!dashboard) return <StateMessage message='No dashboard data available' />;
 
   return (
-    <div className='mx-auto w-full max-w-[1440px] space-y-6 text-[#17202d]'>
+    <div className='mx-auto w-full max-w-[1440px] space-y-6 pb-8 text-[#17202d]'>
       <header className='flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
         <div>
           <h1 className='text-[28px] font-semibold tracking-[-0.025em] text-[#111827] md:text-[32px]'>
@@ -201,10 +217,11 @@ const Dashboard = () => {
           <button
             type='button'
             onClick={loadDashboard}
-            className='inline-flex h-10 cursor-pointer items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50'
+            disabled={refreshing}
+            className='inline-flex h-10 cursor-pointer items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60'
           >
-            <RefreshCw size={15} />
-            Refresh
+            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </header>
@@ -234,7 +251,7 @@ const Dashboard = () => {
         />
       </section>
 
-      <section className='grid gap-6 xl:grid-cols-12'>
+      <section className='grid items-start gap-6 xl:grid-cols-12'>
         <RecentOrdersCard
           className='xl:col-span-8'
           orders={dashboard.recentOrders || []}
@@ -245,7 +262,7 @@ const Dashboard = () => {
         />
       </section>
 
-      <section className='grid gap-6 xl:grid-cols-12'>
+      <section className='grid items-start gap-6 xl:grid-cols-12'>
         <TopProductsCard
           className='xl:col-span-8'
           products={dashboard.topProducts || []}
@@ -262,7 +279,7 @@ function StoreStatusCard({ acceptingOrders, saving, onToggle }) {
     <section className='rounded-[12px] border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]'>
       <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
         <div className='flex items-start gap-3'>
-          <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-slate-100 text-slate-700'>
+          <span className='flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-slate-100 text-slate-700'>
             <Store size={19} strokeWidth={1.8} />
           </span>
           <div>
@@ -300,16 +317,19 @@ function StoreStatusCard({ acceptingOrders, saving, onToggle }) {
           role='switch'
           aria-checked={acceptingOrders}
           className={[
-            'inline-flex h-9 w-[74px] cursor-pointer items-center rounded-full border p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+            'relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60',
             acceptingOrders
-              ? 'justify-end border-emerald-200 bg-emerald-50'
-              : 'justify-start border-red-200 bg-red-50',
+              ? 'border-emerald-500 bg-emerald-500'
+              : 'border-slate-300 bg-slate-300',
           ].join(' ')}
           title={acceptingOrders ? 'Turn orders off' : 'Turn orders on'}
         >
-          <span className='flex h-7 w-7 items-center justify-center rounded-full bg-white text-slate-800 shadow-sm'>
-            <CirclePower size={15} strokeWidth={1.8} />
-          </span>
+          <span
+            className={[
+              'h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
+              acceptingOrders ? 'translate-x-[25px]' : 'translate-x-[3px]',
+            ].join(' ')}
+          />
         </button>
       </div>
     </section>
@@ -329,7 +349,7 @@ function KpiCard({ label, value, detail, icon: Icon }) {
           </p>
           {detail && <p className='mt-2 text-xs text-slate-500'>{detail}</p>}
         </div>
-        <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-slate-100 text-slate-700'>
+        <span className='flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-slate-100 text-slate-700'>
           <Icon size={19} strokeWidth={1.8} />
         </span>
       </div>
@@ -339,6 +359,9 @@ function KpiCard({ label, value, detail, icon: Icon }) {
 
 function RevenueCard({ className = '', period, series, range }) {
   const hasRevenue = series.some((point) => Number(point.revenue) > 0);
+  const averageOrderValue = Number(period?.orders || 0)
+    ? Number(period?.revenue || 0) / Number(period.orders)
+    : 0;
 
   return (
     <section className={`rounded-[12px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${className}`}>
@@ -349,9 +372,16 @@ function RevenueCard({ className = '', period, series, range }) {
             {formatCurrency(period?.revenue)} total across {period?.orders || 0} orders
           </p>
         </div>
-        <span className='w-fit rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600'>
-          {range === '30d' ? '30D' : '7D'}
-        </span>
+        <div className='flex items-center gap-2'>
+          {averageOrderValue > 0 && (
+            <span className='hidden rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500 sm:inline-flex'>
+              AOV&nbsp;<strong className='font-medium text-slate-700'>{formatCurrency(averageOrderValue)}</strong>
+            </span>
+          )}
+          <span className='w-fit rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600'>
+            {range === '30d' ? '30D' : '7D'}
+          </span>
+        </div>
       </div>
 
       <div className='px-4 py-5 sm:px-5'>
@@ -394,7 +424,7 @@ function RevenueChart({ series }) {
     .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
     .join(' ');
   const areaPath = `${linePath} L ${points[points.length - 1].x} ${padding.top + chartHeight} L ${points[0].x} ${padding.top + chartHeight} Z`;
-  const hoverPoint = hoverIndex === null ? points[points.length - 1] : points[hoverIndex];
+  const hoverPoint = hoverIndex === null ? null : points[hoverIndex];
   const yGuides = [0, 0.5, 1];
 
   return (
@@ -414,6 +444,18 @@ function RevenueChart({ series }) {
 
         <path d={areaPath} fill='#f1f5f9' />
         <path d={linePath} fill='none' stroke='#0f172a' strokeWidth='2.2' strokeLinecap='round' strokeLinejoin='round' />
+
+        {hoverPoint && (
+          <line
+            x1={hoverPoint.x}
+            x2={hoverPoint.x}
+            y1={padding.top}
+            y2={padding.top + chartHeight}
+            stroke='#cbd5e1'
+            strokeWidth='1'
+            strokeDasharray='4 4'
+          />
+        )}
 
         {points.map((point, index) => (
           <g key={point.date}>
@@ -554,7 +596,11 @@ function InventoryCard({ className = '', items }) {
           <h2 className='text-sm font-semibold text-slate-950'>Inventory Attention</h2>
           <p className='mt-1 text-xs text-slate-500'>Out of stock and low-stock variants</p>
         </div>
-        <TriangleAlert size={18} strokeWidth={1.8} className='text-slate-500' />
+        {items.length === 0 ? (
+          <CheckCircle2 size={18} strokeWidth={1.8} className='text-emerald-600' />
+        ) : (
+          <TriangleAlert size={18} strokeWidth={1.8} className='text-amber-600' />
+        )}
       </div>
 
       {items.length === 0 ? (
@@ -599,8 +645,8 @@ function TopProductsCard({ className = '', products, range }) {
     <section className={`rounded-[12px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${className}`}>
       <div className='flex items-center justify-between border-b border-slate-100 px-5 py-4'>
         <div>
-          <h2 className='text-sm font-semibold text-slate-950'>Top Products</h2>
-          <p className='mt-1 text-xs text-slate-500'>{range === '30d' ? 'Last 30 days' : 'Last 7 days'} by order revenue</p>
+          <h2 className='text-sm font-semibold text-slate-950'>Top-selling variants</h2>
+          <p className='mt-1 text-xs text-slate-500'>{range === '30d' ? 'Last 30 days' : 'Last 7 days'} by variant revenue</p>
         </div>
       </div>
 
@@ -649,7 +695,7 @@ function QuickActionsCard({ className = '' }) {
               <Icon size={16} strokeWidth={1.8} />
               {label}
             </span>
-            <span className='text-slate-400'>→</span>
+            <ChevronRight size={15} strokeWidth={1.8} className='text-slate-400' />
           </Link>
         ))}
       </div>

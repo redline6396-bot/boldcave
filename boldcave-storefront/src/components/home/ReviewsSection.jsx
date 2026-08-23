@@ -4,30 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchHomepageSettings } from "@/lib/clientApi";
 
-const fallbackReviews = [
-  {
-    id: "review-1",
-    image:
-      "https://olgaperfume.com/cdn/shop/files/inbound6865250190503709878.jpg?v=1704886050&width=750",
-    text: "Really impressed with the fragrance quality and how long it lasts.",
-    name: "A. Sharma",
-  },
-  {
-    id: "review-2",
-    image:
-      "https://olgaperfume.com/cdn/shop/files/WhatsApp-Image-2023-12-23-at-11.30.43_c6e732a2.jpg?v=1704886207&width=750",
-    text: "Packaging felt premium and the scent profile was smooth and refined.",
-    name: "R. Mehta",
-  },
-  {
-    id: "review-3",
-    image:
-      "https://olgaperfume.com/cdn/shop/files/IMG_6080.jpg?v=1704886273&width=750",
-    text: "Great everyday fragrance with strong performance for the price.",
-    name: "K. Verma",
-  },
-];
-
 const hasCompleteFeaturedReviews = (items) =>
   Array.isArray(items) &&
   items.length === 3 &&
@@ -44,7 +20,7 @@ const buildFeaturedReviews = (items) =>
 export default function ReviewsSection() {
   const scrollerRef = useRef(null);
   const scrollFrameRef = useRef(null);
-  const [reviews, setReviews] = useState(fallbackReviews);
+  const [reviews, setReviews] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loadedImages, setLoadedImages] = useState({});
 
@@ -61,7 +37,7 @@ export default function ReviewsSection() {
         setReviews(buildFeaturedReviews(settings.featuredReviews));
         setActiveIndex(0);
       } catch {
-        // Keep the current hardcoded homepage reviews if settings are unavailable.
+        // Keep reviews empty if homepage settings are unavailable.
       }
     }
 
@@ -128,6 +104,10 @@ export default function ReviewsSection() {
       };
     });
   };
+
+  if (reviews.length === 0) {
+    return null;
+  }
 
   return (
     <section className="bg-white text-neutral-950">
