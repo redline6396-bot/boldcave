@@ -11,6 +11,7 @@ export const ADMIN_SESSION_COOKIE = "admin_session";
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const ADMIN_SESSION_MAX_AGE_SECONDS = 60 * 60 * 8;
+const CHECKOUT_PHONE_MAX_AGE_SECONDS = 15 * 60;
 
 function getSecret(name, fallbackName) {
   const value = process.env[name] || (fallbackName ? process.env[fallbackName] : "");
@@ -51,6 +52,38 @@ export function signAdminSession() {
     getSecret("ADMIN_AUTH_SECRET", "AUTH_SECRET"),
     { expiresIn: ADMIN_SESSION_MAX_AGE_SECONDS }
   );
+}
+
+export function signCheckoutPhoneToken({ userId, phone }) {
+  return jwt.sign(
+    {
+      sub: String(userId),
+      phone: normalizePhone(phone),
+      type: "checkout_phone",
+    },
+    getSecret("AUTH_SECRET", "JWT_SECRET"),
+    { expiresIn: CHECKOUT_PHONE_MAX_AGE_SECONDS }
+  );
+}
+
+export function verifyCheckoutPhoneToken(token) {
+  try {
+    const decoded = jwt.verify(
+      String(token || ""),
+      getSecret("AUTH_SECRET", "JWT_SECRET")
+    );
+
+    if (decoded.type !== "checkout_phone" || !decoded.sub) {
+      return null;
+    }
+
+    return {
+      userId: String(decoded.sub),
+      phone: normalizePhone(decoded.phone),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function setUserSessionCookie(response, token) {

@@ -149,7 +149,7 @@ function extractLocation(result = {}) {
   };
 }
 
-export default function CheckoutPage() {
+export default function CheckoutPage({ onClose, onSuccess } = {}) {
   const router = useRouter();
   const {
     user,
@@ -190,6 +190,8 @@ export default function CheckoutPage() {
   const [checkoutPhone, setCheckoutPhone] = useState("");
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
+  const [phoneVerificationToken, setPhoneVerificationToken] =
+    useState("");
 
   const [otpOpen, setOtpOpen] = useState(false);
   const [otpDigits, setOtpDigits] = useState(
@@ -207,7 +209,7 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [updatesOptIn, setUpdatesOptIn] = useState(false);
+  const [updatesOptIn, setUpdatesOptIn] = useState(true);
 
   const items = getCartItems();
   const subtotal = getCartTotal();
@@ -253,12 +255,25 @@ export default function CheckoutPage() {
     normalizePhone(checkoutPhone) === normalizePhone(user.phone);
 
   useEffect(() => {
-    if (!user?.phone || phoneTouched) {
+    if (!isAuthenticated || !user?.phone || phoneTouched) {
       return;
     }
 
-    setCheckoutPhone(normalizePhone(user.phone));
-  }, [phoneTouched, user?.phone, user?.phoneVerified]);
+    const accountPhone = normalizePhone(user.phone);
+
+    setCheckoutPhone(accountPhone);
+    setPhoneVerified(Boolean(accountPhone && user.phoneVerified));
+    setPhoneVerificationToken("");
+  }, [isAuthenticated, phoneTouched, user?.phone, user?.phoneVerified]);
+
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -625,6 +640,7 @@ export default function CheckoutPage() {
       normalizePhone(user?.phone) === cleanPhone
     ) {
       setPhoneVerified(true);
+      setPhoneVerificationToken("");
       setError("");
       return;
     }
@@ -677,16 +693,21 @@ export default function CheckoutPage() {
         normalizePhone(user?.phone) !== cleanPhone;
 
       if (alternateLoggedInNumber) {
-        await verifyPhoneOtp({
+        const result = await verifyPhoneOtp({
           phone: cleanPhone,
           otp: cleanOtp,
         });
+        if (!result.phoneVerificationToken) {
+          throw new Error("Checkout phone verification could not be completed.");
+        }
+        setPhoneVerificationToken(result.phoneVerificationToken);
       } else {
         await verifyLoginOtp({
           phone: cleanPhone,
           otp: cleanOtp,
         });
         await refreshUser();
+        setPhoneVerificationToken("");
       }
 
       setPhoneVerified(true);
@@ -759,11 +780,31 @@ export default function CheckoutPage() {
     });
   };
 
+  const handleCheckoutClose = useCallback(() => {
+    if (onClose) {
+      onClose();
+      return;
+    }
+
+    router.back();
+  }, [onClose, router]);
+
   const completeSuccess = useCallback(() => {
     clearCart();
     removeCoupon();
+    setPhoneTouched(false);
+    setPhoneVerified(false);
+    setPhoneVerificationToken("");
+    setOtpOpen(false);
+    setOtpDemoCode("");
+
+    if (onSuccess) {
+      onSuccess();
+      return;
+    }
+
     router.push("/orders");
-  }, [clearCart, removeCoupon, router]);
+  }, [clearCart, onSuccess, removeCoupon, router]);
 
   const ensureReady = useCallback(async () => {
     setError("");
@@ -849,6 +890,8 @@ export default function CheckoutPage() {
       await placeCodOrder({
         items: cartPayload(cart),
         address: normalizedAddress,
+        phone: normalizePhone(checkoutPhone),
+        phoneVerificationToken,
         couponCode,
       });
 
@@ -860,11 +903,13 @@ export default function CheckoutPage() {
     }
   }, [
     cart,
+    checkoutPhone,
     completeSuccess,
     couponCode,
     ensureReady,
     handleError,
     normalizedAddress,
+    phoneVerificationToken,
   ]);
 
   const handleRazorpaySubmit = useCallback(async () => {
@@ -879,6 +924,8 @@ export default function CheckoutPage() {
       const checkout = await createRazorpayCheckout({
         items: cartPayload(cart),
         address: normalizedAddress,
+        phone: normalizePhone(checkoutPhone),
+        phoneVerificationToken,
         couponCode,
       });
 
@@ -953,6 +1000,7 @@ export default function CheckoutPage() {
     ensureReady,
     handleError,
     normalizedAddress,
+    phoneVerificationToken,
     user?.email,
   ]);
 
@@ -1024,7 +1072,7 @@ export default function CheckoutPage() {
 
   return (
     <div
-      className="fixed inset-0 z-[200] overflow-y-auto bg-black/75 sm:p-5"
+      className="fixed inset-0 z-[200] overflow-y-auto bg-black/60 sm:p-5"
       style={{ fontFamily: '"Helvetica Neue", Arial, sans-serif' }}
     >
       <div className="flex min-h-full items-stretch justify-center sm:items-center">
@@ -1161,6 +1209,7 @@ export default function CheckoutPage() {
                         setCheckoutPhone(next);
                         setPhoneTouched(true);
                         setPhoneVerified(false);
+                        setPhoneVerificationToken("");
                         setError("");
                       }}
                       className="min-w-0 flex-1 bg-white px-3 text-[14px] outline-none"
@@ -1321,7 +1370,7 @@ export default function CheckoutPage() {
         discount={discount}
         total={total}
         couponCode={couponCode}
-        shipping={null}
+        shipping={0}
       />
 
       {otpOpen && (
@@ -1337,6 +1386,7 @@ export default function CheckoutPage() {
             setOtpError("");
             setOtpDemoCode("");
             setPhoneVerified(false);
+            setPhoneVerificationToken("");
           }}
           onClose={() => {
             setOtpOpen(false);
@@ -1355,7 +1405,7 @@ export default function CheckoutPage() {
       {exitConfirmOpen && (
         <ExitConfirm
           onStay={() => setExitConfirmOpen(false)}
-          onLeave={() => router.back()}
+          onLeave={handleCheckoutClose}
         />
       )}
 
@@ -1516,7 +1566,7 @@ function ExitConfirm({ onStay, onLeave }) {
             <button
               type="button"
               onClick={onLeave}
-              className="h-11 rounded-[8px] bg-black text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+              className="h-11 cursor-pointer rounded-[8px] bg-black text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
             >
               Yes
             </button>

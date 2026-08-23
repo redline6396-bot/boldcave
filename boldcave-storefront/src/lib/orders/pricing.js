@@ -242,6 +242,8 @@ async function getCanonicalStockRequirements(requirements = []) {
   };
 }
 
+export const SHIPPING_AMOUNT = 0;
+
 export async function calculateCart({ items = [], couponCode = "" }) {
   if (!Array.isArray(items) || items.length === 0) {
     return {
@@ -416,12 +418,17 @@ export async function calculateCart({ items = [], couponCode = "" }) {
   }
 
   const discount = couponResult.discount || 0;
-  const finalAmount = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+  const shipping = SHIPPING_AMOUNT;
+  const finalAmount = Math.max(
+    0,
+    Math.round((subtotal - discount + shipping) * 100) / 100
+  );
 
   return {
     items: normalizedItems.map(({ lineTotal, ...item }) => item),
     subtotal,
     discount,
+    shipping,
     finalAmount,
     coupon: couponResult.code
       ? {

@@ -3,12 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { fetchOrder } from "@/lib/clientApi";
 
 const ordersHref = "/profile?section=orders";
-const lifecycleSteps = ["confirmed", "processing", "shipped", "delivered"];
 
 const formatDate = (value) =>
   value
@@ -20,7 +24,7 @@ const formatDate = (value) =>
     : "Not available";
 
 const formatPrice = (value) =>
-  `\u20b9${new Intl.NumberFormat("en-IN", {
+  `₹${new Intl.NumberFormat("en-IN", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(Number(value) || 0)}`;
@@ -46,35 +50,115 @@ const getPaymentStatusLabel = (status, method) => {
   const normalizedStatus = String(status || "").toLowerCase();
   const normalizedMethod = String(method || "").toLowerCase();
 
-  if (normalizedMethod === "cod" && ["cod", "pending"].includes(normalizedStatus)) {
+  if (
+    normalizedMethod === "cod" &&
+    ["cod", "pending"].includes(normalizedStatus)
+  ) {
     return "Pay on delivery";
   }
 
   if (normalizedStatus === "paid") return "Paid";
   if (normalizedStatus === "failed") return "Failed";
+
   return labelize(status || "Pending");
 };
 
 function getOrderStatus(order) {
-  const paymentStatus = String(order?.payment?.paymentStatus || "").toLowerCase();
-  if (order?.payment?.method === "razorpay" && paymentStatus === "failed") {
+  const paymentStatus = String(
+    order?.payment?.paymentStatus || ""
+  ).toLowerCase();
+
+  if (
+    order?.payment?.method === "razorpay" &&
+    paymentStatus === "failed"
+  ) {
     return "failed";
   }
 
   return String(order?.orderStatus || "confirmed").toLowerCase();
 }
 
+function getStatusMessage(status) {
+  const normalized = String(status || "").toLowerCase();
+
+  if (normalized === "confirmed") {
+    return "Your order has been placed successfully.";
+  }
+  if (normalized === "processing") {
+    return "Your order is being prepared for dispatch.";
+  }
+  if (normalized === "shipped") {
+    return "Your order is on the way.";
+  }
+  if (normalized === "delivered") {
+    return "Your order has been delivered.";
+  }
+  if (normalized === "cancelled") {
+    return "This order has been cancelled.";
+  }
+  if (normalized === "failed") {
+    return "This order could not be completed.";
+  }
+
+  return "We will update this as your order moves forward.";
+}
+
+function getStatusClass(status) {
+  const normalized = String(status || "").toLowerCase();
+
+  if (["cancelled", "failed"].includes(normalized)) {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (normalized === "delivered") {
+    return "border-neutral-300 bg-white text-neutral-950";
+  }
+
+  return "border-neutral-950 bg-neutral-950 text-white";
+}
+
 function formatAddressLine(...parts) {
   return parts.filter(Boolean).join(", ");
+}
+
+function getItemMrp(item) {
+  const candidates = [item?.mrp, item?.mrpPrice, item?.originalPrice];
+  const value = candidates
+    .map((candidate) => Number(candidate))
+    .find((candidate) => Number.isFinite(candidate) && candidate > 0);
+
+  return value || 0;
+}
+
+function getMrpInfo(items = []) {
+  if (!items.length) {
+    return { complete: false, total: 0 };
+  }
+
+  let total = 0;
+
+  for (const item of items) {
+    const mrp = getItemMrp(item);
+
+    if (!mrp) {
+      return { complete: false, total: 0 };
+    }
+
+    total += mrp * (Number(item.quantity) || 0);
+  }
+
+  return { complete: true, total };
 }
 
 export default function OrderDetails() {
   const params = useParams();
   const orderId = params?.orderId;
   const { loading: authLoading, isAuthenticated, openAuth } = useAuth();
+
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [priceDetailsOpen, setPriceDetailsOpen] = useState(false);
 
   const loadOrder = useCallback(() => {
     if (!isAuthenticated || !orderId) return;
@@ -126,7 +210,7 @@ export default function OrderDetails() {
         <button
           type="button"
           onClick={() => openAuth(`/orders/${orderId || ""}`)}
-          className="mt-7 h-11 cursor-pointer border border-neutral-950 bg-neutral-950 px-7 text-[12px] font-semibold uppercase tracking-[0.09em] text-white transition-colors hover:bg-white hover:text-neutral-950"
+          className="mt-7 h-11 cursor-pointer rounded-[6px] bg-neutral-950 px-7 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
         >
           Login
         </button>
@@ -136,24 +220,26 @@ export default function OrderDetails() {
 
   if (error || !order) {
     return (
-      <main className="min-h-screen bg-white px-5 py-16 text-neutral-950">
+      <main className="min-h-screen bg-white px-5 py-12 text-neutral-950 sm:px-7">
         <div className="mx-auto max-w-[760px]">
           <Link
             href={ordersHref}
-            className="inline-flex cursor-pointer items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-600 transition-colors hover:text-neutral-950"
+            className="inline-flex cursor-pointer items-center gap-2 text-[12px] font-medium text-neutral-600 transition-colors hover:text-neutral-950"
           >
             <ArrowLeft className="h-4 w-4" strokeWidth={1.7} />
             Back to Orders
           </Link>
-          <div className="mt-10 border-t border-neutral-200 pt-8">
+
+          <div className="mt-8 rounded-[9px] border border-neutral-200 p-6 sm:p-8">
             <h1 className="text-[24px] font-semibold">
               {error || "Order not found."}
             </h1>
+
             {error && error !== "Order not found." && (
               <button
                 type="button"
                 onClick={loadOrder}
-                className="mt-5 cursor-pointer text-[11px] font-semibold uppercase tracking-[0.1em] underline underline-offset-4"
+                className="mt-5 cursor-pointer text-[12px] font-semibold underline underline-offset-4"
               >
                 Retry
               </button>
@@ -166,147 +252,222 @@ export default function OrderDetails() {
 
   const address = order.deliveryAddress || {};
   const customer = order.customer || {};
+  const items = order.items || [];
   const status = getOrderStatus(order);
+
   const subtotal = Number(order.amounts?.subtotal) || 0;
   const discount = Number(order.amounts?.discount) || 0;
   const finalAmount = Number(order.amounts?.finalAmount) || 0;
-  const hasSummaryBreakdown =
-    discount > 0 || Boolean(order.coupon?.code) || subtotal !== finalAmount;
+
   const trackingUrl = order.shiprocket?.trackingUrl;
   const awbCode = order.shiprocket?.awbCode;
   const courierName = order.shiprocket?.courierName;
   const shipmentStatus = order.shiprocket?.shipmentStatus;
 
+  const totalUnits = items.reduce(
+    (total, item) => total + (Number(item.quantity) || 0),
+    0
+  );
+
+  const mrpInfo = getMrpInfo(items);
+
+  const productDiscount =
+    mrpInfo.complete && mrpInfo.total > subtotal
+      ? mrpInfo.total - subtotal
+      : 0;
+
   return (
-    <main className="min-h-screen bg-white px-5 py-8 text-neutral-950 sm:px-7 sm:py-10 lg:px-10">
-      <div className="mx-auto max-w-[980px]">
+    <main className="min-h-screen bg-[#f5f5f5] px-3 py-5 text-neutral-950 sm:px-5 sm:py-7 lg:px-7 lg:py-8">
+      <div className="mx-auto w-full max-w-[1040px]">
         <Link
           href={ordersHref}
-          className="inline-flex cursor-pointer items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-600 transition-colors hover:text-neutral-950"
+          className="inline-flex cursor-pointer items-center gap-2 text-[12px] font-medium text-neutral-600 transition-colors hover:text-neutral-950"
         >
           <ArrowLeft className="h-4 w-4" strokeWidth={1.7} />
           Back to Orders
         </Link>
 
-        <header className="mt-7 border-b border-neutral-200 pb-6">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-            <h1 className="text-[30px] font-semibold leading-none sm:text-[36px]">
-              Order Details
-            </h1>
-            <div className="grid gap-3 text-[13px] sm:grid-cols-2 sm:gap-8 sm:pb-0.5 sm:text-right">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
-                  Order ID
+        <section className="mt-5 rounded-[10px] border border-neutral-200 bg-white p-4 sm:p-6">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-neutral-500">
+                Order Details
+              </p>
+
+              <h1 className="mt-1.5 break-all text-[20px] font-semibold leading-tight sm:text-[24px]">
+                {order.orderNumber || getOrderId(order)}
+              </h1>
+
+              <p className="mt-1.5 text-[12px] text-neutral-500">
+                Placed on {formatDate(order.createdAt)} · {totalUnits}{" "}
+                {totalUnits === 1 ? "item" : "items"}
+              </p>
+            </div>
+
+            <span
+              className={[
+                "inline-flex h-8 w-fit items-center rounded-full border px-3 text-[10px] font-semibold uppercase tracking-[0.08em]",
+                getStatusClass(status),
+              ].join(" ")}
+            >
+              {labelize(status)}
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-4 border-t border-neutral-200 pt-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div>
+              <p className="text-[13px] font-semibold text-neutral-950">
+                {labelize(status)}
+              </p>
+
+              <p className="mt-1 text-[12px] leading-5 text-neutral-500">
+                {getStatusMessage(status)}
+              </p>
+
+              {!trackingUrl && !awbCode && (
+                <p className="mt-1 text-[11px] text-neutral-400">
+                  Tracking will be available after dispatch.
                 </p>
-                <p className="mt-1 break-words text-neutral-700">
-                  #{order.orderNumber || getOrderId(order)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
-                  Date
-                </p>
-                <p className="mt-1 text-neutral-700">
-                  {formatDate(order.createdAt)}
-                </p>
-              </div>
+              )}
+            </div>
+
+            {trackingUrl && (
+              <a
+                href={trackingUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-10 w-fit cursor-pointer items-center justify-center gap-2 rounded-[6px] bg-neutral-950 px-4 text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                Track shipment
+                <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
+              </a>
+            )}
+          </div>
+        </section>
+
+        <section className="mt-4 overflow-hidden rounded-[10px] border border-neutral-200 bg-white">
+          <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6">
+            <h2 className="text-[14px] font-semibold">Items</h2>
+
+            <span className="text-[11px] text-neutral-500">
+              {totalUnits} {totalUnits === 1 ? "item" : "items"}
+            </span>
+          </div>
+
+          <div className="border-t border-neutral-200 px-4 sm:px-6">
+            <div className="divide-y divide-neutral-100">
+              {items.map((item, index) => (
+                <div
+                  key={`${item.productId}-${item.size}-${index}`}
+                  className="grid grid-cols-[60px_minmax(0,1fr)_auto] items-center gap-3 py-3.5 sm:grid-cols-[68px_minmax(0,1fr)_auto] sm:gap-4 sm:py-4"
+                >
+                  <div className="h-[60px] w-[60px] overflow-hidden border border-neutral-200 bg-neutral-50 sm:h-[68px] sm:w-[68px]">
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="h-full w-full object-contain"
+                      />
+                    ) : null}
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-neutral-950 sm:text-[14px]">
+                      {item.name}
+                    </p>
+
+                    <p className="mt-1 text-[11px] text-neutral-500">
+                      {item.productType === "combo"
+                        ? "Perfume Combo"
+                        : item.size || "Variant"}{" "}
+                      · Qty {item.quantity}
+                    </p>
+
+                    {item.productType === "combo" &&
+                      item.comboItems?.length > 0 && (
+                        <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-neutral-500 sm:text-[11px]">
+                          Includes{" "}
+                          {item.comboItems
+                            .map(
+                              (entry) =>
+                                `${entry.name} ${entry.size} × ${entry.quantity}`
+                            )
+                            .join(", ")}
+                        </p>
+                      )}
+                  </div>
+
+                  <p className="self-start whitespace-nowrap pt-0.5 text-right text-[12px] font-semibold sm:text-[13px]">
+                    {formatPrice(getLineTotal(item))}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
-        </header>
+        </section>
 
-        <OrderStatus status={status} trackingUrl={trackingUrl} />
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <section className="rounded-[10px] border border-neutral-200 bg-white p-4 sm:p-5">
+            <h2 className="text-[13px] font-semibold">
+              Delivery Address
+            </h2>
 
-        <Section title="Items">
-          <div className="space-y-1">
-            {(order.items || []).map((item) => (
-              <div
-                key={`${item.productId}-${item.size}`}
-                className="grid grid-cols-[56px_minmax(0,1fr)] gap-x-4 gap-y-1 py-3.5 sm:grid-cols-[64px_minmax(0,1fr)_auto] sm:gap-5"
-              >
-                <div className="aspect-square border border-neutral-200 bg-neutral-50">
-                  {item.image ? (
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="h-full w-full object-contain"
-                    />
-                  ) : null}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-semibold uppercase tracking-[0.04em] sm:text-[14px]">
-                    {item.name}
-                  </p>
-                  <p className="mt-1.5 text-[11px] uppercase tracking-[0.07em] text-neutral-500">
-                    {item.productType === "combo" ? "Perfume Combo" : item.size} / Qty {item.quantity}
-                  </p>
-                  {item.productType === "combo" && item.comboItems?.length > 0 && (
-                    <p className="mt-1 text-[11px] leading-4 text-neutral-500">
-                      Includes {item.comboItems.map((entry) => `${entry.name} ${entry.size} x ${entry.quantity}`).join(", ")}
-                    </p>
-                  )}
-                </div>
-                <p className="col-start-2 self-start whitespace-nowrap text-[13px] font-semibold sm:col-start-auto sm:text-right sm:text-[14px]">
-                  {formatPrice(getLineTotal(item))}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <section className="grid gap-8 border-b border-neutral-200 py-7 md:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)] md:gap-12">
-          <div>
-            <SectionHeading>Delivery Address</SectionHeading>
-            <div className="mt-4 text-[14px] leading-6 text-neutral-600">
+            <div className="mt-4 text-[13px] leading-6 text-neutral-600">
               <p className="font-semibold text-neutral-950">
-                {address.fullName || [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Customer"}
+                {address.fullName ||
+                  [customer.firstName, customer.lastName]
+                    .filter(Boolean)
+                    .join(" ") ||
+                  "Customer"}
               </p>
-              <div className="mt-3 space-y-1">
-                {address.addressLine && <p>{address.addressLine}</p>}
+
+              {address.addressLine && (
+                <p className="mt-2">{address.addressLine}</p>
+              )}
+
+              {(address.city || address.state || address.pincode) && (
                 <p>
                   {formatAddressLine(address.city, address.state)}
                   {address.pincode ? ` ${address.pincode}` : ""}
                 </p>
-              </div>
-              <div className="mt-3 space-y-1 text-neutral-500">
+              )}
+
+              <div className="mt-3 space-y-0.5 text-neutral-500">
                 {customer.phone && <p>+91 {customer.phone}</p>}
                 {address.email && <p>{address.email}</p>}
                 {address.type && <p>{address.type}</p>}
               </div>
             </div>
-          </div>
+          </section>
 
-          <div>
-            <SectionHeading>Payment</SectionHeading>
-            <div className="mt-4 space-y-5">
+          <section className="rounded-[10px] border border-neutral-200 bg-white p-4 sm:p-5">
+            <h2 className="text-[13px] font-semibold">Payment</h2>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
               <InfoBlock
                 label="Method"
                 value={getPaymentMethodLabel(order.payment?.method)}
               />
+
               <InfoBlock
-                label="Payment"
+                label="Status"
                 value={getPaymentStatusLabel(
                   order.payment?.paymentStatus,
                   order.payment?.method
                 )}
               />
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
 
-        <Section title="Order Summary">
-          <div className="max-w-[460px] space-y-3.5 text-[14px]">
-            {hasSummaryBreakdown && (
-              <>
-                <SummaryRow label="Subtotal" value={formatPrice(subtotal)} />
-                {discount > 0 && (
-                  <SummaryRow label="Discount" value={`-${formatPrice(discount)}`} />
-                )}
-                {order.coupon?.code && (
-                  <SummaryRow label="Coupon" value={order.coupon.code} />
-                )}
-              </>
-            )}
-            <div className={hasSummaryBreakdown ? "border-t border-neutral-200 pt-3.5" : ""}>
+        <section className="mt-4 rounded-[10px] border border-neutral-200 bg-white p-4 sm:p-5">
+          <h2 className="text-[13px] font-semibold">Order Summary</h2>
+
+          <div className="mt-4 max-w-[520px] space-y-3 text-[13px]">
+            <SummaryRow label="Subtotal" value={formatPrice(subtotal)} />
+            <SummaryRow label="Shipping" value="FREE" />
+
+            <div className="border-t border-neutral-200 pt-3">
               <SummaryRow
                 label="Total"
                 value={formatPrice(finalAmount)}
@@ -314,123 +475,132 @@ export default function OrderDetails() {
               />
             </div>
           </div>
-        </Section>
 
-        <Section title="Tracking" id="order-tracking">
-          {awbCode ? (
-            <div className="max-w-[520px] space-y-3 text-[14px] leading-6 text-neutral-600">
-              <p>
-                <span className="text-neutral-500">Status:</span>{" "}
-                <span className="font-semibold text-neutral-950">
-                  {labelize(shipmentStatus || order.orderStatus)}
-                </span>
-              </p>
-              <p>
-                <span className="text-neutral-500">AWB:</span>{" "}
-                <span className="font-semibold text-neutral-950">{awbCode}</span>
-              </p>
-              {courierName && (
-                <p>
-                  <span className="text-neutral-500">Courier:</span>{" "}
-                  <span className="font-semibold text-neutral-950">{courierName}</span>
-                </p>
+          <div className="mt-4 max-w-[520px] border-t border-neutral-200 pt-4">
+            <button
+              type="button"
+              onClick={() => setPriceDetailsOpen((current) => !current)}
+              className="inline-flex cursor-pointer items-center gap-2 text-[11px] font-semibold text-neutral-700 transition-colors hover:text-neutral-950"
+            >
+              {priceDetailsOpen
+                ? "Hide price details"
+                : "View price details"}
+
+              {priceDetailsOpen ? (
+                <ChevronUp className="h-4 w-4" strokeWidth={1.7} />
+              ) : (
+                <ChevronDown className="h-4 w-4" strokeWidth={1.7} />
               )}
+            </button>
+
+            {priceDetailsOpen && (
+              <div className="mt-4 space-y-3 rounded-[7px] bg-neutral-50 p-4 text-[12px]">
+                {mrpInfo.complete && (
+                  <SummaryRow
+                    label="MRP Total"
+                    value={formatPrice(mrpInfo.total)}
+                  />
+                )}
+
+                {productDiscount > 0 && (
+                  <SummaryRow
+                    label="Product Discount"
+                    value={`-${formatPrice(productDiscount)}`}
+                  />
+                )}
+
+                {discount > 0 && (
+                  <SummaryRow
+                    label="Discount"
+                    value={`-${formatPrice(discount)}`}
+                  />
+                )}
+
+                {order.coupon?.code && (
+                  <SummaryRow
+                    label="Coupon"
+                    value={order.coupon.code}
+                  />
+                )}
+
+                <SummaryRow
+                  label="Items Subtotal"
+                  value={formatPrice(subtotal)}
+                />
+                <SummaryRow label="Shipping" value="FREE" />
+                <SummaryRow
+                  label="Payable Total"
+                  value={formatPrice(finalAmount)}
+                />
+              </div>
+            )}
+          </div>
+        </section>
+
+        {(awbCode || trackingUrl) && (
+          <section
+            id="order-tracking"
+            className="mt-4 rounded-[10px] border border-neutral-200 bg-white p-4 sm:p-5"
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-[13px] font-semibold">Tracking</h2>
+
+                <div className="mt-4 space-y-2 text-[12px] leading-5 text-neutral-600">
+                  <p>
+                    <span className="text-neutral-500">Status:</span>{" "}
+                    <span className="font-medium text-neutral-950">
+                      {labelize(shipmentStatus || order.orderStatus)}
+                    </span>
+                  </p>
+
+                  {awbCode && (
+                    <p>
+                      <span className="text-neutral-500">AWB:</span>{" "}
+                      <span className="font-medium text-neutral-950">
+                        {awbCode}
+                      </span>
+                    </p>
+                  )}
+
+                  {courierName && (
+                    <p>
+                      <span className="text-neutral-500">Courier:</span>{" "}
+                      <span className="font-medium text-neutral-950">
+                        {courierName}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {trackingUrl && (
                 <a
                   href={trackingUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 inline-flex cursor-pointer items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-950 transition-opacity hover:opacity-65"
+                  className="inline-flex h-10 w-fit cursor-pointer items-center justify-center gap-2 rounded-[6px] bg-neutral-950 px-4 text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
                 >
-                  Track Shipment
+                  Track shipment
                   <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
                 </a>
               )}
             </div>
-          ) : (
-            <p className="max-w-[520px] text-[14px] leading-6 text-neutral-500">
-              Tracking will be available once your order is shipped.
-            </p>
-          )}
-        </Section>
+          </section>
+        )}
       </div>
     </main>
-  );
-}
-
-function OrderStatus({ status, trackingUrl }) {
-  const normalizedStatus = String(status || "").toLowerCase();
-  const trackHref = trackingUrl || "#order-tracking";
-  const trackProps = trackingUrl
-    ? { target: "_blank", rel: "noreferrer" }
-    : {};
-
-  if (!lifecycleSteps.includes(normalizedStatus)) {
-    return (
-      <section className="flex flex-col gap-4 border-b border-neutral-200 py-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <SectionHeading>Order Status</SectionHeading>
-          <p className="mt-3 text-[18px] font-semibold text-neutral-950">
-            {labelize(normalizedStatus)}
-          </p>
-        </div>
-        <a
-          href={trackHref}
-          {...trackProps}
-          className="inline-flex h-10 w-full cursor-pointer items-center justify-center border border-neutral-950 bg-neutral-950 px-5 text-[11px] font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-white hover:text-neutral-950 sm:w-fit"
-        >
-          Track Order
-        </a>
-      </section>
-    );
-  }
-
-  return (
-    <section className="flex flex-col gap-4 border-b border-neutral-200 py-6 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <SectionHeading>Order Status</SectionHeading>
-        <p className="mt-3 text-[18px] font-semibold text-neutral-950">
-          {labelize(normalizedStatus)}
-        </p>
-        <p className="mt-2 max-w-[440px] text-[13px] leading-5 text-neutral-500">
-          We will update this as your order moves forward.
-        </p>
-      </div>
-      <a
-        href={trackHref}
-        {...trackProps}
-        className="inline-flex h-10 w-full cursor-pointer items-center justify-center border border-neutral-950 bg-neutral-950 px-5 text-[11px] font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-white hover:text-neutral-950 sm:w-fit"
-      >
-        Track Order
-      </a>
-    </section>
-  );
-}
-
-function Section({ title, children, id }) {
-  return (
-    <section id={id} className="border-b border-neutral-200 py-7">
-      <SectionHeading>{title}</SectionHeading>
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
-
-function SectionHeading({ children }) {
-  return (
-    <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
-      {children}
-    </h2>
   );
 }
 
 function InfoBlock({ label, value }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-[0.1em] text-neutral-500">
+      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-neutral-500">
         {label}
       </p>
-      <p className="mt-2 text-[14px] font-semibold text-neutral-950">
+
+      <p className="mt-1.5 text-[13px] font-semibold text-neutral-950">
         {value}
       </p>
     </div>
@@ -443,13 +613,20 @@ function SummaryRow({ label, value, strong = false }) {
       <span
         className={
           strong
-            ? "text-[13px] font-semibold uppercase tracking-[0.12em] text-neutral-950"
+            ? "text-[13px] font-semibold text-neutral-950"
             : "text-neutral-500"
         }
       >
         {label}
       </span>
-      <span className={strong ? "text-[16px] font-semibold" : "font-medium text-neutral-800"}>
+
+      <span
+        className={
+          strong
+            ? "text-[16px] font-semibold text-neutral-950"
+            : "font-medium text-neutral-800"
+        }
+      >
         {value}
       </span>
     </div>
@@ -458,21 +635,25 @@ function SummaryRow({ label, value, strong = false }) {
 
 function OrderDetailsSkeleton() {
   return (
-    <main className="min-h-screen bg-white px-5 py-8 text-neutral-950 sm:px-7 sm:py-10 lg:px-10">
-      <div className="mx-auto max-w-[980px]">
-        <div className="h-4 w-32 animate-pulse bg-neutral-100" />
-        <div className="mt-7 border-b border-neutral-200 pb-6">
-          <div className="h-8 w-52 animate-pulse bg-neutral-200" />
-          <div className="mt-4 h-4 w-72 max-w-full animate-pulse bg-neutral-100" />
+    <main className="min-h-screen bg-[#f5f5f5] px-3 py-5 text-neutral-950 sm:px-5 sm:py-7">
+      <div className="mx-auto w-full max-w-[1040px]">
+        <div className="h-4 w-28 animate-pulse bg-neutral-200" />
+
+        <div className="mt-5 rounded-[10px] border border-neutral-200 bg-white p-5">
+          <div className="h-3 w-24 animate-pulse bg-neutral-100" />
+          <div className="mt-3 h-7 w-64 max-w-full animate-pulse bg-neutral-200" />
+          <div className="mt-3 h-3 w-52 max-w-full animate-pulse bg-neutral-100" />
+
+          <div className="mt-5 border-t border-neutral-200 pt-5">
+            <div className="h-4 w-28 animate-pulse bg-neutral-200" />
+            <div className="mt-2 h-3 w-72 max-w-full animate-pulse bg-neutral-100" />
+          </div>
         </div>
-        <div className="border-b border-neutral-200 py-6">
-          <div className="h-3 w-28 animate-pulse bg-neutral-100" />
-          <div className="mt-3 h-5 w-28 animate-pulse bg-neutral-200" />
-          <div className="mt-3 h-3 w-72 max-w-full animate-pulse bg-neutral-100" />
-        </div>
-        <div className="border-b border-neutral-200 py-7">
-          <div className="h-3 w-14 animate-pulse bg-neutral-100" />
-          <div className="mt-4 flex items-center gap-5 py-3.5">
+
+        <div className="mt-4 rounded-[10px] border border-neutral-200 bg-white p-5">
+          <div className="h-4 w-16 animate-pulse bg-neutral-200" />
+
+          <div className="mt-5 flex items-center gap-4">
             <div className="h-16 w-16 animate-pulse bg-neutral-100" />
             <div className="flex-1 space-y-2">
               <div className="h-3 w-32 animate-pulse bg-neutral-200" />

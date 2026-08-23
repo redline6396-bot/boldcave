@@ -1,6 +1,7 @@
 "use client";
 
-import { ShoppingCart } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp, ShoppingCart } from "lucide-react";
 import { getVariantProductImageUrl } from "@/lib/clientApi";
 import CheckoutSheet from "@/features/customer/checkout/CheckoutSheet";
 
@@ -22,6 +23,14 @@ export default function OrderSummary({
   couponCode,
   shipping = null,
 }) {
+  const [priceDetailsOpen, setPriceDetailsOpen] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setPriceDetailsOpen(false);
+    }
+  }, [open]);
+
   if (!open) return null;
 
   const mrpTotal = items.reduce((sum, item) => {
@@ -124,41 +133,62 @@ export default function OrderSummary({
           )}
         </div>
 
-        <div className="shrink-0 px-4 pb-3 pt-1 sm:px-5 sm:pb-4 sm:pt-0">
-          <div className="rounded-[13px] bg-[#f8f9fa] px-4 py-3.5 text-[13px]">
-            <SummaryRow label="MRP Total" value={money(mrpTotal)} />
+        <div className="shrink-0 px-4 pb-3 pt-2 sm:px-5 sm:pb-4">
+          <button
+            type="button"
+            onClick={() => setPriceDetailsOpen((current) => !current)}
+            aria-expanded={priceDetailsOpen}
+            className="flex w-full cursor-pointer items-center justify-between gap-4 border-b border-[#e2e6ea] px-1 py-3 text-left text-[13px] text-[#273342]"
+          >
+            <span className="font-medium">Price Details</span>
+            <span className="flex items-center gap-2 font-medium text-[#111b28]">
+              {money(toPay)}
+              {priceDetailsOpen ? (
+                <ChevronUp className="h-4 w-4" strokeWidth={1.7} />
+              ) : (
+                <ChevronDown className="h-4 w-4" strokeWidth={1.7} />
+              )}
+            </span>
+          </button>
 
-            {mrpDiscount > 0 && (
+          {priceDetailsOpen && (
+            <div className="border-b border-[#e2e6ea] px-1 py-3 text-[13px]">
+              <SummaryRow label="MRP Total" value={money(mrpTotal)} />
+
+              {mrpDiscount > 0 && (
+                <SummaryRow
+                  label="Discount on MRP"
+                  value={`-${money(mrpDiscount)}`}
+                  positive
+                />
+              )}
+
+              <SummaryRow label="Subtotal" value={money(subtotal)} />
+
+              {couponDiscount > 0 && (
+                <SummaryRow
+                  label={
+                    couponCode
+                      ? `Coupon (${couponCode})`
+                      : "Coupon Discount"
+                  }
+                  value={`-${money(couponDiscount)}`}
+                  positive
+                />
+              )}
+
               <SummaryRow
-                label="Discount on MRP"
-                value={`-${money(mrpDiscount)}`}
-                positive
-              />
-            )}
-
-            <SummaryRow label="Subtotal" value={money(subtotal)} />
-
-            {couponDiscount > 0 && (
-              <SummaryRow
-                label="Total Discount"
-                value={`-${money(couponDiscount)}`}
-                positive
-              />
-            )}
-
-            <SummaryRow
-              label="Shipping"
-              value={
-                shippingNumber === null
-                  ? "Calculated at checkout"
-                  : shippingNumber === 0
-                    ? "Free"
+                label="Shipping"
+                value={
+                  shippingNumber === null || shippingNumber === 0
+                    ? "FREE"
                     : money(shippingNumber)
-              }
-            />
-          </div>
+                }
+              />
+            </div>
+          )}
 
-          <div className="flex items-center justify-between px-1 pb-1 pt-4 text-[15px] font-medium sm:pt-5">
+          <div className="flex items-center justify-between px-1 pb-1 pt-4 text-[15px] font-medium">
             <span>To Pay</span>
             <span className="text-[17px]">
               {money(toPay)}

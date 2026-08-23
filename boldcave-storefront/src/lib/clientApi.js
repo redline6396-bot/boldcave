@@ -135,18 +135,42 @@ export async function fetchHomepageSettings() {
   });
 }
 
-export async function placeCodOrder({ items, address, couponCode }) {
+export async function placeCodOrder({
+  items,
+  address,
+  phone,
+  phoneVerificationToken,
+  couponCode,
+}) {
   const data = await requestJson(
     "/api/checkout/cod",
-    jsonOptions("POST", { items, address, couponCode })
+    jsonOptions("POST", {
+      items,
+      address,
+      phone,
+      phoneVerificationToken,
+      couponCode,
+    })
   );
   return data?.order || null;
 }
 
-export async function createRazorpayCheckout({ items, address, couponCode }) {
+export async function createRazorpayCheckout({
+  items,
+  address,
+  phone,
+  phoneVerificationToken,
+  couponCode,
+}) {
   return requestJson(
     "/api/checkout/razorpay/create",
-    jsonOptions("POST", { items, address, couponCode })
+    jsonOptions("POST", {
+      items,
+      address,
+      phone,
+      phoneVerificationToken,
+      couponCode,
+    })
   );
 }
 

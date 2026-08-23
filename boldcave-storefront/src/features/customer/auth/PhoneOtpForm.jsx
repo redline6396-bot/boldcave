@@ -39,7 +39,7 @@ export default function PhoneOtpForm({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(RESEND_SECONDS);
-  const [offersOptIn, setOffersOptIn] = useState(false);
+  const [offersOptIn, setOffersOptIn] = useState(true);
 
   const phoneRef = useRef(null);
   const otpRefs = useRef([]);
@@ -235,11 +235,12 @@ export default function PhoneOtpForm({
 
       <section className="relative flex min-h-[210px] flex-col justify-center bg-[#171717] px-6 py-5 text-white sm:min-h-[225px] sm:px-8 md:min-h-[330px] md:px-8 md:py-7">
         <div className="flex flex-col items-center text-center">
-          <div
-            className="flex h-[58px] min-w-[84px] items-center justify-center text-[48px] font-semibold leading-none tracking-[-0.06em] text-white md:h-[66px] md:text-[56px]"
-            aria-label="Temporary brand logo"
-          >
-            B
+          <div className="flex h-[58px] min-w-[84px] items-center justify-center md:h-[66px]">
+            <img
+              src="/images/brand/bold-cave-icon.png"
+              alt="Bold Cave"
+              className="h-[58px] w-[84px] object-contain md:h-[66px]"
+            />
           </div>
 
           <p className="mt-3 max-w-[215px] text-center text-[16px] font-medium leading-[1.3] sm:max-w-[260px] md:mt-4 md:text-[17px]">

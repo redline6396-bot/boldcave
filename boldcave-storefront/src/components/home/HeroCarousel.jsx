@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fetchHomepageSettings } from "@/lib/clientApi";
 
 const AUTOPLAY_DELAY = 3000;
@@ -64,6 +64,7 @@ export default function HeroCarousel() {
 
   const [activeIndex, setActiveIndex] = useState(initialSlideIndex);
   const [loadedImages, setLoadedImages] = useState({});
+  const [isInitialPositionReady, setIsInitialPositionReady] = useState(false);
   const carouselRef = useRef(null);
   const dragRef = useRef(null);
   const suppressClickRef = useRef(false);
@@ -79,6 +80,7 @@ export default function HeroCarousel() {
           return;
         }
 
+        setIsInitialPositionReady(false);
         setSlides(buildHeroSlides(settings.heroSlides));
         setActiveIndex(0);
       } catch {
@@ -124,6 +126,45 @@ export default function HeroCarousel() {
     [markImageLoaded]
   );
 
+  const slidesSignature = slides.map(getSlideImageKey).join("|");
+  const firstSlide = slides[0];
+  const firstSlideLoaded = firstSlide
+    ? Boolean(loadedImages[getSlideImageKey(firstSlide)])
+    : false;
+  const isHeroReady = isInitialPositionReady && firstSlideLoaded;
+
+  // Reset the horizontal scroll position BEFORE paint.
+  // Browsers can restore an overflow container's previous scrollLeft on refresh,
+  // which is what can briefly expose slide 2/3 before React moves back to slide 1.
+  useLayoutEffect(() => {
+    const carousel = carouselRef.current;
+
+    if (!carousel) {
+      return;
+    }
+
+    carousel.scrollLeft = 0;
+    setActiveIndex(0);
+    setIsInitialPositionReady(true);
+  }, [slidesSignature]);
+
+  // When slide 1 finishes loading, guarantee position 0 once more before the
+  // hidden carousel is revealed. This also covers cached-image timing.
+  useLayoutEffect(() => {
+    if (!firstSlideLoaded) {
+      return;
+    }
+
+    const carousel = carouselRef.current;
+
+    if (!carousel) {
+      return;
+    }
+
+    carousel.scrollLeft = 0;
+    setActiveIndex(0);
+  }, [firstSlideLoaded, slidesSignature]);
+
   const scrollToSlide = useCallback((index, behavior = "smooth") => {
     const carousel = carouselRef.current;
 
@@ -155,11 +196,7 @@ export default function HeroCarousel() {
   }, [slides.length]);
 
   useEffect(() => {
-    scrollToSlide(initialSlideIndex, "auto");
-  }, [initialSlideIndex, scrollToSlide]);
-
-  useEffect(() => {
-    if (isPaused) {
+    if (isPaused || !isHeroReady || slides.length <= 1) {
       return undefined;
     }
 
@@ -171,7 +208,13 @@ export default function HeroCarousel() {
     }, AUTOPLAY_DELAY);
 
     return () => window.clearTimeout(timer);
-  }, [activeIndex, isPaused, scrollToSlide, slides.length]);
+  }, [
+    activeIndex,
+    isHeroReady,
+    isPaused,
+    scrollToSlide,
+    slides.length,
+  ]);
 
   const handleScroll = () => {
     if (scrollFrameRef.current) {
@@ -282,7 +325,12 @@ export default function HeroCarousel() {
     <section className="w-full bg-white">
       <div
         ref={carouselRef}
-        className="flex w-full cursor-pointer snap-x snap-mandatory touch-auto select-none overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={[
+          "flex w-full cursor-pointer snap-x snap-mandatory touch-auto select-none overflow-y-hidden overscroll-x-contain scroll-smooth transition-opacity duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          isHeroReady
+            ? "overflow-x-auto opacity-100"
+            : "pointer-events-none overflow-x-hidden opacity-0",
+        ].join(" ")}
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         onScroll={handleScroll}
         onMouseEnter={() => setIsPaused(true)}

@@ -21,7 +21,7 @@ import {
   fetchProductReviews,
   getProductImageUrl,
 } from "@/lib/clientApi";
-import { requestCartDrawerOpen } from "@/lib/cartEvents";
+import { requestCartDrawerOpen, requestCheckoutOpen } from "@/lib/cartEvents";
 
 const FALLBACK_IMAGE =
   "https://upload.wikimedia.org/wikipedia/commons/a/a3/Image-not-found.png";
@@ -483,7 +483,7 @@ export default function ProductPage() {
     const didAdd = addToCart(product, selectedSize, safeQuantity);
 
     if (didAdd) {
-      router.push("/place-order");
+      requestCheckoutOpen();
     }
   };
 

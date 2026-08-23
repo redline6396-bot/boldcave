@@ -78,7 +78,7 @@ export const termsPolicy = {
       paragraphs: [
         "BOLD CAVE offers perfumes and fragrance products. Product descriptions, notes, photographs, sizes and packaging are provided to help customers make an informed purchase. Minor visual or packaging variations may occur. Fragrance perception can differ between individuals due to skin chemistry, environment and personal preference.",
         "We aim to supply genuine BOLD CAVE products that meet our stated specifications. If you believe you received an incorrect, damaged or materially defective product, contact us promptly.",
-        "Prices are displayed in Indian Rupees unless stated otherwise. Applicable taxes and shipping charges, if any, will be shown at checkout. Prices, offers and product availability may change without prior notice.",
+        "Prices are displayed in Indian Rupees unless stated otherwise. Applicable taxes will be shown at checkout, and customer shipping is FREE for every order. Prices, offers and product availability may change without prior notice.",
         "Placing an order constitutes an offer to purchase. An order confirmation acknowledges receipt but does not necessarily mean the order has been accepted for dispatch. We may cancel or refuse an order for legitimate reasons including stock availability, pricing or listing errors, suspected fraud, incomplete information, delivery limitations or legal requirements. Prepaid orders cancelled by us will receive the applicable refund.",
         "You must provide valid payment information and be authorised to use the selected payment method. Payment processing may be handled by third-party providers.",
       ],
@@ -126,7 +126,7 @@ export const shippingPolicy = {
       paragraphs: [
         "Orders are generally processed and dispatched within 48 hours of successful order confirmation/payment. Orders placed on weekends, public holidays, during launches or during unusually high order volumes may require additional processing time.",
         "After dispatch, delivery time depends on the courier/logistics partner selected through Shiprocket, the customer's destination and serviceability. Delivery timelines may also be affected by weather, public holidays, courier operations, high shipment volumes and other circumstances beyond BOLD CAVE's reasonable control. We do not guarantee a fixed delivery date unless expressly stated.",
-        "Shipping charges, if applicable, will be shown at checkout before payment.",
+        "Customer shipping is FREE for every order. Delivery serviceability is still checked during checkout before payment.",
       ],
     },
     {

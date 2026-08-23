@@ -16,6 +16,7 @@ import { useCart } from "@/context/CartContext";
 import { useCoupon } from "@/context/CouponContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { getVariantProductImageUrl } from "@/lib/clientApi";
+import { requestCheckoutOpen } from "@/lib/cartEvents";
 import CouponSection from "@/features/customer/checkout/CouponSection";
 
 const FALLBACK_IMAGE =
@@ -99,8 +100,7 @@ export default function CartDrawer({ isOpen, onClose }) {
       return;
     }
 
-    onClose();
-    router.push("/place-order");
+    requestCheckoutOpen();
   };
 
   const handleShopNow = () => {
@@ -358,9 +358,7 @@ export default function CartDrawer({ isOpen, onClose }) {
 
                     <div className="flex items-center justify-between text-neutral-800">
                       <span>Shipping</span>
-                      <span className="text-neutral-600">
-                        Calculated at checkout
-                      </span>
+                      <span className="font-medium text-neutral-950">FREE</span>
                     </div>
                   </div>
                 </div>

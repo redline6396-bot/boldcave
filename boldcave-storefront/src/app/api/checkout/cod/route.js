@@ -1,6 +1,9 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
-import { requireUser } from "@/lib/auth/session";
+import {
+  requireUser,
+  verifyCheckoutPhoneToken,
+} from "@/lib/auth/session";
 import {
   calculateCart,
   deductStock,
@@ -9,6 +12,7 @@ import {
 } from "@/lib/orders/pricing";
 import { createShiprocketOrder } from "@/lib/shipping/shiprocket";
 import { isAcceptingOrders } from "@/lib/storeSettings";
+import { isValidPhone, normalizePhone } from "@/lib/validation";
 import Order from "@/models/Order";
 
 export const runtime = "nodejs";
@@ -28,10 +32,39 @@ export async function POST(request) {
     }
 
     const body = await readJson(request);
-    const addressCheck = validateAddress(body.address || body.deliveryAddress);
+    const deliveryAddress = body.address || body.deliveryAddress;
+    const checkoutPhone = normalizePhone(body.phone || auth.user.phone);
+    const addressCheck = validateAddress(deliveryAddress);
 
     if (!addressCheck.valid) {
       return failure("INVALID_ADDRESS", addressCheck.message, 400);
+    }
+
+    if (!isValidPhone(checkoutPhone)) {
+      return failure("INVALID_PHONE", "Enter a valid 10 digit Indian phone number", 400);
+    }
+
+    const accountPhone = normalizePhone(auth.user.phone);
+    const isAccountPhone = checkoutPhone === accountPhone;
+
+    if (isAccountPhone && !auth.user.phoneVerified) {
+      return failure("PHONE_NOT_VERIFIED", "Verify your phone number to continue.", 403);
+    }
+
+    if (!isAccountPhone) {
+      const verifiedPhone = verifyCheckoutPhoneToken(body.phoneVerificationToken);
+
+      if (
+        !verifiedPhone ||
+        verifiedPhone.userId !== String(auth.user._id) ||
+        verifiedPhone.phone !== checkoutPhone
+      ) {
+        return failure(
+          "CHECKOUT_PHONE_NOT_VERIFIED",
+          "Verify the checkout phone number to continue.",
+          403
+        );
+      }
     }
 
     const cart = await calculateCart({
@@ -60,15 +93,16 @@ export async function POST(request) {
       customer: {
         firstName: auth.user.firstName || "",
         lastName: auth.user.lastName || "",
-        phone: auth.user.phone,
-        phoneVerified: auth.user.phoneVerified,
-        email: auth.user.email || body.address?.email || "",
+        phone: checkoutPhone,
+        phoneVerified: true,
+        email: auth.user.email || deliveryAddress?.email || "",
       },
-      deliveryAddress: body.address || body.deliveryAddress,
+      deliveryAddress,
       items: cart.items,
       amounts: {
         subtotal: cart.subtotal,
         discount: cart.discount,
+        shipping: cart.shipping,
         finalAmount: cart.finalAmount,
       },
       coupon: cart.coupon,

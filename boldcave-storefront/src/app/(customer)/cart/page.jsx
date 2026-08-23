@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useCoupon } from "@/context/CouponContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { getVariantProductImageUrl } from "@/lib/clientApi";
+import { requestCheckoutOpen } from "@/lib/cartEvents";
 
 const FALLBACK_IMAGE =
   "https://upload.wikimedia.org/wikipedia/commons/a/a3/Image-not-found.png";
@@ -18,7 +18,6 @@ const formatPrice = (value) =>
   }).format(Number(value) || 0)}`;
 
 export default function CartPage() {
-  const router = useRouter();
   const { cart, getCartItems, getCartCount, getCartTotal, updateQuantity, removeFromCart } =
     useCart();
   const {
@@ -207,6 +206,7 @@ export default function CartPage() {
                     value={`-${formatPrice(discount)}`}
                   />
                 )}
+                <SummaryRow label="Shipping" value="FREE" />
                 <div className="border-t border-neutral-200 pt-4">
                   <SummaryRow label="Total" value={formatPrice(total)} strong />
                 </div>
@@ -214,9 +214,9 @@ export default function CartPage() {
 
               <button
                 type="button"
-                onClick={() => router.push("/place-order")}
+                onClick={requestCheckoutOpen}
                 disabled={!acceptingOrders}
-                className="mt-6 h-12 w-full border border-neutral-950 bg-neutral-950 px-3 text-[13px] font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-white hover:text-neutral-950 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-200 disabled:text-neutral-600 disabled:hover:bg-neutral-200"
+                className="mt-6 h-12 w-full cursor-pointer border border-neutral-950 bg-neutral-950 px-3 text-[13px] font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-white hover:text-neutral-950 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-200 disabled:text-neutral-600 disabled:hover:bg-neutral-200"
               >
                 {acceptingOrders
                   ? "Continue to Checkout"

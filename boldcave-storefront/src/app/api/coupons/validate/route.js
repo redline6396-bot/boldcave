@@ -26,6 +26,7 @@ export async function POST(request) {
       valid: Boolean(result.coupon.code),
       discount: result.discount,
       subtotal: result.subtotal,
+      shipping: result.shipping,
       total: result.finalAmount,
       coupon: result.coupon,
       message: result.coupon.code ? "Coupon applied successfully" : "No coupon applied",

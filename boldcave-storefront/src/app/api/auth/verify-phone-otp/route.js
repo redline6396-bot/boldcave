@@ -1,5 +1,8 @@
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
-import { requireUser } from "@/lib/auth/session";
+import {
+  requireUser,
+  signCheckoutPhoneToken,
+} from "@/lib/auth/session";
 import { verifyOtp } from "@/lib/auth/otpProvider";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
 
@@ -31,7 +34,14 @@ export async function POST(request) {
       );
     }
 
-    return success({ phoneVerified: true, phone });
+    return success({
+      phoneVerified: true,
+      phone,
+      phoneVerificationToken: signCheckoutPhoneToken({
+        userId: auth.user._id,
+        phone,
+      }),
+    });
   } catch (error) {
     return handleRouteError(error, "OTP_PHONE_VERIFY_FAILED");
   }

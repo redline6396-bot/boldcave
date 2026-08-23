@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight, ShoppingCart } from "lucide-react";
 import {
   FaFacebookF,
@@ -13,7 +13,11 @@ import {
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import CartDrawer from "@/features/customer/cart/CartDrawer";
-import { OPEN_CART_DRAWER_EVENT } from "@/lib/cartEvents";
+import CheckoutPage from "@/features/customer/checkout/CheckoutPage";
+import {
+  OPEN_CART_DRAWER_EVENT,
+  OPEN_CHECKOUT_EVENT,
+} from "@/lib/cartEvents";
 
 const ROUTES = {
   shopAll: "/collection",
@@ -342,11 +346,13 @@ function DrawerSocials() {
 export default function MainNavbar() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [mobileDrawerTop, setMobileDrawerTop] = useState(0);
   const [desktopDrawerTop, setDesktopDrawerTop] = useState(65);
   const [activeCategory, setActiveCategory] = useState("");
 
   const pathname = usePathname();
+  const router = useRouter();
   const navRef = useRef(null);
 
   const { getCartCount } = useCart();
@@ -393,13 +399,30 @@ export default function MainNavbar() {
     setIsCartDrawerOpen(true);
   }, []);
 
+  const openCheckout = useCallback(() => {
+    setIsDrawerOpen(false);
+    setIsCheckoutOpen(true);
+  }, []);
+
+  const closeCheckout = useCallback(() => {
+    setIsCheckoutOpen(false);
+  }, []);
+
+  const handleCheckoutSuccess = useCallback(() => {
+    setIsCheckoutOpen(false);
+    setIsCartDrawerOpen(false);
+    router.push("/orders");
+  }, [router]);
+
   useEffect(() => {
     window.addEventListener(OPEN_CART_DRAWER_EVENT, openCartDrawer);
+    window.addEventListener(OPEN_CHECKOUT_EVENT, openCheckout);
 
     return () => {
       window.removeEventListener(OPEN_CART_DRAWER_EVENT, openCartDrawer);
+      window.removeEventListener(OPEN_CHECKOUT_EVENT, openCheckout);
     };
-  }, [openCartDrawer]);
+  }, [openCartDrawer, openCheckout]);
 
   useEffect(() => {
     syncActiveCategory();
@@ -524,6 +547,12 @@ export default function MainNavbar() {
       </aside>
 
       <CartDrawer isOpen={isCartDrawerOpen} onClose={closeCartDrawer} />
+      {isCheckoutOpen && (
+        <CheckoutPage
+          onClose={closeCheckout}
+          onSuccess={handleCheckoutSuccess}
+        />
+      )}
     </div>
   );
 }
