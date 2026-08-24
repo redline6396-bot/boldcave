@@ -27,9 +27,13 @@ const fallbackSlides = [
   },
 ];
 
+const isSmallInteractionViewport = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia("(max-width: 1023px)").matches;
+
 const hasHeroSlideContent = (items) =>
   Array.isArray(items) &&
-  items.some((slide) => slide?.desktopImage || slide?.mobileImage || slide?.link);
+  items.some((slide) => slide?.desktopImage || slide?.mobileImage);
 
 const buildHeroSlides = (items) =>
   fallbackSlides.map((fallbackSlide, index) => {
@@ -47,9 +51,11 @@ const buildHeroSlides = (items) =>
 const getSlideImageKey = (slide) =>
   `${slide.id}:${slide.desktopImage}:${slide.mobileImage}`;
 
-export default function HeroCarousel() {
+export default function HeroCarousel({ initialHeroSlides = [] }) {
   const router = useRouter();
-  const [slides, setSlides] = useState([]);
+  const [slides, setSlides] = useState(() =>
+    hasHeroSlideContent(initialHeroSlides) ? buildHeroSlides(initialHeroSlides) : []
+  );
   const [isPaused, setIsPaused] = useState(false);
   const initialSlideIndex = Math.max(
     slides.findIndex((slide) => slide.active),
@@ -65,6 +71,10 @@ export default function HeroCarousel() {
   const scrollFrameRef = useRef(null);
 
   useEffect(() => {
+    if (hasHeroSlideContent(initialHeroSlides)) {
+      return undefined;
+    }
+
     let mounted = true;
 
     async function loadHeroSlides() {
@@ -87,7 +97,7 @@ export default function HeroCarousel() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [initialHeroSlides]);
 
   const markImageLoaded = useCallback((slide) => {
     const imageKey = getSlideImageKey(slide);
@@ -228,8 +238,11 @@ export default function HeroCarousel() {
     dragRef.current = {
       x: event.clientX,
       y: event.clientY,
+      startIndex: activeIndex,
       scrollLeft: carousel.scrollLeft,
       isHorizontal: false,
+      controlledSwipe:
+        event.pointerType !== "mouse" && isSmallInteractionViewport(),
     };
 
     suppressClickRef.current = false;
@@ -259,6 +272,11 @@ export default function HeroCarousel() {
     }
 
     suppressClickRef.current = true;
+    if (dragRef.current.controlledSwipe) {
+      event.preventDefault();
+      return;
+    }
+
     carousel.scrollLeft = dragRef.current.scrollLeft - deltaX;
     event.preventDefault();
   };
@@ -273,6 +291,8 @@ export default function HeroCarousel() {
     const deltaX = event.clientX - dragRef.current.x;
     const deltaY = event.clientY - dragRef.current.y;
     const wasHorizontal = dragRef.current.isHorizontal;
+    const wasControlledSwipe = dragRef.current.controlledSwipe;
+    const startIndex = dragRef.current.startIndex;
 
     dragRef.current = null;
 
@@ -288,9 +308,9 @@ export default function HeroCarousel() {
       return;
     }
 
-    const currentIndex = Math.round(
-      carousel.scrollLeft / carousel.clientWidth
-    );
+    const currentIndex = wasHorizontal && !wasControlledSwipe
+      ? Math.round(carousel.scrollLeft / carousel.clientWidth)
+      : startIndex;
 
     let nextIndex = currentIndex;
 
@@ -298,7 +318,7 @@ export default function HeroCarousel() {
       Math.abs(deltaX) >= SWIPE_THRESHOLD &&
       Math.abs(deltaX) > Math.abs(deltaY)
     ) {
-      nextIndex = deltaX < 0 ? activeIndex + 1 : activeIndex - 1;
+      nextIndex = deltaX < 0 ? startIndex + 1 : startIndex - 1;
     }
 
     scrollToSlide(nextIndex);
@@ -320,9 +340,9 @@ export default function HeroCarousel() {
       <div
         ref={carouselRef}
         className={[
-          "flex w-full cursor-pointer snap-x snap-mandatory touch-auto select-none overflow-y-hidden overscroll-x-contain scroll-smooth transition-opacity duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden aspect-square sm:h-[45vw] sm:aspect-auto lg:h-[43vw] lg:max-h-[780px]",
+          "flex w-full cursor-pointer snap-x snap-mandatory touch-pan-y select-none overflow-y-hidden overscroll-x-contain scroll-smooth transition-opacity duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden aspect-square sm:h-[45vw] sm:aspect-auto lg:h-[43vw] lg:max-h-[780px] lg:touch-auto",
           isHeroReady
-            ? "overflow-x-auto opacity-100"
+            ? "overflow-x-hidden opacity-100 lg:overflow-x-auto"
             : "pointer-events-none overflow-x-hidden opacity-0",
         ].join(" ")}
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
@@ -335,7 +355,11 @@ export default function HeroCarousel() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={() => {
+          const startIndex = dragRef.current?.startIndex ?? activeIndex;
           dragRef.current = null;
+          if (isSmallInteractionViewport()) {
+            scrollToSlide(startIndex, "smooth");
+          }
         }}
       >
         {slides.map((slide, index) => {
@@ -353,18 +377,22 @@ export default function HeroCarousel() {
               className="block w-full min-w-full shrink-0 snap-start overflow-hidden"
             >
               <picture className="relative block aspect-square w-full bg-[#f7f5f2] sm:h-[45vw] sm:aspect-auto lg:h-[43vw] lg:max-h-[780px]">
-                <source
-                  media="(max-width: 639px)"
-                  srcSet={slide.mobileImage}
-                />
-                <source
-                  media="(min-width: 640px)"
-                  srcSet={slide.desktopImage}
-                />
+                {slide.mobileImage && (
+                  <source
+                    media="(max-width: 639px)"
+                    srcSet={slide.mobileImage}
+                  />
+                )}
+                {slide.desktopImage && (
+                  <source
+                    media="(min-width: 640px)"
+                    srcSet={slide.desktopImage}
+                  />
+                )}
 
                 <img
                   ref={(node) => registerImage(node, slide)}
-                  src={slide.desktopImage}
+                  src={slide.desktopImage || slide.mobileImage}
                   alt=""
                   className={[
                     "block h-full w-full max-w-none object-cover object-center transition-opacity duration-200 sm:h-full sm:object-cover lg:h-full lg:object-cover",

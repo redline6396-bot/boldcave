@@ -92,7 +92,7 @@ export async function POST(request) {
           failureReason: "",
         },
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!claimedAttempt) {

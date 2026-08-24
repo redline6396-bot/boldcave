@@ -26,6 +26,7 @@ export default function PhoneOtpForm({
   redirectTo = "",
   onDone,
   onClose,
+  compactMobile = false,
 }) {
   const { completeAuth } = useAuth();
 
@@ -48,18 +49,30 @@ export default function PhoneOtpForm({
   const otp = otpDigits.join("");
   const phoneReady = isValidPhone(cleanPhone);
   const otpReady = otp.length === OTP_LENGTH;
-
-  useEffect(() => {
-    if (step !== "phone") {
-      return undefined;
-    }
-
-    const frame = window.requestAnimationFrame(() => {
-      phoneRef.current?.focus();
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [step]);
+  const brandSectionClass = compactMobile
+    ? "relative flex min-h-[190px] flex-col justify-center bg-[#171717] px-6 py-4 text-white sm:min-h-[205px] sm:px-8 sm:py-4 md:min-h-[330px] md:px-8 md:py-7"
+    : "relative flex min-h-[210px] flex-col justify-center bg-[#171717] px-6 py-5 text-white sm:min-h-[225px] sm:px-8 md:min-h-[330px] md:px-8 md:py-7";
+  const brandMessageClass = compactMobile
+    ? "mt-2.5 max-w-[215px] text-center text-[16px] font-medium leading-[1.3] sm:max-w-[260px] md:mt-4 md:text-[17px]"
+    : "mt-3 max-w-[215px] text-center text-[16px] font-medium leading-[1.3] sm:max-w-[260px] md:mt-4 md:text-[17px]";
+  const formSectionClass = compactMobile
+    ? "relative flex min-h-[252px] items-center bg-white px-5 py-5 sm:min-h-[258px] sm:px-7 sm:py-5 md:min-h-[330px] md:px-8 md:py-6"
+    : "relative flex min-h-[278px] items-center bg-white px-5 py-6 sm:px-7 sm:py-6 md:min-h-[330px] md:px-8 md:py-6";
+  const phoneInputWrapClass = compactMobile
+    ? "mt-4 flex h-[44px] min-w-0 overflow-hidden rounded-[8px] border border-neutral-300 bg-white transition-[border-color,box-shadow] focus-within:border-neutral-950 focus-within:shadow-[0_0_0_2px_rgba(0,0,0,0.06)] md:mt-[18px]"
+    : "mt-[18px] flex h-[44px] min-w-0 overflow-hidden rounded-[8px] border border-neutral-300 bg-white transition-[border-color,box-shadow] focus-within:border-neutral-950 focus-within:shadow-[0_0_0_2px_rgba(0,0,0,0.06)]";
+  const submitButtonClass = compactMobile
+    ? "mt-2.5 h-[40px] w-full cursor-pointer rounded-[8px] border border-neutral-950 bg-neutral-950 text-[12px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-300 disabled:text-white disabled:opacity-100 md:mt-3"
+    : "mt-3 h-[40px] w-full cursor-pointer rounded-[8px] border border-neutral-950 bg-neutral-950 text-[12px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-300 disabled:text-white disabled:opacity-100";
+  const consentClass = compactMobile
+    ? "mt-2.5 flex cursor-pointer items-center gap-2 text-left md:mt-3"
+    : "mt-3 flex cursor-pointer items-center gap-2 text-left";
+  const otpInputsClass = compactMobile
+    ? "mt-4 flex justify-center gap-1.5 sm:gap-2 md:mt-5"
+    : "mt-5 flex justify-center gap-1.5 sm:gap-2";
+  const otpButtonClass = compactMobile
+    ? "mt-4 h-[40px] w-full cursor-pointer rounded-[8px] border border-neutral-950 bg-neutral-950 text-[12px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-300 disabled:text-white disabled:opacity-100 md:mt-[18px]"
+    : "mt-[18px] h-[40px] w-full cursor-pointer rounded-[8px] border border-neutral-950 bg-neutral-950 text-[12px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-300 disabled:text-white disabled:opacity-100";
 
   useEffect(() => {
     if (step !== "otp" || resendIn <= 0) return undefined;
@@ -233,7 +246,7 @@ export default function PhoneOtpForm({
         </button>
       )}
 
-      <section className="relative flex min-h-[210px] flex-col justify-center bg-[#171717] px-6 py-5 text-white sm:min-h-[225px] sm:px-8 md:min-h-[330px] md:px-8 md:py-7">
+      <section className={brandSectionClass}>
         <div className="flex flex-col items-center text-center">
           <div className="flex h-[58px] min-w-[84px] items-center justify-center md:h-[66px]">
             <img
@@ -243,14 +256,14 @@ export default function PhoneOtpForm({
             />
           </div>
 
-          <p className="mt-3 max-w-[215px] text-center text-[16px] font-medium leading-[1.3] sm:max-w-[260px] md:mt-4 md:text-[17px]">
+          <p className={brandMessageClass}>
             Login now to access your account.
           </p>
 
         </div>
       </section>
 
-      <section className="relative flex min-h-[278px] items-center bg-white px-5 py-6 sm:px-7 sm:py-6 md:min-h-[330px] md:px-8 md:py-6">
+      <section className={formSectionClass}>
         <div className="mx-auto w-full max-w-[320px]">
           {step === "phone" ? (
             <form onSubmit={handleSendOtp}>
@@ -263,7 +276,7 @@ export default function PhoneOtpForm({
                 </p>
               </div>
 
-              <div className="mt-[18px] flex h-[44px] min-w-0 overflow-hidden rounded-[8px] border border-neutral-300 bg-white transition-[border-color,box-shadow] focus-within:border-neutral-950 focus-within:shadow-[0_0_0_2px_rgba(0,0,0,0.06)]">
+              <div className={phoneInputWrapClass}>
                 <span className="flex h-full shrink-0 items-center border-r border-neutral-300 px-3 text-[14px] font-medium text-neutral-800">
                   +91
                 </span>
@@ -272,7 +285,6 @@ export default function PhoneOtpForm({
                   type="tel"
                   inputMode="numeric"
                   autoComplete="tel"
-                  autoFocus
                   maxLength={10}
                   value={phone}
                   onChange={(event) => {
@@ -301,12 +313,12 @@ export default function PhoneOtpForm({
               <button
                 type="submit"
                 disabled={loading || !phoneReady}
-                className="mt-3 h-[40px] w-full cursor-pointer rounded-[8px] border border-neutral-950 bg-neutral-950 text-[12px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-300 disabled:text-white disabled:opacity-100"
+                className={submitButtonClass}
               >
                 {loading ? "Sending..." : "Submit"}
               </button>
 
-              <label className="mt-3 flex cursor-pointer items-center gap-2 text-left">
+              <label className={consentClass}>
                 <input
                   type="checkbox"
                   checked={offersOptIn}
@@ -339,7 +351,7 @@ export default function PhoneOtpForm({
               </div>
 
               <div
-                className="mt-5 flex justify-center gap-1.5 sm:gap-2"
+                className={otpInputsClass}
                 onPaste={handleOtpPaste}
               >
                 {otpDigits.map((digit, index) => (
@@ -383,7 +395,7 @@ export default function PhoneOtpForm({
               <button
                 type="submit"
                 disabled={loading || !otpReady}
-                className="mt-[18px] h-[40px] w-full cursor-pointer rounded-[8px] border border-neutral-950 bg-neutral-950 text-[12px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-300 disabled:text-white disabled:opacity-100"
+                className={otpButtonClass}
               >
                 {loading ? "Verifying..." : "Verify"}
               </button>
@@ -412,7 +424,7 @@ export default function PhoneOtpForm({
 
       <style jsx>{`
         .auth-card {
-          max-height: calc(100dvh - 28px);
+          max-height: var(--auth-visual-max-height, calc(100dvh - 28px));
           border: 0;
           outline: 0;
           scrollbar-width: none;

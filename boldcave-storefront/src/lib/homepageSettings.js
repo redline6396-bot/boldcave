@@ -5,6 +5,13 @@ const HOMEPAGE_SETTINGS_KEY = "global";
 const SLOT_COUNT = 3;
 const DEFAULT_COLLECTION_COUNT = 5;
 const MAX_COLLECTION_COUNT = 99;
+const HOMEPAGE_SETTINGS_CACHE_TTL_MS = 60 * 1000;
+
+const cacheStore = globalThis.__homepageSettingsCache || {
+  entry: null,
+};
+
+globalThis.__homepageSettingsCache = cacheStore;
 
 const defaultHeroSlides = () =>
   Array.from({ length: SLOT_COUNT }, () => ({
@@ -60,6 +67,10 @@ export function serializeHomepageSettings(settings) {
   };
 }
 
+export function clearHomepageSettingsCache() {
+  cacheStore.entry = null;
+}
+
 export async function getHomepageSettings() {
   return HomepageSettings.findOneAndUpdate(
     { key: HOMEPAGE_SETTINGS_KEY },
@@ -73,15 +84,28 @@ export async function getHomepageSettings() {
       },
     },
     {
-      new: true,
+      returnDocument: "after",
       upsert: true,
       setDefaultsOnInsert: true,
     }
   );
 }
 
-export async function getSerializedHomepageSettings() {
-  return serializeHomepageSettings(await getHomepageSettings());
+export async function getSerializedHomepageSettings({ cache = true } = {}) {
+  if (cache && cacheStore.entry?.expiresAt > Date.now()) {
+    return cacheStore.entry.value;
+  }
+
+  const value = serializeHomepageSettings(await getHomepageSettings());
+
+  if (cache) {
+    cacheStore.entry = {
+      value,
+      expiresAt: Date.now() + HOMEPAGE_SETTINGS_CACHE_TTL_MS,
+    };
+  }
+
+  return value;
 }
 
 export async function updateHomepageSettings({
@@ -90,7 +114,7 @@ export async function updateHomepageSettings({
   collectionFragranceCount,
   collectionPersonalityCount,
 }) {
-  return HomepageSettings.findOneAndUpdate(
+  const settings = await HomepageSettings.findOneAndUpdate(
     { key: HOMEPAGE_SETTINGS_KEY },
     {
       $set: {
@@ -101,9 +125,16 @@ export async function updateHomepageSettings({
       },
     },
     {
-      new: true,
+      returnDocument: "after",
       upsert: true,
       setDefaultsOnInsert: true,
     }
   );
+
+  cacheStore.entry = {
+    value: serializeHomepageSettings(settings),
+    expiresAt: Date.now() + HOMEPAGE_SETTINGS_CACHE_TTL_MS,
+  };
+
+  return settings;
 }

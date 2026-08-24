@@ -49,7 +49,7 @@ export async function findOrCreateUserForPhone(phone) {
         },
       },
       {
-        new: true,
+        returnDocument: "after",
         upsert: true,
         setDefaultsOnInsert: true,
       }

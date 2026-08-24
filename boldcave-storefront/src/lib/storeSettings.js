@@ -19,7 +19,7 @@ export async function getStoreSettings() {
       },
     },
     {
-      new: true,
+      returnDocument: "after",
       upsert: true,
       setDefaultsOnInsert: true,
     }
@@ -39,7 +39,7 @@ export async function updateStoreSettings({ acceptingOrders }) {
       },
     },
     {
-      new: true,
+      returnDocument: "after",
       upsert: true,
       setDefaultsOnInsert: true,
     }

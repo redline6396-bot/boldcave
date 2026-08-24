@@ -49,7 +49,7 @@ export async function PUT(request, { params }) {
     if (result.error) return applyAdminCors(request, failure("VALIDATION_ERROR", result.error, 400));
 
     const product = await Product.findByIdAndUpdate(id, result.payload, {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     });
 

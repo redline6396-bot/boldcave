@@ -58,7 +58,7 @@ export async function PATCH(request, { params }) {
     }
 
     const coupon = await Coupon.findByIdAndUpdate(couponId, result.payload, {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     });
 

@@ -689,7 +689,7 @@ function InlineReviewForm({
 
         <div className="mt-8">
           <p className="text-[16px] text-neutral-950">Picture / Video (optional)</p>
-          <label className="mx-auto mt-4 flex h-[112px] w-[112px] cursor-pointer items-center justify-center border border-neutral-300 bg-[#f7f7f7] text-neutral-500 transition-colors hover:border-neutral-700 hover:text-neutral-800">
+          <label className="mx-auto mt-4 flex h-[104px] w-[104px] cursor-pointer items-center justify-center border border-neutral-300 bg-[#f7f7f7] text-neutral-500 transition-colors hover:border-neutral-700 hover:text-neutral-800 sm:h-[112px] sm:w-[112px] lg:h-[124px] lg:w-[124px]">
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
@@ -698,7 +698,7 @@ function InlineReviewForm({
               onChange={onFileChange}
               disabled={saving || uploadedCount >= MAX_REVIEW_MEDIA}
             />
-            <Upload className="h-9 w-9" strokeWidth={1.5} />
+            <Upload className="h-7 w-7 sm:h-8 sm:w-8" strokeWidth={1.5} />
           </label>
           <p className="mt-3 text-[12px] leading-5 text-neutral-500">
             JPG, PNG or WEBP. Up to {MAX_REVIEW_MEDIA} images, 5MB each.

@@ -54,9 +54,7 @@ export default function ProductCard({ product }) {
 
   const defaultVariant = getDefaultVariant(variants);
 
-  const [selectedSize, setSelectedSize] = useState(
-    defaultVariant?.size || ""
-  );
+  const [selectedSize, setSelectedSize] = useState(defaultVariant?.size || "");
 
   const selectedVariant = useMemo(
     () => variants.find((variant) => variant.size === selectedSize),
@@ -83,12 +81,17 @@ export default function ProductCard({ product }) {
     return null;
   }
 
-  const isSelectedOutOfStock = !selectedVariant || Number(selectedVariant.stock) <= 0;
+  const isSelectedOutOfStock =
+    !selectedVariant || Number(selectedVariant.stock) <= 0;
 
   const productImage =
     getVariantProductImageUrl(product, selectedVariant) || PLACEHOLDER_IMAGE;
 
-  const selectedVariantGallery = getVariantProductGalleryUrls(product, selectedVariant);
+  const selectedVariantGallery = getVariantProductGalleryUrls(
+    product,
+    selectedVariant
+  );
+
   const hoverImage =
     getProductImageUrl(selectedVariant?.images?.[1]) ||
     selectedVariantGallery.find((image) => image !== productImage) ||
@@ -96,11 +99,15 @@ export default function ProductCard({ product }) {
     "";
 
   const hasHoverImage = Boolean(hoverImage);
-
   const productUrl = `/product/${product.slug}`;
 
   const profileLine = isCombo
-    ? product.whatYouGet || `Includes ${(product.comboItems || []).map((item) => item.name).filter(Boolean).slice(0, 3).join(", ")}`
+    ? product.whatYouGet ||
+      `Includes ${(product.comboItems || [])
+        .map((item) => item.name)
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(", ")}`
     : product.fragranceNotes?.top?.slice(0, 3).join(" | ") ||
       product.fragranceProfile;
 
@@ -133,7 +140,6 @@ export default function ProductCard({ product }) {
       onClick={handleCardClick}
       className="group mx-auto w-full max-w-[388px] cursor-pointer border border-[#e8e2d9] bg-white"
     >
-      {/* PRODUCT IMAGE */}
       <button
         type="button"
         onClick={handleNavigate}
@@ -184,22 +190,18 @@ export default function ProductCard({ product }) {
         </div>
       </button>
 
-      {/* PRODUCT INFORMATION */}
-      <div className="px-3 pb-4 pt-3 text-center max-[390px]:px-2 max-[390px]:pb-3 sm:px-6 sm:pb-6 sm:pt-4">
-
-        {/* PRODUCT NAME */}
+      <div className="px-3 pb-4 pt-3 text-center max-[450px]:px-2.5 max-[450px]:pb-3 max-[450px]:pt-3 sm:px-6 sm:pb-6 sm:pt-4">
         <button
           type="button"
           onClick={handleNavigate}
-          className="inline-block cursor-pointer text-[18px] font-semibold uppercase leading-none tracking-[0.08em] text-neutral-950 max-[390px]:text-[13px] max-[390px]:tracking-[0.04em] sm:text-[21px] sm:tracking-[0.09em]"
+          className="inline-block cursor-pointer text-[18px] font-semibold uppercase leading-none tracking-[0.08em] text-neutral-950 max-[450px]:text-[15px] max-[450px]:tracking-[0.055em] sm:text-[21px] sm:tracking-[0.09em]"
         >
           <span className="decoration-neutral-500 decoration-[0.75px] underline-offset-[5px] group-hover:underline">
             {product.name}
           </span>
         </button>
 
-        {/* BRAND */}
-        <p className="mt-1.5 text-[9px] font-normal uppercase leading-none tracking-[0.16em] text-neutral-400 max-[390px]:text-[7px] max-[390px]:tracking-[0.12em] sm:mt-2 sm:text-[10px] sm:tracking-[0.18em]">
+        <p className="mt-1.5 text-[9px] font-normal uppercase leading-none tracking-[0.16em] text-neutral-400 max-[450px]:mt-1.5 max-[450px]:text-[8px] max-[450px]:tracking-[0.14em] sm:mt-2 sm:text-[10px] sm:tracking-[0.18em]">
           by Bold Cave
         </p>
 
@@ -209,26 +211,24 @@ export default function ProductCard({ product }) {
           </p>
         )}
 
-        {/* FRAGRANCE NOTES */}
-        <p className="mt-2 min-h-4 truncate text-[12px] font-normal leading-normal text-neutral-500 max-[390px]:text-[10px] sm:mt-2.5 sm:text-[13px] sm:tracking-[0.01em]">
+        <p className="mt-2 truncate text-[12px] font-normal leading-normal text-neutral-500 max-[450px]:mt-2 max-[450px]:text-[11px] max-[410px]:text-[9px] sm:mt-2.5 sm:text-[13px] sm:tracking-[0.01em]">
           {profileLine}
         </p>
 
-        {/* PRICE */}
-        <div className="mt-3 flex flex-nowrap items-baseline justify-center gap-1 sm:mt-4 sm:gap-1.5">
+        <div className="mt-3 flex flex-nowrap items-baseline justify-center gap-1 max-[450px]:mt-2.5 sm:mt-4 sm:gap-1.5">
           {selectedVariant?.mrp > selectedVariant?.sellingPrice && (
-            <span className="whitespace-nowrap text-[11px] font-normal text-neutral-400 line-through decoration-neutral-400 decoration-1 underline-offset-2 max-[390px]:text-[9px] sm:text-[12px]">
+            <span className="whitespace-nowrap text-[11px] font-normal text-neutral-400 line-through decoration-neutral-400 decoration-1 underline-offset-2 max-[450px]:text-[10px] sm:text-[12px]">
               {formatRupees(selectedVariant.mrp)}
             </span>
           )}
 
-          <span className="whitespace-nowrap text-[15px] font-medium text-neutral-950 max-[390px]:text-[12px] sm:text-[17px]">
+          <span className="whitespace-nowrap text-[15px] font-medium text-neutral-950 max-[450px]:text-[14px] sm:text-[17px]">
             {formatRupees(selectedVariant?.sellingPrice)}
           </span>
         </div>
 
         {!isCombo && (
-          <div className="mt-3 grid grid-cols-2 gap-1.5 sm:mx-auto sm:mt-4 sm:w-[92%] sm:gap-2">
+          <div className="mt-3 grid grid-cols-2 gap-1.5 max-[450px]:mt-2.5 sm:mx-auto sm:mt-4 sm:w-[92%] sm:gap-2">
             {displayVariants.map((variant) => {
               const unavailable = Number(variant.stock) <= 0;
               const selected = variant.size === selectedSize;
@@ -239,7 +239,7 @@ export default function ProductCard({ product }) {
                   type="button"
                   onClick={() => setSelectedSize(variant.size)}
                   className={[
-                    "h-10 border px-1 text-[11px] uppercase tracking-[0.03em] transition max-[390px]:h-8 max-[390px]:text-[9px] max-[390px]:tracking-[0.015em] sm:h-9 sm:px-3 sm:text-xs sm:tracking-[0.05em]",
+                    "h-10 border px-1 text-[11px] uppercase tracking-[0.03em] transition max-[450px]:h-8 max-[450px]:text-[10px] max-[450px]:tracking-[0.025em] sm:h-9 sm:px-3 sm:text-xs sm:tracking-[0.05em]",
                     selected
                       ? "border-neutral-950 bg-neutral-950 text-white"
                       : "border-neutral-300 bg-white text-neutral-800",
@@ -255,12 +255,11 @@ export default function ProductCard({ product }) {
           </div>
         )}
 
-        {/* ADD TO CART */}
         <button
           type="button"
           onClick={handleAddToCart}
           disabled={isSelectedOutOfStock}
-          className="mt-3 h-11 w-full cursor-pointer border border-neutral-950 bg-neutral-950 px-2 text-[11px] font-semibold uppercase tracking-[0.04em] text-white transition hover:bg-white hover:text-neutral-950 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-100 disabled:text-neutral-400 max-[390px]:h-9 max-[390px]:text-[9px] sm:mx-auto sm:w-[92%] sm:px-4 sm:text-[12px] sm:tracking-[0.08em]"
+          className="mt-3 h-11 w-full cursor-pointer border border-neutral-950 bg-neutral-950 px-2 text-[11px] font-semibold uppercase tracking-[0.04em] text-white transition hover:bg-white hover:text-neutral-950 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-100 disabled:text-neutral-400 max-[450px]:mt-2.5 max-[450px]:h-9 max-[450px]:text-[10px] max-[450px]:tracking-[0.035em] sm:mx-auto sm:w-[92%] sm:px-4 sm:text-[12px] sm:tracking-[0.08em]"
         >
           {isSelectedOutOfStock ? "OUT OF STOCK" : "ADD TO CART"}
         </button>

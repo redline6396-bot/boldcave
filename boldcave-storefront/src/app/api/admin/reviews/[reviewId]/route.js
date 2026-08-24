@@ -26,7 +26,7 @@ export async function PATCH(request, { params }) {
 
     await connectDB();
     const review = await Review.findByIdAndUpdate(reviewId, updates, {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     });
 

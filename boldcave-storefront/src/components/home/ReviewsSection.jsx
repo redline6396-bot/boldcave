@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchHomepageSettings } from "@/lib/clientApi";
 
+const REVIEW_SWIPE_THRESHOLD = 42;
+
 const hasCompleteFeaturedReviews = (items) =>
   Array.isArray(items) &&
   items.length === 3 &&
@@ -20,6 +22,7 @@ const buildFeaturedReviews = (items) =>
 export default function ReviewsSection() {
   const scrollerRef = useRef(null);
   const scrollFrameRef = useRef(null);
+  const dragRef = useRef(null);
   const [reviews, setReviews] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loadedImages, setLoadedImages] = useState({});
@@ -83,13 +86,69 @@ export default function ReviewsSection() {
     const cards = scroller.querySelectorAll("[data-review-card]");
     const target = cards[safeIndex];
 
-    target?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "start",
-    });
+    if (target) {
+      scroller.scrollTo({
+        left: target.offsetLeft - scroller.offsetLeft,
+        behavior: "smooth",
+      });
+    }
 
     setActiveIndex(safeIndex);
+  };
+
+  const handlePointerDown = (event) => {
+    dragRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      startIndex: activeIndex,
+      isHorizontal: false,
+    };
+
+    if (event.currentTarget.setPointerCapture) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+  };
+
+  const handlePointerMove = (event) => {
+    if (!dragRef.current) {
+      return;
+    }
+
+    const deltaX = event.clientX - dragRef.current.x;
+    const deltaY = event.clientY - dragRef.current.y;
+
+    if (!dragRef.current.isHorizontal) {
+      dragRef.current.isHorizontal =
+        Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY);
+    }
+
+    if (dragRef.current.isHorizontal) {
+      event.preventDefault();
+    }
+  };
+
+  const handlePointerEnd = (event) => {
+    if (!dragRef.current) {
+      return;
+    }
+
+    const deltaX = event.clientX - dragRef.current.x;
+    const deltaY = event.clientY - dragRef.current.y;
+    const wasHorizontal = dragRef.current.isHorizontal;
+    const startIndex = dragRef.current.startIndex;
+
+    dragRef.current = null;
+
+    if (
+      wasHorizontal &&
+      Math.abs(deltaX) >= REVIEW_SWIPE_THRESHOLD &&
+      Math.abs(deltaX) > Math.abs(deltaY)
+    ) {
+      scrollToReview(deltaX < 0 ? startIndex + 1 : startIndex - 1);
+      return;
+    }
+
+    scrollToReview(startIndex);
   };
 
   const markImageLoaded = (id) => {
@@ -120,9 +179,17 @@ export default function ReviewsSection() {
         <div className="mt-6 overflow-x-hidden pl-5 sm:hidden">
           <div
             ref={scrollerRef}
-            className="reviews-scrollbar-hidden flex w-full snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="reviews-scrollbar-hidden flex w-full snap-x snap-mandatory touch-pan-y gap-3 overflow-x-hidden scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             onScroll={handleScroll}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={() => {
+              const startIndex = dragRef.current?.startIndex ?? activeIndex;
+              dragRef.current = null;
+              scrollToReview(startIndex);
+            }}
           >
             {reviews.map((review) => (
               <ReviewItem
@@ -229,7 +296,7 @@ function ReviewItem({
             tablet ? "h-auto object-contain" : "",
             loaded ? "opacity-100" : "opacity-0",
           ].join(" ")}
-          loading="eager"
+          loading="lazy"
           fetchPriority="low"
           decoding="async"
           onLoad={onImageLoad}

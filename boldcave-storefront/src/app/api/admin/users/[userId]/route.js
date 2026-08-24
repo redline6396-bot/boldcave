@@ -48,7 +48,7 @@ export async function PATCH(request, { params }) {
     }
 
     await connectDB();
-    const user = await User.findByIdAndUpdate(userId, { status }, { new: true });
+    const user = await User.findByIdAndUpdate(userId, { status }, { returnDocument: "after" });
     if (!user) return applyAdminCors(request, failure("USER_NOT_FOUND", "User not found", 404));
 
     return applyAdminCors(request, success({ user }));

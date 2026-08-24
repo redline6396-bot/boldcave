@@ -709,7 +709,7 @@ export default function ProductPage() {
                 ? `/collection?category=${encodeURIComponent(getAudienceTags(product)[0])}`
                 : "/collection"
             }
-            className="text-[9px] font-medium uppercase tracking-[0.18em] text-neutral-500 transition-colors hover:text-neutral-950 sm:text-[11px] min-[600px]:text-[11px] min-[820px]:text-[10px] lg:tracking-[0.18em]"
+            className="text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-500 transition-colors hover:text-neutral-950 sm:text-[11px] min-[600px]:text-[10px] min-[820px]:text-[10px] lg:tracking-[0.18em]"
           >
             BOLD CAVE
           </Link>
@@ -718,7 +718,7 @@ export default function ProductPage() {
             <span className="text-[34px] font-normal uppercase leading-none tracking-0 min-[600px]:text-[36px] min-[760px]:text-[40px] min-[820px]:text-[30px] lg:text-[44px]">
               {product.name}
             </span>
-            <span className="text-[8.5px] font-medium uppercase tracking-[0.22em] text-neutral-500 min-[600px]:text-[10px] min-[600px]:tracking-[0.19em] min-[760px]:text-[11px] min-[820px]:text-[8px] min-[820px]:tracking-[0.16em] lg:text-[12px] lg:tracking-[0.24em]">
+            <span className="text-[10px] font-medium uppercase tracking-[0.20em] text-neutral-500 min-[600px]:text-[10px] min-[600px]:tracking-[0.20em] min-[760px]:text-[11px] min-[820px]:text-[8px] min-[820px]:tracking-[0.16em] lg:text-[12px] lg:tracking-[0.24em]">
               - {isCombo ? COMBO_TITLE_DESCRIPTOR : PRODUCT_TITLE_DESCRIPTOR}
             </span>
           </h1>
@@ -728,7 +728,7 @@ export default function ProductPage() {
               <button
                 type="button"
                 onClick={handleScrollToReviews}
-                className="mt-2 inline-flex cursor-pointer items-center gap-2.5 text-[12px] text-neutral-700 transition-colors hover:text-neutral-950 min-[600px]:mt-2 min-[600px]:text-[13px] min-[820px]:mt-1.5 min-[820px]:text-[12px] lg:mt-2 lg:text-[13px]"
+                className="mt-2 inline-flex cursor-pointer items-center gap-2.5 text-[13px] text-neutral-700 transition-colors hover:text-neutral-950 min-[600px]:mt-2 min-[600px]:text-[13px] min-[820px]:mt-1.5 min-[820px]:text-[12px] lg:mt-2 lg:text-[13px]"
                 aria-label={
                   reviewSummary.count
                     ? `Read ${reviewSummary.count} customer reviews`
@@ -757,13 +757,13 @@ export default function ProductPage() {
           </div>
 
           {product.shortDescription && (
-            <p className="mt-4 max-w-[315px] text-[14px] leading-[1.55] text-neutral-700 min-[600px]:mt-4 min-[600px]:max-w-[520px] min-[600px]:text-[15px] min-[600px]:leading-[1.6] min-[820px]:mt-3 min-[820px]:max-w-[300px] min-[820px]:text-[13px] min-[820px]:leading-[1.5] lg:mt-3 lg:max-w-[300px] lg:text-[16px] lg:leading-[1.6]">
+            <p className="mt-4 max-w-[315px] text-[15px] leading-[1.6] text-neutral-700 min-[600px]:mt-4 min-[600px]:max-w-[520px] min-[600px]:text-[15px] min-[600px]:leading-[1.6] min-[820px]:mt-3 min-[820px]:max-w-[300px] min-[820px]:text-[13px] min-[820px]:leading-[1.5] lg:mt-3 lg:max-w-[300px] lg:text-[16px] lg:leading-[1.6]">
               {product.shortDescription}
             </p>
           )}
 
           <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1.5 sm:mt-3.5 min-[600px]:mt-4 min-[820px]:mt-3 lg:mt-4">
-            <span className="text-[27px] font-normal leading-none tracking-[-0.015em] text-neutral-950 sm:text-[27px] min-[600px]:text-[30px] min-[820px]:text-[25px] lg:text-[30px]">
+            <span className="text-[30px] font-normal leading-none tracking-[-0.015em] text-neutral-950 sm:text-[27px] min-[600px]:text-[30px] min-[820px]:text-[25px] lg:text-[30px]">
               {formatRupees(selectedVariant?.sellingPrice)}
             </span>
             {selectedVariant?.mrp > selectedVariant?.sellingPrice && (
@@ -798,7 +798,7 @@ export default function ProductPage() {
             </div>
           ) : (
             <div className="mt-4 border-t border-[#e8e2d9] pt-3.5 sm:mt-4 sm:pt-4 min-[600px]:mt-3 min-[600px]:pt-3 lg:mt-4 lg:pt-4">
-              <p className="text-[12px] font-normal leading-none tracking-0 text-neutral-800 sm:text-[13px] min-[600px]:text-[14px] min-[820px]:text-[12px] lg:text-[15px]">
+              <p className="text-[13px] font-normal leading-none tracking-0 text-neutral-800 sm:text-[13px] min-[600px]:text-[13px] min-[820px]:text-[12px] lg:text-[15px]">
                 Select Size
               </p>
 
@@ -813,7 +813,7 @@ export default function ProductPage() {
                       type="button"
                       onClick={() => setSelectedSize(variant.size)}
                       className={[
-                        "h-9 min-w-[94px] border px-3 text-[11px] font-medium uppercase tracking-[0.01em] transition-colors min-[600px]:h-11 min-[600px]:min-w-[126px] min-[600px]:px-5 min-[600px]:text-[12px] min-[820px]:h-10 min-[820px]:min-w-[108px] min-[820px]:px-4 min-[820px]:text-[11px] lg:h-11 lg:min-w-[126px] lg:text-[11px]",
+                        "h-9 min-w-[94px] border px-3 text-[11px] font-medium uppercase tracking-[0.01em] transition-colors min-[600px]:h-11 min-[600px]:min-w-[126px] min-[600px]:px-5 min-[600px]:text-[11px] min-[820px]:h-10 min-[820px]:min-w-[108px] min-[820px]:px-4 min-[820px]:text-[11px] lg:h-11 lg:min-w-[126px] lg:text-[11px]",
                         selected
                           ? "border-neutral-950 bg-neutral-950 text-white"
                           : "border-neutral-300 bg-white text-neutral-950 hover:border-neutral-950",
@@ -831,10 +831,10 @@ export default function ProductPage() {
           )}
 
           <div className="mt-3 sm:mt-4 min-[600px]:mt-4 min-[820px]:mt-3 lg:mt-[18px]">
-            <p className="flex items-baseline gap-1.5 text-[12px] font-normal leading-none tracking-0 text-neutral-800 sm:text-[13px] min-[600px]:text-[14px] min-[820px]:text-[12px] lg:text-[15px]">
+            <p className="flex items-baseline gap-1.5 text-[13px] font-normal leading-none tracking-0 text-neutral-800 sm:text-[13px] min-[600px]:text-[13px] min-[820px]:text-[12px] lg:text-[15px]">
               <span>Quantity</span>
               {currentCartQuantity > 0 && (
-                <span className="text-[10px] font-normal text-neutral-500 sm:text-[11px] min-[600px]:text-[12px] min-[820px]:text-[10.5px] lg:text-[12px]">
+                <span className="text-[11px] font-normal text-neutral-500 sm:text-[11px] min-[600px]:text-[11px] min-[820px]:text-[10.5px] lg:text-[12px]">
                   {currentCartQuantity} in cart
                 </span>
               )}
@@ -850,7 +850,7 @@ export default function ProductPage() {
               >
                 <Minus className="h-3.5 w-3.5 lg:h-[18px] lg:w-[18px]" strokeWidth={1.7} />
               </button>
-              <span className="flex items-center justify-center text-[13px] font-normal min-[600px]:text-[16px] min-[820px]:text-[14px] lg:text-[17px]">
+              <span className="flex items-center justify-center text-[15px] font-normal min-[600px]:text-[15px] min-[820px]:text-[14px] lg:text-[17px]">
                 {quantity}
               </span>
               <button
@@ -880,7 +880,7 @@ export default function ProductPage() {
               type="button"
               onClick={handleAddToCart}
               disabled={!canBuy}
-              className="h-10 border cursor-pointer border-neutral-300 bg-white text-[13px] font-normal tracking-[0.015em] text-neutral-950 transition-colors hover:border-neutral-950 min-[600px]:h-12 min-[600px]:text-[14px] min-[820px]:h-10 min-[820px]:text-[13px] lg:h-[46px] lg:text-[15px] disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-100 disabled:text-neutral-400"
+              className="h-10 border cursor-pointer border-neutral-300 bg-white text-[14px] font-normal tracking-[0.015em] text-neutral-950 transition-colors hover:border-neutral-950 min-[600px]:h-12 min-[600px]:text-[14px] min-[820px]:h-10 min-[820px]:text-[13px] lg:h-[46px] lg:text-[15px] disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-100 disabled:text-neutral-400"
             >
               {isSelectedUnavailable ? "Out of stock" : "Add to cart"}
             </button>
@@ -889,7 +889,7 @@ export default function ProductPage() {
               type="button"
               onClick={handleBuyNow}
               disabled={!canBuy || !acceptingOrders}
-              className="h-10 border cursor-pointer border-neutral-950 bg-neutral-950 text-[13px] font-semibold tracking-[0.01em] text-white transition-colors hover:bg-neutral-800 min-[600px]:h-12 min-[600px]:text-[14px] min-[820px]:h-10 min-[820px]:text-[13px] lg:h-[46px] lg:text-[15px] disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-100 disabled:text-neutral-400"
+              className="h-10 border cursor-pointer border-neutral-950 bg-neutral-950 text-[14px] font-semibold tracking-[0.01em] text-white transition-colors hover:bg-neutral-800 min-[600px]:h-12 min-[600px]:text-[14px] min-[820px]:h-10 min-[820px]:text-[13px] lg:h-[46px] lg:text-[15px] disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-100 disabled:text-neutral-400"
             >
               {acceptingOrders ? "Buy it now" : "Currently not accepting orders"}
             </button>
@@ -951,7 +951,7 @@ function ProductInfoDetails({ product, selectedVariant }) {
   return (
     <section className="mt-8 max-w-[552px] sm:mt-10 lg:mt-14">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-[20px] font-normal uppercase leading-none tracking-[0.02em] text-neutral-950 min-[600px]:text-[22px] min-[760px]:text-[24px] min-[820px]:text-[20px] lg:text-[30px] lg:tracking-[0.035em]">
+        <h2 className="text-[22px] font-normal uppercase leading-none tracking-[0.02em] text-neutral-950 min-[600px]:text-[22px] min-[760px]:text-[24px] min-[820px]:text-[20px] lg:text-[30px] lg:tracking-[0.035em]">
           Product Details
         </h2>
         <button
@@ -969,10 +969,10 @@ function ProductInfoDetails({ product, selectedVariant }) {
 
       <div className="mt-3 overflow-hidden border-y border-neutral-200 sm:border sm:border-neutral-200 lg:mt-4">
         <div className="grid grid-cols-[40%_60%] border-b border-neutral-200 bg-neutral-50 sm:grid-cols-[0.9fr_1.1fr]">
-          <div className="px-2.5 py-2.5 text-[12px] font-semibold tracking-0 text-neutral-950 sm:border-r sm:border-neutral-200 sm:px-4 sm:py-3 sm:text-[13px] lg:px-5 lg:py-4 lg:tracking-[0.03em]">
+          <div className="px-2.5 py-2.5 text-[13px] font-semibold tracking-0 text-neutral-950 sm:border-r sm:border-neutral-200 sm:px-4 sm:py-3 sm:text-[13px] lg:px-5 lg:py-4 lg:tracking-[0.03em]">
             Attribute
           </div>
-          <div className="px-2.5 py-2.5 text-[12px] font-semibold tracking-0 text-neutral-950 sm:px-4 sm:py-3 sm:text-[13px] lg:px-5 lg:py-4 lg:tracking-[0.03em]">
+          <div className="px-2.5 py-2.5 text-[13px] font-semibold tracking-0 text-neutral-950 sm:px-4 sm:py-3 sm:text-[13px] lg:px-5 lg:py-4 lg:tracking-[0.03em]">
             Details
           </div>
         </div>
@@ -995,7 +995,7 @@ function ProductInfoDetails({ product, selectedVariant }) {
         <DetailRow label="Country of Origin" value="India" />
       </div>
 
-      <div className="mt-6 max-w-[520px] space-y-4 text-[13px] leading-[1.65] tracking-0 text-neutral-800 sm:mt-7 sm:text-[14px] lg:mt-8 lg:space-y-4 lg:text-[15px] lg:leading-[1.65]">
+      <div className="mt-6 max-w-[520px] space-y-4 text-[14px] leading-[1.65] tracking-0 text-neutral-800 sm:mt-7 sm:text-[14px] lg:mt-8 lg:space-y-4 lg:text-[15px] lg:leading-[1.65]">
         <p>{product.description}</p>
         {!isCombo && (
           <p>
@@ -1143,7 +1143,7 @@ function ProductRatingStars({ value }) {
 
 function InfoPill({ children }) {
   return (
-    <span className="inline-flex min-h-5 shrink-0 items-center border border-neutral-300 bg-white px-1.5 text-[8px] font-medium uppercase leading-none tracking-[0.035em] text-neutral-800 min-[600px]:min-h-6 min-[600px]:px-2.5 min-[600px]:text-[9px] min-[600px]:tracking-[0.08em] min-[820px]:min-h-5 min-[820px]:px-1.5 min-[820px]:text-[8px] min-[820px]:tracking-[0.04em] lg:min-h-6 lg:px-2.5 lg:text-[10px] lg:tracking-[0.11em]">
+    <span className="inline-flex min-h-5 shrink-0 items-center border border-neutral-300 bg-white px-1.5 text-[9px] font-medium uppercase leading-none tracking-[0.05em] text-neutral-800 min-[600px]:min-h-6 min-[600px]:px-2.5 min-[600px]:text-[9px] min-[600px]:tracking-[0.08em] min-[820px]:min-h-5 min-[820px]:px-1.5 min-[820px]:text-[8px] min-[820px]:tracking-[0.04em] lg:min-h-6 lg:px-2.5 lg:text-[10px] lg:tracking-[0.11em]">
       {children}
     </span>
   );
@@ -1152,10 +1152,10 @@ function InfoPill({ children }) {
 function DetailRow({ label, value }) {
   return (
     <div className="grid grid-cols-[40%_60%] border-b border-neutral-200 last:border-b-0 sm:grid-cols-[0.9fr_1.1fr]">
-      <div className="px-2.5 py-2.5 text-[12px] font-semibold leading-[1.45] tracking-0 text-neutral-950 sm:border-r sm:border-neutral-200 sm:px-4 sm:py-3 sm:text-[13px] lg:px-5 lg:py-4 lg:text-[14px] lg:tracking-[0.02em]">
+      <div className="px-2.5 py-2.5 text-[13px] font-semibold leading-[1.45] tracking-0 text-neutral-950 sm:border-r sm:border-neutral-200 sm:px-4 sm:py-3 sm:text-[13px] lg:px-5 lg:py-4 lg:text-[14px] lg:tracking-[0.02em]">
         {label}
       </div>
-      <div className="min-w-0 break-words px-2.5 py-2.5 text-[12px] leading-[1.5] tracking-0 text-neutral-700 sm:px-4 sm:py-3 sm:text-[13px] lg:px-5 lg:py-4 lg:text-[14px] lg:leading-6 lg:tracking-[0.01em]">
+      <div className="min-w-0 break-words px-2.5 py-2.5 text-[13px] leading-[1.5] tracking-0 text-neutral-700 sm:px-4 sm:py-3 sm:text-[13px] lg:px-5 lg:py-4 lg:text-[14px] lg:leading-6 lg:tracking-[0.01em]">
         <span className="block max-w-[19ch] sm:max-w-none">{value}</span>
       </div>
     </div>
@@ -1168,14 +1168,14 @@ function Accordion({ title, children, defaultOpen = false }) {
       className="group border-b border-[#e5dfd6] last:border-b-0"
       open={defaultOpen}
     >
-      <summary className="flex min-h-[50px] cursor-pointer list-none items-center justify-between gap-5 bg-white px-4 text-[11px] font-medium uppercase tracking-[0.16em] text-neutral-950 sm:min-h-[57px] sm:px-6 sm:text-[12px] sm:tracking-[0.2em] [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-[50px] cursor-pointer list-none items-center justify-between gap-5 bg-white px-4 text-[12px] font-medium uppercase tracking-[0.17em] text-neutral-950 sm:min-h-[57px] sm:px-6 sm:text-[12px] sm:tracking-[0.2em] [&::-webkit-details-marker]:hidden">
         <span>{title}</span>
         <ChevronDown
           className="h-4 w-4 shrink-0 transition-transform duration-200 group-open:rotate-180"
           strokeWidth={1.6}
         />
       </summary>
-      <div className="px-4 pb-5 pt-1 text-[13px] leading-6 text-neutral-600 sm:px-6 sm:pb-5 sm:pt-2 sm:text-[14px] sm:leading-6">
+      <div className="px-4 pb-5 pt-1 text-[14px] leading-6 text-neutral-600 sm:px-6 sm:pb-5 sm:pt-2 sm:text-[14px] sm:leading-6">
         {children}
       </div>
     </details>
