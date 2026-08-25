@@ -756,6 +756,14 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   };
 
   const handleOtpKeyDown = (index, event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (!otpLoading) {
+        handleVerifyOtp();
+      }
+      return;
+    }
+
     if (
       event.key === "Backspace" &&
       !otpDigits[index] &&

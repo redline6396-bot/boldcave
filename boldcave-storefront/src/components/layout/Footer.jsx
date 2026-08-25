@@ -70,21 +70,21 @@ export default function Footer() {
 
   return (
     <footer className="w-full border-t border-[#202020] bg-black text-white">
-      <div className="mx-auto max-w-[1360px] px-5 pt-8 md:px-10 md:pt-10 lg:px-10 lg:pt-8">
+      <div className="mx-auto max-w-[1360px] px-5 pt-4 md:px-10 md:pt-5 lg:px-10 lg:pt-4">
         {/* BRAND */}
-<div className="pb-3 text-center md:pb-8 lg:pb-9">
-  <Link
-    href="/"
-    aria-label="Bold Cave home"
-    className="inline-flex h-[92px] w-[92px] max-w-full items-center justify-center overflow-hidden sm:h-[104px] sm:w-[104px] md:h-[118px] md:w-[118px] lg:h-[126px] lg:w-[126px]"
-  >
-    <img
-      src="/images/brand/bold-cave-icon.png"
-      alt="Bold Cave"
-      className="block h-full w-full object-contain"
-    />
-  </Link>
-</div>
+        <div className="pb-2 text-center md:pb-4 lg:pb-5">
+          <Link
+            href="/"
+            aria-label="Bold Cave home"
+            className="inline-flex h-[92px] w-[92px] max-w-full items-center justify-center overflow-hidden sm:h-[104px] sm:w-[104px] md:h-[118px] md:w-[118px] lg:h-[126px] lg:w-[126px]"
+          >
+            <img
+              src="/images/brand/bold-cave-icon.png"
+              alt="Bold Cave"
+              className="block h-full w-full object-contain"
+            />
+          </Link>
+        </div>
         {/* MOBILE */}
         <div className="md:hidden">
           {footerColumns.map((column) => (

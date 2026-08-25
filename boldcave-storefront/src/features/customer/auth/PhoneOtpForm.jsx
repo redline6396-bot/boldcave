@@ -252,6 +252,12 @@ export default function PhoneOtpForm({
   };
 
   const handleOtpKeyDown = (index, event) => {
+    if (event.key === "Enter" && !loading) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+      return;
+    }
+
     if (event.key === "Backspace" && !otpDigits[index] && index > 0) {
       otpRefs.current[index - 1]?.focus();
     }

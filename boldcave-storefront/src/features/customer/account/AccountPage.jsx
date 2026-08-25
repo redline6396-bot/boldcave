@@ -699,7 +699,7 @@ function AccountContent() {
 
   return (
     <main
-      className="bg-[#ececec] px-3 py-5 text-neutral-950 sm:px-4 sm:py-6 md:px-5 md:py-7 lg:px-6"
+      className="bg-[#ececec] px-3 py-5 text-neutral-950 sm:px-4 sm:py-6 md:px-5 md:py-7 lg:min-h-[calc(100dvh-126px)] lg:px-6"
       style={{
         fontFamily: '"Helvetica Neue", Arial, sans-serif',
       }}
@@ -1901,4 +1901,3 @@ function AddressFields({
     </div>
   );
 }
-
