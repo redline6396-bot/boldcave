@@ -13,6 +13,11 @@ const storeSettingsSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    otpMode: {
+      type: String,
+      enum: ["test", "live"],
+      default: "live",
+    },
   },
   { timestamps: true }
 );

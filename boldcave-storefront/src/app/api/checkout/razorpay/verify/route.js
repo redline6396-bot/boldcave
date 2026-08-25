@@ -1,6 +1,7 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
+import { syncUserProfileFromCheckoutAddress } from "@/lib/auth/users";
 import { deductStock } from "@/lib/orders/pricing";
 import { verifyRazorpaySignature } from "@/lib/payments/razorpay";
 import { createShiprocketOrder } from "@/lib/shipping/shiprocket";
@@ -145,6 +146,16 @@ export async function POST(request) {
       },
       orderStatus: "confirmed",
     });
+
+    try {
+      await syncUserProfileFromCheckoutAddress(auth.user, claimedAttempt.deliveryAddress);
+    } catch (error) {
+      console.error("Checkout profile sync failed", {
+        userId: String(auth.user._id),
+        orderId: String(order._id),
+        code: error?.code,
+      });
+    }
 
     try {
       const shiprocketOrder = await createShiprocketOrder(order);

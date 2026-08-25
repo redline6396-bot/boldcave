@@ -1,7 +1,7 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { setUserSessionCookie, signUserSession, safeUser } from "@/lib/auth/session";
-import { verifyOtp } from "@/lib/auth/otpProvider";
+import { OtpTestPhoneNotAllowedError, verifyOtp } from "@/lib/auth/otpProvider";
 import { findOrCreateUserForPhone } from "@/lib/auth/users";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
 
@@ -50,6 +50,10 @@ export async function POST(request) {
     const response = success({ user: safeUser(user) });
     return setUserSessionCookie(response, token);
   } catch (error) {
+    if (error instanceof OtpTestPhoneNotAllowedError) {
+      return failure(error.code, error.message, 403);
+    }
+
     return handleRouteError(error, "OTP_VERIFY_FAILED");
   }
 }

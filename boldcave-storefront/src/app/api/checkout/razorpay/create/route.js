@@ -4,6 +4,7 @@ import {
   requireUser,
   verifyCheckoutPhoneToken,
 } from "@/lib/auth/session";
+import { checkoutProfileFromAddress } from "@/lib/auth/users";
 import { calculateCart, generateOrderNumber, validateAddress } from "@/lib/orders/pricing";
 import { createRazorpayOrder } from "@/lib/payments/razorpay";
 import { isAcceptingOrders } from "@/lib/storeSettings";
@@ -73,6 +74,7 @@ export async function POST(request) {
 
     const orderNumber = generateOrderNumber();
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    const checkoutProfile = checkoutProfileFromAddress(deliveryAddress);
 
     const razorpayOrder = await createRazorpayOrder({
       amount: cart.finalAmount,
@@ -87,11 +89,11 @@ export async function POST(request) {
       orderNumber,
       user: auth.user._id,
       customer: {
-        firstName: auth.user.firstName || "",
-        lastName: auth.user.lastName || "",
+        firstName: checkoutProfile.firstName || auth.user.firstName || "",
+        lastName: checkoutProfile.lastName || auth.user.lastName || "",
         phone: checkoutPhone,
         phoneVerified: true,
-        email: auth.user.email || deliveryAddress?.email || "",
+        email: checkoutProfile.email || auth.user.email || "",
       },
       deliveryAddress,
       items: cart.items,

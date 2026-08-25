@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import ProductCard from "@/components/product/ProductCard";
 import { fetchHomepageSettings, fetchProducts } from "@/lib/clientApi";
 
@@ -93,13 +94,20 @@ export default function CollectionSection() {
     <section className="bg-white px-2.5 pb-8 pt-8 sm:px-6 sm:py-10 lg:px-8 lg:py-8">
       <div className="mx-auto max-w-[1280px] lg:max-w-[1160px]">
         <div className="text-center">
-          <h2 className="whitespace-nowrap text-[24px] font-semibold uppercase leading-none tracking-[0.035em] text-neutral-950 sm:text-[38px] sm:tracking-[0.06em] lg:text-[34px] lg:tracking-[0.055em]">
+          <h2 className="whitespace-nowrap text-[28px] font-semibold uppercase leading-none tracking-[0.03em] text-neutral-950 max-[450px]:text-[25px] max-[390px]:text-[23px] sm:text-[38px] sm:tracking-[0.06em] lg:text-[34px] lg:tracking-[0.055em]">
             SHOP THE COLLECTION
           </h2>
 
           <p className="mt-3 text-[15px] font-normal leading-relaxed text-neutral-500 sm:mt-5 lg:mt-4 lg:text-[14px]">
             {formatCollectionSubtitle(fragranceCount, personalityCount)}
           </p>
+
+          <Link
+            href="/collection"
+            className="mt-1.5 inline-flex text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-500 underline underline-offset-4 transition-colors hover:text-neutral-950 sm:mt-2 sm:text-[10px]"
+          >
+            View all
+          </Link>
         </div>
 
         {products.length > 0 ? (

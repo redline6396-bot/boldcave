@@ -70,18 +70,18 @@ export default function Footer() {
 
   return (
     <footer className="w-full border-t border-[#202020] bg-black text-white">
-      <div className="mx-auto max-w-[1360px] px-5 pt-10 md:px-10 md:pt-14 lg:px-10 lg:pt-10">
+      <div className="mx-auto max-w-[1360px] px-5 pt-8 md:px-10 md:pt-10 lg:px-10 lg:pt-8">
         {/* BRAND */}
-<div className="pb-4 text-center md:pb-12 lg:pb-14">
+<div className="pb-3 text-center md:pb-8 lg:pb-9">
   <Link
     href="/"
     aria-label="Bold Cave home"
-    className="inline-flex h-[54px] w-[250px] max-w-full items-center justify-center overflow-hidden sm:h-[60px] sm:w-[320px] md:h-[66px] md:w-[380px] lg:h-[70px] lg:w-[430px]"
+    className="inline-flex h-[92px] w-[92px] max-w-full items-center justify-center overflow-hidden sm:h-[104px] sm:w-[104px] md:h-[118px] md:w-[118px] lg:h-[126px] lg:w-[126px]"
   >
     <img
-      src="/images/brand/bold-cave-logo.png"
+      src="/images/brand/bold-cave-icon.png"
       alt="Bold Cave"
-      className="block h-auto w-full max-w-none translate-y-[4px] sm:translate-y-[5px]"
+      className="block h-full w-full object-contain"
     />
   </Link>
 </div>

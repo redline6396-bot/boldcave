@@ -203,6 +203,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   const [resendIn, setResendIn] = useState(RESEND_SECONDS);
   const otpRefs = useRef([]);
   const checkoutPhoneRef = useRef(null);
+  const checkoutPhoneInitializedRef = useRef(false);
 
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
@@ -255,16 +256,22 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     normalizePhone(checkoutPhone) === normalizePhone(user.phone);
 
   useEffect(() => {
-    if (!isAuthenticated || !user?.phone || phoneTouched) {
+    if (
+      !isAuthenticated ||
+      !user?.phone ||
+      phoneTouched ||
+      checkoutPhoneInitializedRef.current
+    ) {
       return;
     }
 
     const accountPhone = normalizePhone(user.phone);
 
     setCheckoutPhone(accountPhone);
-    setPhoneVerified(Boolean(accountPhone && user.phoneVerified));
+    setPhoneVerified(false);
     setPhoneVerificationToken("");
-  }, [isAuthenticated, phoneTouched, user?.phone, user?.phoneVerified]);
+    checkoutPhoneInitializedRef.current = true;
+  }, [isAuthenticated, phoneTouched, user?.phone]);
 
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
@@ -637,6 +644,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
 
     if (
       isAuthenticated &&
+      user?.phoneVerified &&
       normalizePhone(user?.phone) === cleanPhone
     ) {
       setPhoneVerified(true);
@@ -651,6 +659,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     isAuthenticated,
     openOtpForPhone,
     user?.phone,
+    user?.phoneVerified,
   ]);
 
   const handleResendOtp = useCallback(async () => {
@@ -788,6 +797,25 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
 
     router.back();
   }, [onClose, router]);
+
+  const handleCheckoutBack = useCallback(() => {
+    if (otpOpen) {
+      setOtpOpen(false);
+      setOtpError("");
+      setOtpDemoCode("");
+      return;
+    }
+
+    if (phoneVerified) {
+      setPhoneVerified(false);
+      setPhoneVerificationToken("");
+      setError("");
+      setNotice("");
+      return;
+    }
+
+    setExitConfirmOpen(true);
+  }, [otpOpen, phoneVerified]);
 
   const completeSuccess = useCallback(() => {
     clearCart();
@@ -1080,7 +1108,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
           <header className="flex h-[62px] shrink-0 items-center justify-between border-b border-[#e0e4e8] bg-white px-4 sm:px-5">
             <button
               type="button"
-              onClick={() => setExitConfirmOpen(true)}
+              onClick={handleCheckoutBack}
               className="flex cursor-pointer items-center gap-2.5"
             >
               <ChevronLeft

@@ -5,6 +5,10 @@ import {
   verifyCheckoutPhoneToken,
 } from "@/lib/auth/session";
 import {
+  checkoutProfileFromAddress,
+  syncUserProfileFromCheckoutAddress,
+} from "@/lib/auth/users";
+import {
   calculateCart,
   deductStock,
   generateOrderNumber,
@@ -87,15 +91,16 @@ export async function POST(request) {
       throw error;
     }
 
+    const checkoutProfile = checkoutProfileFromAddress(deliveryAddress);
     const order = await Order.create({
       orderNumber: generateOrderNumber(),
       user: auth.user._id,
       customer: {
-        firstName: auth.user.firstName || "",
-        lastName: auth.user.lastName || "",
+        firstName: checkoutProfile.firstName || auth.user.firstName || "",
+        lastName: checkoutProfile.lastName || auth.user.lastName || "",
         phone: checkoutPhone,
         phoneVerified: true,
-        email: auth.user.email || deliveryAddress?.email || "",
+        email: checkoutProfile.email || auth.user.email || "",
       },
       deliveryAddress,
       items: cart.items,
@@ -112,6 +117,16 @@ export async function POST(request) {
       },
       orderStatus: "confirmed",
     });
+
+    try {
+      await syncUserProfileFromCheckoutAddress(auth.user, deliveryAddress);
+    } catch (error) {
+      console.error("Checkout profile sync failed", {
+        userId: String(auth.user._id),
+        orderId: String(order._id),
+        code: error?.code,
+      });
+    }
 
     try {
       const shiprocketOrder = await createShiprocketOrder(order);

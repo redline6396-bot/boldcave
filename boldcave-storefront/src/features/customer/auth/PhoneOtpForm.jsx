@@ -27,6 +27,7 @@ export default function PhoneOtpForm({
   onDone,
   onClose,
   compactMobile = false,
+  keyboardOpen = false,
 }) {
   const { completeAuth } = useAuth();
 
@@ -44,6 +45,8 @@ export default function PhoneOtpForm({
 
   const phoneRef = useRef(null);
   const otpRefs = useRef([]);
+  const authCardRef = useRef(null);
+  const formSectionRef = useRef(null);
 
   const cleanPhone = normalizePhone(phone);
   const otp = otpDigits.join("");
@@ -73,6 +76,56 @@ export default function PhoneOtpForm({
   const otpButtonClass = compactMobile
     ? "mt-4 h-[40px] w-full cursor-pointer rounded-[8px] border border-neutral-950 bg-neutral-950 text-[12px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-300 disabled:text-white disabled:opacity-100 md:mt-[18px]"
     : "mt-[18px] h-[40px] w-full cursor-pointer rounded-[8px] border border-neutral-950 bg-neutral-950 text-[12px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-300 disabled:text-white disabled:opacity-100";
+
+  useEffect(() => {
+    if (!compactMobile) {
+      return undefined;
+    }
+
+    const card = authCardRef.current;
+
+    if (!card) {
+      return undefined;
+    }
+
+    if (!keyboardOpen) {
+      card.scrollTo({ top: 0, behavior: "auto" });
+      return undefined;
+    }
+
+    let timeoutId;
+    let frameId;
+
+    const bringFormIntoView = () => {
+      frameId = window.requestAnimationFrame(() => {
+        const currentCard = authCardRef.current;
+        const formSection = formSectionRef.current;
+
+        if (!currentCard || !formSection) {
+          return;
+        }
+
+        const visibleBrandHeight = step === "otp" ? 88 : 112;
+        const targetTop = Math.max(
+          0,
+          formSection.offsetTop - visibleBrandHeight
+        );
+
+        currentCard.scrollTo({
+          top: targetTop,
+          behavior: "auto",
+        });
+      });
+    };
+
+    bringFormIntoView();
+    timeoutId = window.setTimeout(bringFormIntoView, 120);
+
+    return () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
+      if (frameId) window.cancelAnimationFrame(frameId);
+    };
+  }, [compactMobile, keyboardOpen, step]);
 
   useEffect(() => {
     if (step !== "otp" || resendIn <= 0) return undefined;
@@ -232,6 +285,7 @@ export default function PhoneOtpForm({
 
   return (
     <div
+      ref={authCardRef}
       className="auth-card relative isolate grid w-[min(760px,calc(100vw-32px))] max-w-[760px] overflow-hidden rounded-[16px] bg-[#171717] shadow-[0_18px_55px_rgba(0,0,0,0.26)] md:grid-cols-[44%_56%]"
       style={{ fontFamily: '"Helvetica Neue", Arial, sans-serif' }}
     >
@@ -263,7 +317,7 @@ export default function PhoneOtpForm({
         </div>
       </section>
 
-      <section className={formSectionClass}>
+      <section ref={formSectionRef} className={formSectionClass}>
         <div className="mx-auto w-full max-w-[320px]">
           {step === "phone" ? (
             <form onSubmit={handleSendOtp}>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronRight, ShoppingCart } from "lucide-react";
+import { ChevronRight, ShoppingCart, User } from "lucide-react";
 import {
   FaFacebookF,
   FaInstagram,
@@ -126,22 +126,22 @@ function MenuToggleButton({
   );
 }
 
-function CaveShopLink({ className = "" }) {
+function ProfileLink({ isAuthenticated, onClick, className = "" }) {
   return (
-    <Link
-      href={ROUTES.shopAll}
-      aria-label="Shop the collection"
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={isAuthenticated ? "Open profile" : "Login to view profile"}
       className={[
         "inline-flex h-9 w-9 cursor-pointer items-center justify-center text-white sm:h-12 sm:w-12",
         className,
       ].join(" ")}
     >
-      <img
-        src="/images/brand/bold-cave-icon.png"
-        alt=""
-        className="h-[28px] w-auto max-w-[34px] object-contain sm:h-[34px] sm:max-w-[40px]"
+      <User
+        className="h-[29px] w-[29px] sm:h-[32px] sm:w-[32px]"
+        strokeWidth={1.65}
       />
-    </Link>
+    </button>
   );
 }
 
@@ -399,6 +399,18 @@ export default function MainNavbar() {
     setIsCartDrawerOpen(true);
   }, []);
 
+  const openProfile = useCallback(() => {
+    setIsDrawerOpen(false);
+    setIsCartDrawerOpen(false);
+
+    if (isAuthenticated) {
+      router.push("/profile");
+      return;
+    }
+
+    openAuth("/profile");
+  }, [isAuthenticated, openAuth, router]);
+
   const openCheckout = useCallback(() => {
     setIsDrawerOpen(false);
     setIsCheckoutOpen(true);
@@ -476,7 +488,10 @@ export default function MainNavbar() {
         <BrandLogo />
 
         <div className="flex items-center justify-end gap-1.5 justify-self-end sm:absolute sm:right-8 sm:gap-2">
-          <CaveShopLink />
+          <ProfileLink
+            isAuthenticated={isAuthenticated}
+            onClick={openProfile}
+          />
           <CartLink count={cartCount} onClick={openCartDrawer} />
         </div>
       </nav>

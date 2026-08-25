@@ -3,7 +3,7 @@ import {
   requireUser,
   signCheckoutPhoneToken,
 } from "@/lib/auth/session";
-import { verifyOtp } from "@/lib/auth/otpProvider";
+import { OtpTestPhoneNotAllowedError, verifyOtp } from "@/lib/auth/otpProvider";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -43,6 +43,10 @@ export async function POST(request) {
       }),
     });
   } catch (error) {
+    if (error instanceof OtpTestPhoneNotAllowedError) {
+      return failure(error.code, error.message, 403);
+    }
+
     return handleRouteError(error, "OTP_PHONE_VERIFY_FAILED");
   }
 }

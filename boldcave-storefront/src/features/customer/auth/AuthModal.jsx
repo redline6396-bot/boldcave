@@ -55,7 +55,10 @@ export default function AuthModal() {
         return;
       }
 
-      const availableHeight = Math.max(280, viewport.height - KEYBOARD_VIEWPORT_GAP * 2);
+      const availableHeight = Math.max(
+        280,
+        viewport.height - KEYBOARD_VIEWPORT_GAP * 2
+      );
 
       setKeyboardViewport({
         top: viewport.offsetTop + KEYBOARD_VIEWPORT_GAP,
@@ -79,6 +82,8 @@ export default function AuthModal() {
     return null;
   }
 
+  const isKeyboardOpen = Boolean(keyboardViewport);
+
   return (
     <>
       <button
@@ -91,12 +96,10 @@ export default function AuthModal() {
       <div
         className={[
           "fixed left-1/2 z-[141] flex w-[calc(100%_-_20px)] max-w-[760px] -translate-x-1/2 justify-center",
-          keyboardViewport
-            ? "items-start overflow-y-auto"
-            : "top-1/2 -translate-y-1/2",
+          isKeyboardOpen ? "items-start" : "top-1/2 -translate-y-1/2",
         ].join(" ")}
         style={
-          keyboardViewport
+          isKeyboardOpen
             ? {
                 top: `${keyboardViewport.top}px`,
                 maxHeight: `${keyboardViewport.maxHeight}px`,
@@ -111,6 +114,7 @@ export default function AuthModal() {
           redirectTo={redirectAfterAuth}
           onClose={closeAuth}
           compactMobile
+          keyboardOpen={isKeyboardOpen}
         />
       </div>
     </>

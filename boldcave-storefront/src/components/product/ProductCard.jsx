@@ -194,7 +194,7 @@ export default function ProductCard({ product }) {
         <button
           type="button"
           onClick={handleNavigate}
-          className="inline-block cursor-pointer text-[18px] font-semibold uppercase leading-none tracking-[0.08em] text-neutral-950 max-[450px]:text-[15px] max-[450px]:tracking-[0.055em] sm:text-[21px] sm:tracking-[0.09em]"
+          className="inline-block cursor-pointer text-[18px] font-semibold uppercase leading-none tracking-[0.08em] text-neutral-950 max-[450px]:text-[14px] max-[450px]:tracking-[0.05em] sm:text-[21px] sm:tracking-[0.09em]"
         >
           <span className="decoration-neutral-500 decoration-[0.75px] underline-offset-[5px] group-hover:underline">
             {product.name}
