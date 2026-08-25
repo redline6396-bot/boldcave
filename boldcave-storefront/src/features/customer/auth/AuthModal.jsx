@@ -95,7 +95,7 @@ export default function AuthModal() {
 
       <div
         className={[
-          "fixed left-1/2 z-[141] flex w-[calc(100%_-_20px)] max-w-[760px] -translate-x-1/2 justify-center",
+          "fixed left-1/2 z-[141] flex w-[calc(100vw_-_28px)] max-w-[760px] -translate-x-1/2 justify-center sm:w-[calc(100vw_-_40px)]",
           isKeyboardOpen ? "items-start" : "top-1/2 -translate-y-1/2",
         ].join(" ")}
         style={

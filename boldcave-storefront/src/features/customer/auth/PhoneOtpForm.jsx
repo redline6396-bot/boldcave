@@ -286,7 +286,7 @@ export default function PhoneOtpForm({
   return (
     <div
       ref={authCardRef}
-      className="auth-card relative isolate grid w-[min(760px,calc(100vw-32px))] max-w-[760px] overflow-hidden rounded-[16px] bg-[#171717] shadow-[0_18px_55px_rgba(0,0,0,0.26)] md:grid-cols-[44%_56%]"
+      className="auth-card relative isolate grid w-full max-w-[760px] overflow-hidden rounded-[16px] bg-[#171717] shadow-[0_18px_55px_rgba(0,0,0,0.26)] md:grid-cols-[44%_56%]"
       style={{ fontFamily: '"Helvetica Neue", Arial, sans-serif' }}
     >
       {onClose && (
@@ -331,7 +331,7 @@ export default function PhoneOtpForm({
               </div>
 
               <div className={phoneInputWrapClass}>
-                <span className="flex h-full shrink-0 items-center border-r border-neutral-300 px-3 text-[14px] font-medium text-neutral-800">
+                <span className="flex h-full shrink-0 items-center border-r border-neutral-300 px-3 text-[16px] font-medium text-neutral-800 md:text-[14px]">
                   +91
                 </span>
                 <input
@@ -349,7 +349,7 @@ export default function PhoneOtpForm({
                     if (error) setError("");
                   }}
                   placeholder="Enter Mobile Number"
-                  className="h-full min-w-0 flex-1 bg-white px-3.5 text-[14px] text-neutral-950 outline-none placeholder:text-neutral-400"
+                  className="h-full min-w-0 flex-1 bg-white px-3.5 text-[16px] text-neutral-950 outline-none placeholder:text-neutral-400 md:text-[14px]"
                 />
               </div>
 
@@ -490,14 +490,13 @@ export default function PhoneOtpForm({
 
         @media (max-width: 767px) {
           .auth-card {
-            width: min(440px, calc(100vw - 44px));
+            width: 100%;
             overflow-y: auto;
           }
         }
 
         @media (max-width: 420px) {
           .auth-card {
-            width: calc(100vw - 28px);
             border-radius: 14px;
           }
         }
