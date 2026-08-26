@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth/session";
 import { syncUserProfileFromCheckoutAddress } from "@/lib/auth/users";
 import { deductStock } from "@/lib/orders/pricing";
 import { verifyRazorpaySignature } from "@/lib/payments/razorpay";
-import { createShiprocketOrder } from "@/lib/shipping/shiprocket";
+import { syncShiprocketOrder } from "@/lib/shipping/shiprocket";
 import { isAcceptingOrders } from "@/lib/storeSettings";
 import Order from "@/models/Order";
 import RazorpayAttempt from "@/models/RazorpayAttempt";
@@ -157,34 +157,17 @@ export async function POST(request) {
       });
     }
 
-    try {
-      const shiprocketOrder = await createShiprocketOrder(order);
-      order.shiprocket = {
-        shiprocketOrderId: shiprocketOrder.order_id || shiprocketOrder.shiprocket_order_id,
-        shipmentId: shiprocketOrder.shipment_id,
-        awbCode: shiprocketOrder.awb_code,
-        courierName: shiprocketOrder.courier_name,
-        trackingUrl: shiprocketOrder.tracking_url,
-        shipmentStatus: shiprocketOrder.status,
-        syncStatus: "created",
-      };
-    } catch (error) {
-      order.shiprocket = {
-        syncStatus: error.message?.includes("not configured") ? "not_configured" : "failed",
-        lastError: error.message,
-      };
-    }
-
-    await order.save();
+    const shiprocketSync = await syncShiprocketOrder(order);
+    const finalOrder = shiprocketSync.order || order;
 
     claimedAttempt.status = "paid";
-    claimedAttempt.finalOrder = order._id;
+    claimedAttempt.finalOrder = finalOrder._id;
     claimedAttempt.razorpayPaymentId = body.razorpay_payment_id;
     claimedAttempt.razorpaySignature = body.razorpay_signature;
     claimedAttempt.failureReason = "";
     await claimedAttempt.save();
 
-    return success({ order });
+    return success({ order: finalOrder });
   } catch (error) {
     return handleRouteError(error, "RAZORPAY_VERIFY_FAILED");
   }

@@ -485,10 +485,13 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
         const invalid = shippingError.code === "INVALID_PINCODE";
 
         if (!invalid) {
-          const demoLocation = DEMO_PINCODES[pin] || {
-            city: candidate.city || "",
-            state: candidate.state || "",
-          };
+          const providerLocation = extractLocation(shippingError.details || {});
+          const demoLocation = providerLocation.city || providerLocation.state
+            ? providerLocation
+            : (DEMO_PINCODES[pin] || {
+                city: candidate.city || "",
+                state: candidate.state || "",
+              });
 
           const demoResult = {
             serviceable: true,
@@ -1263,12 +1266,6 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                     Privacy Policy
                   </Link>
                 </p>
-
-                {isAuthenticated && (
-                  <p className="mt-2 text-[10px] leading-4 text-[#6b7580]">
-                    Same as your verified account number? OTP will be skipped.
-                  </p>
-                )}
               </section>
             ) : (
               <>

@@ -10,6 +10,12 @@ const attemptItemSchema = new mongoose.Schema(
     quantity: { type: Number, required: true, min: 1 },
     unitPrice: { type: Number, required: true, min: 0 },
     mrp: { type: Number, min: 0 },
+    sku: { type: String, trim: true },
+    hsnCode: { type: String, trim: true },
+    weightKg: { type: Number, min: 0 },
+    lengthCm: { type: Number, min: 0 },
+    breadthCm: { type: Number, min: 0 },
+    heightCm: { type: Number, min: 0 },
     productType: { type: String, enum: ["product", "combo"], default: "product" },
     comboItems: {
       type: [
@@ -78,6 +84,24 @@ const razorpayAttemptSchema = new mongoose.Schema(
 
 razorpayAttemptSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 razorpayAttemptSchema.index({ user: 1, createdAt: -1 });
+
+const REQUIRED_ATTEMPT_ITEM_PATHS = [
+  "items.sku",
+  "items.hsnCode",
+  "items.weightKg",
+  "items.lengthCm",
+  "items.breadthCm",
+  "items.heightCm",
+];
+
+if (
+  mongoose.models.RazorpayAttempt &&
+  REQUIRED_ATTEMPT_ITEM_PATHS.some(
+    (path) => !mongoose.models.RazorpayAttempt.schema?.path(path)
+  )
+) {
+  delete mongoose.models.RazorpayAttempt;
+}
 
 const RazorpayAttempt =
   mongoose.models.RazorpayAttempt ||

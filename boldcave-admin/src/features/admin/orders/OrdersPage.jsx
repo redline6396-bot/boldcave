@@ -5,7 +5,8 @@ import { ChevronDown, ChevronUp, ExternalLink, Package, Search } from 'lucide-re
 import { NotificationContext } from '@/context/NotificationContext';
 import { api, formatDate, getErrorMessage, getId, money } from '@/lib/api';
 
-const ORDER_STATUSES = ['confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+const ORDER_STATUSES = ['confirmed', 'processing', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'cancelled'];
+const ADMIN_MANUAL_ORDER_STATUSES = ['confirmed', 'processing', 'cancelled'];
 const PAYMENT_STATUSES = ['pending', 'paid', 'failed', 'cod'];
 
 export default function OrdersPage() {
@@ -74,6 +75,20 @@ export default function OrdersPage() {
     }
   };
 
+  const retryShiprocketSync = async (order) => {
+    const id = getId(order);
+    try {
+      setBusyId(`shiprocket:${id}`);
+      const response = await api.post(`/api/admin/orders/${id}/shiprocket/retry`);
+      setOrders((current) => current.map((entry) => (getId(entry) === id ? response.data.data.order : entry)));
+      success(response.data.data.synced ? 'Shiprocket sync completed' : 'Shiprocket sync checked');
+    } catch (err) {
+      showError(getErrorMessage(err, 'Unable to retry Shiprocket sync'));
+    } finally {
+      setBusyId('');
+    }
+  };
+
   return (
     <div className='space-y-6'>
       <header>
@@ -94,7 +109,7 @@ export default function OrdersPage() {
           </label>
           <select value={status} onChange={(event) => setStatus(event.target.value)} className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'>
             <option value=''>All statuses</option>
-            {ORDER_STATUSES.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
+            {ORDER_STATUSES.map((entry) => <option key={entry} value={entry}>{displayValue(entry)}</option>)}
           </select>
           <select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)} className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'>
             <option value=''>All payments</option>
@@ -120,7 +135,7 @@ export default function OrdersPage() {
                   <div className='min-w-0'>
                     <div className='flex flex-wrap items-center gap-3'>
                       <p className='font-semibold text-gray-950'>{order.orderNumber || id}</p>
-                      <Badge>{order.orderStatus}</Badge>
+                      <Badge>{displayValue(order.orderStatus)}</Badge>
                       <Badge tone='muted'>{displayValue(order.payment?.method)} / {displayValue(order.payment?.paymentStatus)}</Badge>
                     </div>
                     <p className='mt-1 text-sm text-gray-500'>
@@ -159,8 +174,16 @@ export default function OrdersPage() {
                           disabled={busyId === id}
                           className='w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'
                         >
-                          {ORDER_STATUSES.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
+                          {!ADMIN_MANUAL_ORDER_STATUSES.includes(order.orderStatus) && (
+                            <option value={order.orderStatus}>
+                              {displayValue(order.orderStatus)} (Shiprocket)
+                            </option>
+                          )}
+                          {ADMIN_MANUAL_ORDER_STATUSES.map((entry) => <option key={entry} value={entry}>{displayValue(entry)}</option>)}
                         </select>
+                        <p className='mt-2 text-xs text-gray-500'>
+                          Shipped and delivery statuses update from Shiprocket.
+                        </p>
                       </div>
                     </div>
 
@@ -202,6 +225,16 @@ export default function OrdersPage() {
                       order.shiprocket?.shipmentStatus ? `Shipment Status: ${order.shiprocket.shipmentStatus}` : '',
                       order.shiprocket?.syncStatus ? `Sync: ${order.shiprocket.syncStatus}` : '',
                     ]} />
+                    {['failed', 'not_configured'].includes(order.shiprocket?.syncStatus) && !order.shiprocket?.shiprocketOrderId && !order.shiprocket?.shipmentId && (
+                      <button
+                        type='button'
+                        onClick={() => retryShiprocketSync(order)}
+                        disabled={busyId === `shiprocket:${id}`}
+                        className='inline-flex w-fit rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50'
+                      >
+                        {busyId === `shiprocket:${id}` ? 'Retrying...' : 'Retry Shiprocket Sync'}
+                      </button>
+                    )}
                     {order.shiprocket?.trackingUrl && (
                       <a href={order.shiprocket.trackingUrl} target='_blank' rel='noreferrer' className='inline-flex items-center gap-2 text-sm font-semibold text-black underline'>
                         Open tracking <ExternalLink size={15} />
@@ -223,7 +256,9 @@ function customerName(order) {
 }
 
 function displayValue(value) {
-  return value || '-';
+  return String(value || '-')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function itemsSummary(items = []) {

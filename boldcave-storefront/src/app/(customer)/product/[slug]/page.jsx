@@ -75,7 +75,8 @@ const getDisplayVariants = (variants) =>
   });
 
 const PRODUCT_TITLE_DESCRIPTOR = "EXTRAIT DE PARFUM";
-const COMBO_TITLE_DESCRIPTOR = "PERFUME COMBO";
+const BULLET = "\u2022";
+const MULTIPLY = "\u00d7";
 
 const DEFAULT_LEGAL_INFORMATION = {
   countryOfOrigin: "India",
@@ -87,13 +88,67 @@ const DEFAULT_HOW_TO_USE =
 const DEFAULT_STORAGE_PRECAUTIONS =
   "Store in a cool, dry place away from direct sunlight, excessive heat and moisture.";
 
-function getComboTotalVolume(comboItems = []) {
-  const totalMl = comboItems.reduce((total, item) => {
-    const match = String(item.size || item.variantId || "").match(/(\d+(?:\.\d+)?)\s*ml/i);
-    return match ? total + Number(match[1]) * (Number(item.quantity) || 1) : total;
-  }, 0);
+function parseVolumeMl(value) {
+  const match = String(value || "").match(/(\d+(?:\.\d+)?)\s*ml/i);
+  return match ? Number(match[1]) : 0;
+}
 
-  return totalMl > 0 ? `${totalMl} ML` : "";
+function getComboSetMetrics(comboItems = []) {
+  let totalQuantity = 0;
+  let totalMl = 0;
+  let knownVolumeQuantity = 0;
+  const sizeCounts = new Map();
+  const names = [];
+
+  comboItems.forEach((item) => {
+    const quantity = Math.max(1, Number(item?.quantity) || 1);
+    const size = String(item?.size || item?.variantId || "").trim();
+    const name = String(item?.name || "").trim();
+    const volumeMl = parseVolumeMl(size);
+
+    totalQuantity += quantity;
+    if (name) names.push(name);
+
+    if (!size) return;
+
+    const key = size.toLowerCase();
+    const current = sizeCounts.get(key) || { size, quantity: 0 };
+    current.quantity += quantity;
+    sizeCounts.set(key, current);
+
+    if (volumeMl > 0) {
+      knownVolumeQuantity += quantity;
+      totalMl += volumeMl * quantity;
+    }
+  });
+
+  const setIncludesLabel = `${totalQuantity} Perfume${totalQuantity === 1 ? "" : "s"}`;
+  const totalVolumeLabel = totalMl > 0 ? `${totalMl} ML` : "";
+  const hasCompleteVolume = totalQuantity > 0 && knownVolumeQuantity === totalQuantity;
+  const groups = Array.from(sizeCounts.values());
+  const sizeSummary =
+    groups.length === 1
+      ? `${groups[0].size} Each`
+      : groups.map((group) => `${group.quantity} ${MULTIPLY} ${group.size}`).join(" + ");
+  const compactSizeSummary =
+    groups.length === 1
+      ? `${groups[0].quantity} ${MULTIPLY} ${groups[0].size}`
+      : groups.map((group) => `${group.quantity} ${MULTIPLY} ${group.size}`).join(" + ");
+
+  const summaryParts = [setIncludesLabel];
+  if (sizeSummary) summaryParts.push(sizeSummary);
+  if (totalVolumeLabel && hasCompleteVolume) {
+    summaryParts.push(`${totalVolumeLabel} Total`);
+  }
+
+  return {
+    totalQuantity,
+    namesLabel: names.length ? names.join(` ${BULLET} `) : "Perfume Combo",
+    discoveryLabel: compactSizeSummary ? `Discovery Set ${BULLET} ${compactSizeSummary}` : "Discovery Set",
+    setIncludesLabel,
+    totalVolumeLabel: hasCompleteVolume ? totalVolumeLabel : "",
+    summaryLabel: summaryParts.filter(Boolean).join(` ${BULLET} `),
+  };
 }
 
 export default function ProductPage() {
@@ -259,6 +314,7 @@ export default function ProductPage() {
 
   const galleryImages = getProductImages(product, selectedVariant);
   const isCombo = product.productType === "combo";
+  const comboMetrics = isCombo ? getComboSetMetrics(product.comboItems) : null;
 
   const mobileThumbCount = 3;
   const maxMobileThumbStart = Math.max(
@@ -702,7 +758,14 @@ export default function ProductPage() {
           </div>
         </div>
 
-        <div className="mx-auto w-full max-w-[360px] min-w-0 bg-white pt-0 min-[600px]:mx-auto min-[600px]:w-full min-[600px]:max-w-[560px] min-[600px]:pt-2 min-[820px]:mx-0 min-[820px]:max-w-none min-[820px]:pt-1 lg:w-full lg:max-w-[460px] lg:justify-self-start">
+        <div
+          className={[
+            "mx-auto w-full min-w-0 bg-white pt-0 min-[600px]:mx-auto min-[600px]:w-full min-[600px]:pt-2 min-[820px]:mx-0 min-[820px]:max-w-none min-[820px]:pt-1 lg:w-full lg:justify-self-start",
+            isCombo
+              ? "max-w-[340px] min-[600px]:max-w-[500px] lg:max-w-[420px]"
+              : "max-w-[360px] min-[600px]:max-w-[560px] lg:max-w-[460px]",
+          ].join(" ")}
+        >
           <Link
             href={
               getAudienceTags(product)[0]
@@ -714,14 +777,36 @@ export default function ProductPage() {
             BOLD CAVE
           </Link>
 
-          <h1 className="mt-1 flex max-w-[460px] flex-wrap items-baseline gap-x-2 gap-y-0.5 text-neutral-950 min-[600px]:max-w-[560px] min-[600px]:gap-x-2.5 min-[820px]:max-w-[320px] min-[820px]:gap-x-2 lg:mt-2 lg:max-w-[460px]">
-            <span className="text-[34px] font-normal uppercase leading-none tracking-0 min-[600px]:text-[36px] min-[760px]:text-[40px] min-[820px]:text-[30px] lg:text-[44px]">
+          <h1
+            className={[
+              "mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-neutral-950 min-[600px]:gap-x-2.5 min-[820px]:gap-x-2 lg:mt-2",
+              isCombo
+                ? "max-w-[340px] min-[600px]:max-w-[500px] min-[820px]:max-w-[320px] lg:max-w-[420px]"
+                : "max-w-[460px] min-[600px]:max-w-[560px] min-[820px]:max-w-[320px] lg:max-w-[460px]",
+            ].join(" ")}
+          >
+            <span
+              className={[
+                "font-normal uppercase leading-none tracking-0",
+                isCombo
+                  ? "text-[28px] min-[600px]:text-[32px] min-[760px]:text-[34px] min-[820px]:text-[28px] lg:text-[38px]"
+                  : "text-[34px] min-[600px]:text-[36px] min-[760px]:text-[40px] min-[820px]:text-[30px] lg:text-[44px]",
+              ].join(" ")}
+            >
               {product.name}
             </span>
-            <span className="text-[10px] font-medium uppercase tracking-[0.20em] text-neutral-500 min-[600px]:text-[10px] min-[600px]:tracking-[0.20em] min-[760px]:text-[11px] min-[820px]:text-[8px] min-[820px]:tracking-[0.16em] lg:text-[12px] lg:tracking-[0.24em]">
-              - {isCombo ? COMBO_TITLE_DESCRIPTOR : PRODUCT_TITLE_DESCRIPTOR}
-            </span>
+            {!isCombo && (
+              <span className="text-[10px] font-medium uppercase tracking-[0.20em] text-neutral-500 min-[600px]:text-[10px] min-[600px]:tracking-[0.20em] min-[760px]:text-[11px] min-[820px]:text-[8px] min-[820px]:tracking-[0.16em] lg:text-[12px] lg:tracking-[0.24em]">
+                - {PRODUCT_TITLE_DESCRIPTOR}
+              </span>
+            )}
           </h1>
+
+          {isCombo && comboMetrics?.discoveryLabel && (
+            <p className="mt-2 text-[11px] font-medium uppercase leading-none tracking-[0.16em] text-neutral-500 min-[600px]:text-[11px] min-[820px]:text-[9px] lg:text-[12px]">
+              {comboMetrics.discoveryLabel}
+            </p>
+          )}
 
           <div className="min-h-[22px]">
             {reviewSummary && (
@@ -775,26 +860,17 @@ export default function ProductPage() {
 
           {isCombo ? (
             <div className="mt-4 border-t border-[#e8e2d9] pt-3.5 sm:mt-4 sm:pt-4 min-[600px]:mt-3 min-[600px]:pt-3 lg:mt-4 lg:pt-4">
-              <p className="text-[12px] font-normal uppercase leading-none tracking-[0.08em] text-neutral-800 sm:text-[13px] lg:text-[15px]">
-                What You Get
+              <p className="text-[11px] font-medium uppercase leading-none tracking-[0.14em] text-neutral-800 lg:text-[12px]">
+                The Set
               </p>
-              {product.whatYouGet && (
-                <p className="mt-2 whitespace-pre-line text-[13px] leading-6 text-neutral-600">
-                  {product.whatYouGet}
+              <p className="mt-2 max-w-[390px] text-[13px] font-normal uppercase leading-5 tracking-[0.06em] text-neutral-950 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] min-[600px]:text-[13px] min-[820px]:max-w-[320px] min-[820px]:text-[12px] lg:max-w-[420px] lg:text-[14px]">
+                {comboMetrics?.namesLabel || "Perfume Combo"}
+              </p>
+              {comboMetrics?.summaryLabel && (
+                <p className="mt-1.5 text-[12px] leading-5 text-neutral-500 min-[600px]:text-[12px] lg:text-[13px]">
+                  {comboMetrics.summaryLabel}
                 </p>
               )}
-              <div className="mt-3 space-y-2">
-                {(product.comboItems || []).map((item, index) => (
-                  <Link
-                    key={`${item.productId}-${item.variantId}-${index}`}
-                    href={item.slug ? `/product/${item.slug}` : "#"}
-                    className="flex items-center justify-between border border-neutral-200 px-3 py-2 text-[12px] uppercase tracking-[0.05em] text-neutral-800"
-                  >
-                    <span>{item.name || "Perfume"}</span>
-                    <span>{item.size || item.variantId} x {item.quantity}</span>
-                  </Link>
-                ))}
-              </div>
             </div>
           ) : (
             <div className="mt-4 border-t border-[#e8e2d9] pt-3.5 sm:mt-4 sm:pt-4 min-[600px]:mt-3 min-[600px]:pt-3 lg:mt-4 lg:pt-4">
@@ -813,7 +889,7 @@ export default function ProductPage() {
                       type="button"
                       onClick={() => setSelectedSize(variant.size)}
                       className={[
-                        "h-9 min-w-[94px] border px-3 text-[11px] font-medium uppercase tracking-[0.01em] transition-colors min-[600px]:h-11 min-[600px]:min-w-[126px] min-[600px]:px-5 min-[600px]:text-[11px] min-[820px]:h-10 min-[820px]:min-w-[108px] min-[820px]:px-4 min-[820px]:text-[11px] lg:h-11 lg:min-w-[126px] lg:text-[11px]",
+                        "h-9 min-w-[94px] border px-3 text-[11px] font-medium uppercase tracking-[0.01em] transition-colors min-[600px]:h-11 min-[600px]:min-w-[126px] min-[600px]:px-5 min-[600px]:text-[11px] min-[820px]:h-10 min-[820px]:min-w-[108px] min-[820px]:px-4 min-[820px]:text-[11px] lg:h-10 lg:min-w-[112px] lg:px-4 lg:text-[13px]",
                         selected
                           ? "border-neutral-950 bg-neutral-950 text-white"
                           : "border-neutral-300 bg-white text-neutral-950 hover:border-neutral-950",
@@ -927,7 +1003,7 @@ function ProductInfoDetails({ product, selectedVariant }) {
   const audienceTags = getAudienceTags(product);
   const howToUse = product.howToUse || DEFAULT_HOW_TO_USE;
   const storagePrecautions = product.storagePrecautions || DEFAULT_STORAGE_PRECAUTIONS;
-  const comboTotalVolume = getComboTotalVolume(product.comboItems);
+  const comboMetrics = isCombo ? getComboSetMetrics(product.comboItems) : null;
 
   const handleShare = async () => {
     const shareData = {
@@ -980,8 +1056,10 @@ function ProductInfoDetails({ product, selectedVariant }) {
         {isCombo ? (
           <>
             <DetailRow label="Product Type" value="Perfume Combo" />
-            <DetailRow label="Set Includes" value={`${product.comboItems?.length || 0} Perfumes`} />
-            {comboTotalVolume && <DetailRow label="Total Volume" value={comboTotalVolume} />}
+            <DetailRow label="Set Includes" value={comboMetrics?.setIncludesLabel || "Not available"} />
+            {comboMetrics?.totalVolumeLabel && (
+              <DetailRow label="Total Volume" value={comboMetrics.totalVolumeLabel} />
+            )}
           </>
         ) : (
           <>
@@ -1006,7 +1084,6 @@ function ProductInfoDetails({ product, selectedVariant }) {
         )}
         <p className="pt-1 font-medium text-neutral-950">Why you&apos;ll love it:</p>
         <ul className="space-y-2 pl-5 sm:space-y-2.5 lg:space-y-3">
-          {isCombo && product.whatYouGet && <li className="list-disc whitespace-pre-line">{product.whatYouGet}</li>}
           {!isCombo && product.fragranceProfile && <li className="list-disc">{product.fragranceProfile}</li>}
           {product.bestFor?.length > 0 && (
             <li className="list-disc">
@@ -1021,31 +1098,34 @@ function ProductInfoDetails({ product, selectedVariant }) {
         </ul>
       </div>
 
+      {isCombo && product.comboItems?.length > 0 && (
+        <div className="mt-6 max-w-[520px] sm:mt-7 lg:mt-8">
+          <h3 className="text-[12px] font-medium uppercase leading-none tracking-[0.14em] text-neutral-950">
+            Included Perfumes
+          </h3>
+          <div className="mt-3 divide-y divide-neutral-200 border-y border-neutral-200">
+            {product.comboItems.map((item, index) => (
+              <Link
+                key={`${item.productId}-${item.variantId}-${index}`}
+                href={item.slug ? `/product/${item.slug}` : "#"}
+                className="flex items-center justify-between gap-4 py-2.5 text-[12px] uppercase tracking-[0.04em] text-neutral-800 transition-colors hover:text-neutral-950"
+              >
+                <span className="min-w-0 truncate">{item.name || "Perfume"}</span>
+                <span className="shrink-0 text-right text-[11px] font-medium text-neutral-600">
+                  {item.size || item.variantId} {MULTIPLY} {item.quantity}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-6 border border-[#e5dfd6] sm:mt-7 lg:mt-9">
         <Accordion title="DESCRIPTION">
           <p>{product.description}</p>
         </Accordion>
 
-        {isCombo ? (
-          <Accordion title="WHAT YOU GET">
-            <div className="grid gap-4">
-              {(product.comboItems || []).map((item, index) => (
-                <div key={`${item.productId}-${item.variantId}-${index}`}>
-                  <Link
-                    href={item.slug ? `/product/${item.slug}` : "#"}
-                    className="text-[13px] font-semibold uppercase tracking-[0.1em] text-neutral-950 underline-offset-4 hover:underline"
-                  >
-                    {item.name || "Perfume"}
-                  </Link>
-                  <p className="mt-1 text-[13px] leading-6 text-neutral-600">
-                    {item.size || item.variantId} x {item.quantity}
-                    {item.fragranceProfile ? ` - ${item.fragranceProfile}` : ""}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </Accordion>
-        ) : (
+        {!isCombo && (
           <Accordion title="FRAGRANCE NOTES">
             <div className="grid gap-5">
               <NoteGroup title="Top Notes" notes={product.fragranceNotes?.top} />

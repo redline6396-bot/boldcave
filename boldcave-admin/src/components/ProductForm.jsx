@@ -13,6 +13,10 @@ const blankVariant = (size = '') => ({
   costPrice: '',
   stock: '',
   sku: '',
+  weightKg: '',
+  lengthCm: '',
+  breadthCm: '',
+  heightCm: '',
   image: null,
   imagesText: '',
 });
@@ -27,6 +31,7 @@ const emptyForm = {
   featuredOrder: 0,
   shortDescription: '',
   description: '',
+  hsnCode: '',
   imagesText: '',
   fragranceProfile: '',
   longevity: '',
@@ -38,6 +43,11 @@ const emptyForm = {
   comboMrp: '',
   comboSellingPrice: '',
   comboCostPrice: '',
+  comboSku: '',
+  comboWeightKg: '',
+  comboLengthCm: '',
+  comboBreadthCm: '',
+  comboHeightCm: '',
   comboItems: [{ productId: '', variantId: '', quantity: 1 }],
   bestFor: '',
   bestSeason: '',
@@ -79,6 +89,29 @@ function generateSku(value, size) {
   return `${base}-${sizeCode}`;
 }
 
+function comboItemKey(item) {
+  return `${item.productId || ''}:${String(item.variantId || '').trim().toLowerCase()}`;
+}
+
+function positiveNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function hasShippingMetadata(item) {
+  return (
+    String(item.sku || '').trim() &&
+    positiveNumber(item.weightKg) > 0 &&
+    positiveNumber(item.lengthCm) > 0 &&
+    positiveNumber(item.breadthCm) > 0 &&
+    positiveNumber(item.heightCm) > 0
+  );
+}
+
+function isNumericString(value) {
+  return /^\d+$/.test(String(value || '').trim());
+}
+
 function imageUrlsFromImages(images = []) {
   return (Array.isArray(images) ? images : [])
     .map((image) => image?.url || image)
@@ -98,6 +131,7 @@ function formFromProduct(product) {
     featuredOrder: Number(product.featuredOrder) || 0,
     shortDescription: product.shortDescription || '',
     description: product.description || '',
+    hsnCode: product.hsnCode || '',
     imagesText: imageUrlsFromImages(product.images).join('\n'),
     fragranceProfile: product.fragranceProfile || '',
     longevity: product.longevity || '',
@@ -109,6 +143,11 @@ function formFromProduct(product) {
     comboMrp: product.productType === 'combo' ? product.variants?.[0]?.mrp ?? '' : '',
     comboSellingPrice: product.productType === 'combo' ? product.variants?.[0]?.sellingPrice ?? '' : '',
     comboCostPrice: product.productType === 'combo' ? product.variants?.[0]?.costPrice ?? '' : '',
+    comboSku: product.productType === 'combo' ? product.variants?.[0]?.sku ?? '' : '',
+    comboWeightKg: product.productType === 'combo' ? product.variants?.[0]?.weightKg ?? '' : '',
+    comboLengthCm: product.productType === 'combo' ? product.variants?.[0]?.lengthCm ?? '' : '',
+    comboBreadthCm: product.productType === 'combo' ? product.variants?.[0]?.breadthCm ?? '' : '',
+    comboHeightCm: product.productType === 'combo' ? product.variants?.[0]?.heightCm ?? '' : '',
     comboItems: product.comboItems?.length
       ? product.comboItems.map((item) => ({
           productId: item.productId || '',
@@ -135,6 +174,10 @@ function formFromProduct(product) {
         costPrice: variant.costPrice ?? '',
         stock: variant.stock ?? '',
         sku: variant.sku ?? '',
+        weightKg: variant.weightKg ?? '',
+        lengthCm: variant.lengthCm ?? '',
+        breadthCm: variant.breadthCm ?? '',
+        heightCm: variant.heightCm ?? '',
         image: variant.image || null,
         imagesText: (variantImages.length ? variantImages : legacyVariantImage).join('\n'),
       };
@@ -474,11 +517,39 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
       if (comboItems.some((item) => !item.productId || !item.variantId || item.quantity < 1)) {
         throw new Error('Each included product needs product, size and quantity');
       }
+      const comboItemKeys = comboItems.map(comboItemKey);
+      if (comboItemKeys.length !== new Set(comboItemKeys).size) {
+        throw new Error('Duplicate included product and size entries are not allowed');
+      }
       if (Number(form.comboMrp) <= 0 || Number(form.comboSellingPrice) <= 0) {
         throw new Error('MRP and selling price must be greater than zero');
       }
+      if (Number(form.comboMrp) < Number(form.comboSellingPrice)) {
+        throw new Error('MRP must be greater than or equal to selling price');
+      }
       if (Number(form.comboCostPrice || 0) < 0) {
         throw new Error('Cost price cannot be negative');
+      }
+      const comboShipping = {
+        sku: String(form.comboSku || generateSku(form.slug || form.name, 'COMBO')).trim(),
+        weightKg: positiveNumber(form.comboWeightKg),
+        lengthCm: positiveNumber(form.comboLengthCm),
+        breadthCm: positiveNumber(form.comboBreadthCm),
+        heightCm: positiveNumber(form.comboHeightCm),
+      };
+      if ([
+        comboShipping.weightKg,
+        comboShipping.lengthCm,
+        comboShipping.breadthCm,
+        comboShipping.heightCm,
+      ].some((value) => value < 0)) {
+        throw new Error('Combo shipping weight and dimensions cannot be negative');
+      }
+      if (form.hsnCode && !isNumericString(form.hsnCode)) {
+        throw new Error('HSN Code must contain numbers only');
+      }
+      if (form.status === 'published' && (!hasShippingMetadata(comboShipping) || !String(form.hsnCode || '').trim())) {
+        throw new Error('Published combos need Combo SKU, HSN Code, weight and dimensions');
       }
 
       const uploadedImages = [];
@@ -494,15 +565,21 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
         status: form.status,
         featured: form.featured,
         featuredOrder: form.featuredOrder,
+        hsnCode: form.hsnCode,
         shortDescription: form.shortDescription,
         description: form.description,
         images: [...urlImages.map((url) => ({ url })), ...uploadedImages],
-        whatYouGet: form.whatYouGet,
+        whatYouGet: '',
         positioning: form.positioning,
         bestFor: csv(form.bestFor),
         mrp: Number(form.comboMrp),
         sellingPrice: Number(form.comboSellingPrice),
         costPrice: Number(form.comboCostPrice || 0),
+        sku: comboShipping.sku,
+        weightKg: comboShipping.weightKg,
+        lengthCm: comboShipping.lengthCm,
+        breadthCm: comboShipping.breadthCm,
+        heightCm: comboShipping.heightCm,
         comboItems,
       };
     }
@@ -518,6 +595,10 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
         sku:
           String(variant.sku || '').trim() ||
           generateSku(form.slug || form.name, variant.size),
+        weightKg: positiveNumber(variant.weightKg),
+        lengthCm: positiveNumber(variant.lengthCm),
+        breadthCm: positiveNumber(variant.breadthCm),
+        heightCm: positiveNumber(variant.heightCm),
       }));
 
     if (selectedVariants.length === 0) throw new Error('Add at least one variant');
@@ -533,6 +614,27 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
     }
     if (selectedVariants.some((variant) => variant.stock < 0 || variant.costPrice < 0)) {
       throw new Error('Stock and cost price cannot be negative');
+    }
+    if (
+      selectedVariants.some(
+        (variant) =>
+          variant.weightKg < 0 ||
+          variant.lengthCm < 0 ||
+          variant.breadthCm < 0 ||
+          variant.heightCm < 0
+      )
+    ) {
+      throw new Error('Shipping weight and dimensions cannot be negative');
+    }
+    if (form.hsnCode && !isNumericString(form.hsnCode)) {
+      throw new Error('HSN Code must contain numbers only');
+    }
+    if (
+      form.status === 'published' &&
+      (!String(form.hsnCode || '').trim() ||
+        selectedVariants.some((variant) => Number(variant.stock) > 0 && !hasShippingMetadata(variant)))
+    ) {
+      throw new Error('Published orderable variants need SKU, HSN Code, weight and dimensions');
     }
 
     const variantsWithImages = [];
@@ -566,6 +668,7 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
       status: form.status,
       featured: form.featured,
       featuredOrder: form.featuredOrder,
+      hsnCode: form.hsnCode,
       shortDescription: form.shortDescription,
       description: form.description,
       images: product ? urlImages.map((url) => ({ url })) : [],
@@ -682,21 +785,13 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
             required
           />
           {isCombo && (
-            <>
-              <Textarea
-                label='What You Get'
-                value={form.whatYouGet}
-                onChange={(value) => setField('whatYouGet', value)}
-                placeholder={'VERTEX 10 ML x 1\nNOIR 10 ML x 1\nBLUE 10 ML x 1'}
-              />
-              <Field
-                label='Best For / Positioning'
-                helper='Simple customer-facing positioning. Separate multiple values with commas if needed.'
-                value={form.bestFor}
-                onChange={(value) => setField('bestFor', value)}
-                placeholder='Gifting, Travel & Discovery'
-              />
-            </>
+            <Field
+              label='Best For / Positioning'
+              helper='Simple customer-facing positioning. Separate multiple values with commas if needed.'
+              value={form.bestFor}
+              onChange={(value) => setField('bestFor', value)}
+              placeholder='Gifting, Travel & Discovery'
+            />
           )}
         </div>
       </section>
@@ -786,6 +881,25 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
       )}
 
       {isCombo && (
+        <section className='rounded border border-gray-200 bg-white p-5'>
+          <h2 className='mb-4 font-semibold text-gray-950'>Shipping Metadata</h2>
+          <div className='grid gap-4 md:grid-cols-3'>
+            <Field
+              label='Combo SKU'
+              helper='Business SKU sent to Shiprocket.'
+              value={form.comboSku || generateSku(form.slug || form.name, 'COMBO')}
+              onChange={(value) => setField('comboSku', value)}
+              placeholder='DISCOVERY-COMBO'
+            />
+            <Field label='Weight (kg)' type='number' value={form.comboWeightKg} onChange={(value) => setField('comboWeightKg', value)} placeholder='0.5' />
+            <Field label='Length (cm)' type='number' value={form.comboLengthCm} onChange={(value) => setField('comboLengthCm', value)} placeholder='12' />
+            <Field label='Breadth (cm)' type='number' value={form.comboBreadthCm} onChange={(value) => setField('comboBreadthCm', value)} placeholder='10' />
+            <Field label='Height (cm)' type='number' value={form.comboHeightCm} onChange={(value) => setField('comboHeightCm', value)} placeholder='8' />
+          </div>
+        </section>
+      )}
+
+      {isCombo && (
         <ImageManager
           title='Images'
           imagesText={form.imagesText}
@@ -836,6 +950,12 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
                   onChange={(value) => setVariant(index, 'sku', value)}
                   placeholder='NOIR-50ML'
                 />
+              </div>
+              <div className='mt-3 grid gap-3 md:grid-cols-4'>
+                <Field label='Weight (kg)' type='number' value={variant.weightKg} onChange={(value) => setVariant(index, 'weightKg', value)} placeholder='0.2' />
+                <Field label='Length (cm)' type='number' value={variant.lengthCm} onChange={(value) => setVariant(index, 'lengthCm', value)} placeholder='6' />
+                <Field label='Breadth (cm)' type='number' value={variant.breadthCm} onChange={(value) => setVariant(index, 'breadthCm', value)} placeholder='6' />
+                <Field label='Height (cm)' type='number' value={variant.heightCm} onChange={(value) => setVariant(index, 'heightCm', value)} placeholder='14' />
               </div>
               <div className='mt-4'>
                 <ImageManager
@@ -956,6 +1076,13 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
       <section className='rounded border border-gray-200 bg-white p-5'>
         <h2 className='mb-4 font-semibold text-gray-950'>Product Information / Legal</h2>
         <div className='grid gap-4 md:grid-cols-2'>
+          <Field
+            label='HSN Code'
+            helper='Numeric tax classification sent to Shiprocket.'
+            value={form.hsnCode}
+            onChange={(value) => setField('hsnCode', value)}
+            placeholder='330300'
+          />
           <Textarea
             label='Ingredients'
             value={form.ingredients}

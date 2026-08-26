@@ -1,6 +1,10 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
-import { getTrackingByAwb } from "@/lib/shipping/shiprocket";
+import {
+  applyShiprocketStatusToOrder,
+  getStatusFromTracking,
+  getTrackingByAwb,
+} from "@/lib/shipping/shiprocket";
 import Order from "@/models/Order";
 
 export const runtime = "nodejs";
@@ -22,7 +26,9 @@ export async function POST(request) {
     const limit = Math.min(Number(body.limit) || 25, 100);
     const orders = await Order.find({
       "shiprocket.awbCode": { $exists: true, $ne: "" },
-      orderStatus: { $in: ["confirmed", "processing", "shipped"] },
+      orderStatus: {
+        $in: ["confirmed", "processing", "shipped", "in_transit", "out_for_delivery"],
+      },
     }).limit(limit);
 
     let updated = 0;
@@ -31,12 +37,11 @@ export async function POST(request) {
     for (const order of orders) {
       try {
         const tracking = await getTrackingByAwb(order.shiprocket.awbCode);
-        const status =
-          tracking?.tracking_data?.shipment_track?.[0]?.current_status ||
-          tracking?.tracking_data?.track_status ||
-          order.shiprocket.shipmentStatus;
+        const status = getStatusFromTracking(tracking) || order.shiprocket.shipmentStatus;
 
         order.shiprocket.shipmentStatus = status;
+        order.shiprocket.lastSyncedAt = new Date();
+        applyShiprocketStatusToOrder(order, status);
         await order.save();
         updated += 1;
       } catch (error) {

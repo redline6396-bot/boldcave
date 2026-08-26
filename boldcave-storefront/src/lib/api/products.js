@@ -180,6 +180,7 @@ export function serializeProduct(product, { includeCostPrice = false } = {}) {
       : [],
     shortDescription: object.shortDescription || "",
     description: object.description || "",
+    hsnCode: object.hsnCode || "",
     featured: Boolean(object.featured),
     featuredOrder: Number(object.featuredOrder) || 0,
     images: (object.images || []).map((image) =>
@@ -191,7 +192,7 @@ export function serializeProduct(product, { includeCostPrice = false } = {}) {
     concentration: object.concentration || "",
     personality: object.personality || "",
     positioning: object.positioning || "",
-    whatYouGet: object.whatYouGet || "",
+    whatYouGet: isCombo ? "" : object.whatYouGet || "",
     bestFor: object.bestFor || [],
     bestSeason: object.bestSeason || [],
     howToUse: object.howToUse || "",
@@ -208,6 +209,10 @@ export function serializeProduct(product, { includeCostPrice = false } = {}) {
         mrp: variant.mrp,
         stock: isCombo ? Number(object.comboAvailability) || 0 : variant.stock,
         sku: variant.sku,
+        weightKg: Number(variant.weightKg) || 0,
+        lengthCm: Number(variant.lengthCm) || 0,
+        breadthCm: Number(variant.breadthCm) || 0,
+        heightCm: Number(variant.heightCm) || 0,
         image: isCombo ? undefined : serializeImage(variant.image),
         images: isCombo ? [] : variantImages,
       };

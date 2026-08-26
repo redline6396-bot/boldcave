@@ -5,7 +5,15 @@ export const ORDER_STATUSES = [
   "confirmed",
   "processing",
   "shipped",
+  "in_transit",
+  "out_for_delivery",
   "delivered",
+  "cancelled",
+];
+
+export const ADMIN_MANUAL_ORDER_STATUSES = [
+  "confirmed",
+  "processing",
   "cancelled",
 ];
 

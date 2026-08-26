@@ -10,6 +10,12 @@ const orderItemSchema = new mongoose.Schema(
     quantity: { type: Number, required: true, min: 1 },
     unitPrice: { type: Number, required: true, min: 0 },
     mrp: { type: Number, min: 0 },
+    sku: { type: String, trim: true },
+    hsnCode: { type: String, trim: true },
+    weightKg: { type: Number, min: 0 },
+    lengthCm: { type: Number, min: 0 },
+    breadthCm: { type: Number, min: 0 },
+    heightCm: { type: Number, min: 0 },
     productType: { type: String, enum: ["product", "combo"], default: "product" },
     comboItems: {
       type: [
@@ -74,7 +80,15 @@ const orderSchema = new mongoose.Schema(
     },
     orderStatus: {
       type: String,
-      enum: ["confirmed", "processing", "shipped", "delivered", "cancelled"],
+      enum: [
+        "confirmed",
+        "processing",
+        "shipped",
+        "in_transit",
+        "out_for_delivery",
+        "delivered",
+        "cancelled",
+      ],
       default: "confirmed",
       index: true,
     },
@@ -87,10 +101,13 @@ const orderSchema = new mongoose.Schema(
       shipmentStatus: { type: String },
       syncStatus: {
         type: String,
-        enum: ["not_configured", "pending", "created", "failed"],
+        enum: ["not_configured", "pending", "syncing", "created", "failed"],
         default: "pending",
       },
       lastError: { type: String },
+      lastAttemptAt: { type: Date },
+      lastSyncedAt: { type: Date },
+      syncStartedAt: { type: Date },
     },
   },
   { timestamps: true }
@@ -99,6 +116,22 @@ const orderSchema = new mongoose.Schema(
 orderSchema.index({ user: 1, createdAt: -1 });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ orderStatus: 1, createdAt: -1 });
+
+const REQUIRED_ORDER_ITEM_PATHS = [
+  "items.sku",
+  "items.hsnCode",
+  "items.weightKg",
+  "items.lengthCm",
+  "items.breadthCm",
+  "items.heightCm",
+];
+
+if (
+  mongoose.models.Order &&
+  REQUIRED_ORDER_ITEM_PATHS.some((path) => !mongoose.models.Order.schema?.path(path))
+) {
+  delete mongoose.models.Order;
+}
 
 const Order = mongoose.models.Order || mongoose.model("Order", orderSchema);
 

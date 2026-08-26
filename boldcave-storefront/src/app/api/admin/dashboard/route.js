@@ -18,6 +18,8 @@ const ORDER_STATUSES = [
   "confirmed",
   "processing",
   "shipped",
+  "in_transit",
+  "out_for_delivery",
   "delivered",
   "cancelled",
 ];

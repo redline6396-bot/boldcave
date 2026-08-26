@@ -7,6 +7,7 @@ import {
 import { checkoutProfileFromAddress } from "@/lib/auth/users";
 import { calculateCart, generateOrderNumber, validateAddress } from "@/lib/orders/pricing";
 import { createRazorpayOrder } from "@/lib/payments/razorpay";
+import { validateCheckoutServiceability } from "@/lib/shipping/shiprocket";
 import { isAcceptingOrders } from "@/lib/storeSettings";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
 import RazorpayAttempt from "@/models/RazorpayAttempt";
@@ -70,6 +71,20 @@ export async function POST(request) {
 
     if (cart.error) {
       return failure(cart.error.code, cart.error.message, cart.error.status, cart.error.details);
+    }
+
+    const serviceability = await validateCheckoutServiceability({
+      deliveryPincode: deliveryAddress.pincode,
+      cod: false,
+    });
+
+    if (!serviceability.ok) {
+      return failure(
+        serviceability.code,
+        serviceability.message,
+        serviceability.status,
+        { retryable: serviceability.retryable }
+      );
     }
 
     const orderNumber = generateOrderNumber();

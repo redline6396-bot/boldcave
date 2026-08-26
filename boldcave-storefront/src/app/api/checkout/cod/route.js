@@ -14,7 +14,10 @@ import {
   generateOrderNumber,
   validateAddress,
 } from "@/lib/orders/pricing";
-import { createShiprocketOrder } from "@/lib/shipping/shiprocket";
+import {
+  syncShiprocketOrder,
+  validateCheckoutServiceability,
+} from "@/lib/shipping/shiprocket";
 import { isAcceptingOrders } from "@/lib/storeSettings";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
 import Order from "@/models/Order";
@@ -80,6 +83,20 @@ export async function POST(request) {
       return failure(cart.error.code, cart.error.message, cart.error.status, cart.error.details);
     }
 
+    const serviceability = await validateCheckoutServiceability({
+      deliveryPincode: deliveryAddress.pincode,
+      cod: true,
+    });
+
+    if (!serviceability.ok) {
+      return failure(
+        serviceability.code,
+        serviceability.message,
+        serviceability.status,
+        { retryable: serviceability.retryable }
+      );
+    }
+
     try {
       await deductStock(cart.items);
     } catch (error) {
@@ -128,27 +145,9 @@ export async function POST(request) {
       });
     }
 
-    try {
-      const shiprocketOrder = await createShiprocketOrder(order);
-      order.shiprocket = {
-        shiprocketOrderId: shiprocketOrder.order_id || shiprocketOrder.shiprocket_order_id,
-        shipmentId: shiprocketOrder.shipment_id,
-        awbCode: shiprocketOrder.awb_code,
-        courierName: shiprocketOrder.courier_name,
-        trackingUrl: shiprocketOrder.tracking_url,
-        shipmentStatus: shiprocketOrder.status,
-        syncStatus: "created",
-      };
-      await order.save();
-    } catch (error) {
-      order.shiprocket = {
-        syncStatus: error.message?.includes("not configured") ? "not_configured" : "failed",
-        lastError: error.message,
-      };
-      await order.save();
-    }
+    const shiprocketSync = await syncShiprocketOrder(order);
 
-    return success({ order }, 201);
+    return success({ order: shiprocketSync.order || order }, 201);
   } catch (error) {
     return handleRouteError(error, "COD_CHECKOUT_FAILED");
   }

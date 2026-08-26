@@ -1,7 +1,11 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, success } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
-import { getTrackingByAwb } from "@/lib/shipping/shiprocket";
+import {
+  applyShiprocketStatusToOrder,
+  getStatusFromTracking,
+  getTrackingByAwb,
+} from "@/lib/shipping/shiprocket";
 import { isObjectId } from "@/lib/validation";
 import Order from "@/models/Order";
 
@@ -35,11 +39,18 @@ export async function GET(request) {
     }
 
     const tracking = await getTrackingByAwb(order.shiprocket.awbCode);
+    const status = getStatusFromTracking(tracking) || order.shiprocket.shipmentStatus;
+    order.shiprocket.shipmentStatus = status;
+    order.shiprocket.lastSyncedAt = new Date();
+    applyShiprocketStatusToOrder(order, status);
+    await order.save();
+
     return success({
       available: true,
       awbCode: order.shiprocket.awbCode,
       trackingUrl: order.shiprocket.trackingUrl,
       status: order.shiprocket.shipmentStatus,
+      orderStatus: order.orderStatus,
       tracking,
     });
   } catch (error) {

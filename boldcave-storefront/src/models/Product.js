@@ -28,6 +28,10 @@ const variantSchema = new mongoose.Schema(
     costPrice: { type: Number, required: true, min: 0 },
     stock: { type: Number, required: true, min: 0 },
     sku: { type: String, trim: true },
+    weightKg: { type: Number, min: 0, default: 0 },
+    lengthCm: { type: Number, min: 0, default: 0 },
+    breadthCm: { type: Number, min: 0, default: 0 },
+    heightCm: { type: Number, min: 0, default: 0 },
     image: { type: imageSchema, default: undefined },
     images: { type: [imageSchema], default: [] },
   },
@@ -56,6 +60,7 @@ const productSchema = new mongoose.Schema(
     audienceTags: [{ type: String, enum: PRODUCT_CATEGORIES, trim: true }],
     shortDescription: { type: String, trim: true },
     description: { type: String, required: true, trim: true },
+    hsnCode: { type: String, trim: true },
     images: { type: [imageSchema], default: [] },
     fragranceProfile: { type: String, trim: true },
     longevity: { type: String, trim: true },
@@ -103,6 +108,8 @@ if (
   (mongoose.models.Product && !mongoose.models.Product.schema?.path("productType")) ||
   (mongoose.models.Product && !mongoose.models.Product.schema?.path("variants.image")) ||
   (mongoose.models.Product && !mongoose.models.Product.schema?.path("variants.images")) ||
+  (mongoose.models.Product && !mongoose.models.Product.schema?.path("variants.weightKg")) ||
+  (mongoose.models.Product && !mongoose.models.Product.schema?.path("hsnCode")) ||
   (mongoose.models.Product && !mongoose.models.Product.schema?.path("featured")) ||
   (mongoose.models.Product && !mongoose.models.Product.schema?.path("featuredOrder"))
 ) {

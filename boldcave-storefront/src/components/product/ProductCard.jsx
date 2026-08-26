@@ -21,6 +21,8 @@ const formatPrice = (value) =>
   }).format(Number(value) || 0);
 
 const formatRupees = (value) => `${CURRENCY} ${formatPrice(value)}`;
+const BULLET = "\u2022";
+const MULTIPLY = "\u00d7";
 
 const normalizeSize = (size) =>
   String(size || "")
@@ -43,6 +45,42 @@ const getDisplayVariants = (variants) =>
     if (isDefaultSize(rightVariant)) return 1;
     return 0;
   });
+
+const getComboNamesLine = (comboItems = []) => {
+  const names = comboItems
+    .map((item) => String(item?.name || "").trim())
+    .filter(Boolean);
+
+  return names.length ? names.join(` ${BULLET} `) : "Perfume Combo";
+};
+
+const getComboSizeSummary = (comboItems = []) => {
+  const sizeCounts = new Map();
+  let totalQuantity = 0;
+
+  comboItems.forEach((item) => {
+    const quantity = Math.max(1, Number(item?.quantity) || 1);
+    const size = String(item?.size || item?.variantId || "").trim();
+    totalQuantity += quantity;
+    if (!size) return;
+
+    const key = size.toLowerCase();
+    const current = sizeCounts.get(key) || { size, quantity: 0 };
+    current.quantity += quantity;
+    sizeCounts.set(key, current);
+  });
+
+  if (!totalQuantity) return "";
+
+  const groups = Array.from(sizeCounts.values());
+  if (!groups.length) {
+    return `${totalQuantity} perfume${totalQuantity === 1 ? "" : "s"}`;
+  }
+
+  return groups
+    .map((group) => `${group.quantity} ${MULTIPLY} ${group.size}`)
+    .join(" + ");
+};
 
 export default function ProductCard({ product }) {
   const router = useRouter();
@@ -101,15 +139,11 @@ export default function ProductCard({ product }) {
   const hasHoverImage = Boolean(hoverImage);
   const productUrl = `/product/${product.slug}`;
 
-  const profileLine = isCombo
-    ? product.whatYouGet ||
-      `Includes ${(product.comboItems || [])
-        .map((item) => item.name)
-        .filter(Boolean)
-        .slice(0, 3)
-        .join(", ")}`
-    : product.fragranceNotes?.top?.slice(0, 3).join(" | ") ||
-      product.fragranceProfile;
+  const profileLine =
+    product.fragranceNotes?.top?.slice(0, 3).join(" | ") ||
+    product.fragranceProfile;
+  const comboNamesLine = isCombo ? getComboNamesLine(product.comboItems) : "";
+  const comboSizeSummary = isCombo ? getComboSizeSummary(product.comboItems) : "";
 
   const handleNavigate = () => {
     router.push(productUrl);
@@ -151,7 +185,7 @@ export default function ProductCard({ product }) {
             src={productImage}
             alt={product.name}
             className={[
-              "absolute inset-0 h-full w-full object-contain transition-opacity duration-200",
+              "absolute inset-0 h-full w-full object-contain transition-[opacity,transform] duration-300 ease-out group-hover:scale-[1.025]",
               hasHoverImage
                 ? "opacity-100 group-hover:opacity-0"
                 : "opacity-100",
@@ -170,7 +204,7 @@ export default function ProductCard({ product }) {
             <img
               src={hoverImage}
               alt={`${product.name} alternate view`}
-              className="absolute inset-0 h-full w-full object-contain opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+              className="absolute inset-0 h-full w-full object-contain opacity-0 transition-[opacity,transform] duration-300 ease-out group-hover:scale-[1.025] group-hover:opacity-100"
               style={{
                 filter: isSelectedOutOfStock ? "grayscale(45%)" : undefined,
               }}
@@ -211,9 +245,22 @@ export default function ProductCard({ product }) {
           </p>
         )}
 
-        <p className="mt-2 truncate text-[12px] font-normal leading-normal text-neutral-500 max-[450px]:mt-2 max-[450px]:text-[11px] max-[410px]:text-[9px] sm:mt-2.5 sm:text-[13px] sm:tracking-[0.01em]">
-          {profileLine}
-        </p>
+        {isCombo ? (
+          <div className="mt-2 max-[450px]:mt-2 sm:mt-2.5">
+            <p className="overflow-hidden text-[12px] font-normal leading-snug text-neutral-500 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] max-[450px]:text-[11px] max-[410px]:text-[9px] sm:truncate sm:text-[13px] sm:tracking-[0.01em]">
+              {comboNamesLine}
+            </p>
+            {comboSizeSummary && (
+              <p className="mt-1 text-[10px] font-normal uppercase leading-none tracking-[0.12em] text-neutral-400 max-[450px]:text-[9px] sm:text-[10px]">
+                {comboSizeSummary}
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="mt-2 truncate text-[12px] font-normal leading-normal text-neutral-500 max-[450px]:mt-2 max-[450px]:text-[11px] max-[410px]:text-[9px] sm:mt-2.5 sm:text-[13px] sm:tracking-[0.01em]">
+            {profileLine}
+          </p>
+        )}
 
         <div className="mt-3 flex flex-nowrap items-baseline justify-center gap-1 max-[450px]:mt-2.5 sm:mt-4 sm:gap-1.5">
           {selectedVariant?.mrp > selectedVariant?.sellingPrice && (

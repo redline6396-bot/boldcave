@@ -10,7 +10,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { fetchOrder } from "@/lib/clientApi";
+import { fetchOrder, fetchOrderTracking } from "@/lib/clientApi";
 
 const ordersHref = "/profile?section=orders";
 
@@ -89,6 +89,12 @@ function getStatusMessage(status) {
   }
   if (normalized === "shipped") {
     return "Your order is on the way.";
+  }
+  if (normalized === "in_transit") {
+    return "Your order is moving through the courier network.";
+  }
+  if (normalized === "out_for_delivery") {
+    return "Your order is out for delivery.";
   }
   if (normalized === "delivered") {
     return "Your order has been delivered.";
@@ -169,7 +175,41 @@ export default function OrderDetails() {
 
     fetchOrder(orderId)
       .then((result) => {
-        if (active) setOrder(result);
+        if (!active) return;
+
+        setOrder(result);
+
+        if (!result?.shiprocket?.awbCode) {
+          return;
+        }
+
+        fetchOrderTracking(orderId)
+          .then((tracking) => {
+            if (!active) return;
+
+            setOrder((current) => {
+              if (!current) return current;
+
+              return {
+                ...current,
+                orderStatus: tracking?.orderStatus || current.orderStatus,
+                shiprocket: {
+                  ...(current.shiprocket || {}),
+                  shipmentStatus:
+                    tracking?.status ||
+                    current.shiprocket?.shipmentStatus ||
+                    "",
+                  trackingUrl:
+                    tracking?.trackingUrl ||
+                    current.shiprocket?.trackingUrl ||
+                    "",
+                },
+              };
+            });
+          })
+          .catch(() => {
+            // Live tracking refresh should not block viewing the saved order.
+          });
       })
       .catch((orderError) => {
         if (!active) return;

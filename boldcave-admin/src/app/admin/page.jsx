@@ -40,6 +40,16 @@ const STATUS_META = {
     className: 'bg-blue-50 text-blue-700 ring-blue-200',
     bar: 'bg-blue-500',
   },
+  in_transit: {
+    label: 'In Transit',
+    className: 'bg-sky-50 text-sky-700 ring-sky-200',
+    bar: 'bg-sky-500',
+  },
+  out_for_delivery: {
+    label: 'Out For Delivery',
+    className: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+    bar: 'bg-indigo-500',
+  },
   delivered: {
     label: 'Delivered',
     className: 'bg-emerald-50 text-emerald-700 ring-emerald-200',

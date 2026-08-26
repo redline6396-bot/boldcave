@@ -329,6 +329,12 @@ export async function calculateCart({ items = [], couponCode = "" }) {
         quantity,
         unitPrice: comboVariant.sellingPrice,
         mrp: comboVariant.mrp,
+        sku: comboVariant.sku || "",
+        hsnCode: product.hsnCode || "",
+        weightKg: Number(comboVariant.weightKg) || 0,
+        lengthCm: Number(comboVariant.lengthCm) || 0,
+        breadthCm: Number(comboVariant.breadthCm) || 0,
+        heightCm: Number(comboVariant.heightCm) || 0,
         productType: "combo",
         comboItems: (product.comboItems || []).map((item) => {
           const referencedProduct = productsById.get(String(item.productId));
@@ -379,6 +385,12 @@ export async function calculateCart({ items = [], couponCode = "" }) {
       quantity,
       unitPrice: variant.sellingPrice,
       mrp: variant.mrp,
+      sku: variant.sku || "",
+      hsnCode: product.hsnCode || "",
+      weightKg: Number(variant.weightKg) || 0,
+      lengthCm: Number(variant.lengthCm) || 0,
+      breadthCm: Number(variant.breadthCm) || 0,
+      heightCm: Number(variant.heightCm) || 0,
       productType: "product",
       lineTotal: variant.sellingPrice * quantity,
     });
@@ -505,7 +517,16 @@ export async function hasVerifiedPurchase(userId, productId) {
   const order = await Order.findOne({
     user: userId,
     "items.productId": productId,
-    orderStatus: { $in: ["confirmed", "processing", "shipped", "delivered"] },
+    orderStatus: {
+      $in: [
+        "confirmed",
+        "processing",
+        "shipped",
+        "in_transit",
+        "out_for_delivery",
+        "delivered",
+      ],
+    },
     "payment.paymentStatus": { $in: ["paid", "cod"] },
   }).select("_id");
 
