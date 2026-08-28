@@ -474,6 +474,10 @@ export function mapShiprocketStatusToOrderStatus(rawStatus) {
 
   if (!status) return "";
 
+  if (isShiprocketRtoStatus(status)) {
+    return "";
+  }
+
   if (status.includes("delivered") && !status.includes("rto")) {
     return "delivered";
   }
@@ -510,6 +514,15 @@ export function mapShiprocketStatusToOrderStatus(rawStatus) {
   }
 
   return "";
+}
+
+export function isShiprocketRtoStatus(rawStatus) {
+  const status = String(rawStatus || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+
+  return status.includes("rto") || status.includes("return to origin");
 }
 
 export function applyShiprocketStatusToOrder(order, rawStatus) {
