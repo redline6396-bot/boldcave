@@ -1,5 +1,6 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
+import { requireUser } from "@/lib/auth/session";
 import { calculateCart } from "@/lib/orders/pricing";
 
 export const runtime = "nodejs";
@@ -8,9 +9,13 @@ export async function POST(request) {
   try {
     await connectDB();
     const body = await readJson(request);
+    const auth = await requireUser(request);
+    const userId = auth.response ? null : auth.user._id;
     const result = await calculateCart({
       items: body.items || [],
       couponCode: body.code || body.couponCode,
+      paymentMethod: body.paymentMethod || "cod",
+      userId,
     });
 
     if (result.error) {
@@ -23,13 +28,20 @@ export async function POST(request) {
     }
 
     return success({
-      valid: Boolean(result.coupon.code),
+      valid: Boolean(result.coupon?.code),
       discount: result.discount,
       subtotal: result.subtotal,
       shipping: result.shipping,
+      prepaidDiscount: result.prepaidDiscount,
       total: result.finalAmount,
-      coupon: result.coupon,
-      message: result.coupon.code ? "Coupon applied successfully" : "No coupon applied",
+      discountWinner: result.discountWinner,
+      coupon: result.coupon?.code
+        ? {
+            code: result.coupon.code,
+            discount: result.coupon.discount,
+          }
+        : { code: null, discount: 0 },
+      message: result.coupon?.code ? "Coupon applied successfully" : "No coupon applied",
     });
   } catch (error) {
     return handleRouteError(error, "COUPON_VALIDATE_FAILED");

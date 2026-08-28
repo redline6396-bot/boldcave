@@ -21,7 +21,10 @@ export async function GET(request, { params }) {
     if (!isObjectId(couponId)) return applyAdminCors(request, failure("INVALID_COUPON_ID", "Invalid coupon id", 400));
 
     await connectDB();
-    const coupon = await Coupon.findById(couponId);
+    const coupon = await Coupon.findById(couponId).populate(
+      "eligibleUserIds",
+      "firstName lastName phone email"
+    );
     if (!coupon) return applyAdminCors(request, failure("COUPON_NOT_FOUND", "Coupon not found", 404));
     return applyAdminCors(request, success({ coupon }));
   } catch (error) {
@@ -42,6 +45,7 @@ export async function PATCH(request, { params }) {
     const body = await readJson(request);
     const existing = await Coupon.findById(couponId);
     if (!existing) return applyAdminCors(request, failure("COUPON_NOT_FOUND", "Coupon not found", 404));
+    const hasField = (field) => Object.prototype.hasOwnProperty.call(body, field);
 
     const merged = {
       code: body.code ?? existing.code,
@@ -49,6 +53,16 @@ export async function PATCH(request, { params }) {
       discountValue: body.discountValue ?? existing.discountValue,
       minimumOrder: body.minimumOrder ?? body.minOrderAmount ?? existing.minimumOrder,
       expiryDate: body.expiryDate ?? existing.expiryDate,
+      startsAt: hasField("startsAt") ? body.startsAt : existing.startsAt,
+      usageLimit: hasField("usageLimit") ? body.usageLimit : existing.usageLimit,
+      perCustomerLimit: hasField("perCustomerLimit")
+        ? body.perCustomerLimit
+        : existing.perCustomerLimit,
+      firstOrderOnly: body.firstOrderOnly ?? existing.firstOrderOnly,
+      visibility: body.visibility ?? existing.visibility,
+      eligibleUserIds: hasField("eligibleUserIds")
+        ? body.eligibleUserIds
+        : existing.eligibleUserIds,
       active: body.active ?? existing.active,
     };
 
@@ -60,7 +74,7 @@ export async function PATCH(request, { params }) {
     const coupon = await Coupon.findByIdAndUpdate(couponId, result.payload, {
       returnDocument: "after",
       runValidators: true,
-    });
+    }).populate("eligibleUserIds", "firstName lastName phone email");
 
     return applyAdminCors(request, success({ coupon }));
   } catch (error) {

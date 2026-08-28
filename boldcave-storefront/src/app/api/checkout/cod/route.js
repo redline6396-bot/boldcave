@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth/users";
 import {
   calculateCart,
+  consumeCouponUsageForOrder,
   deductStock,
   generateOrderNumber,
   validateAddress,
@@ -77,6 +78,8 @@ export async function POST(request) {
     const cart = await calculateCart({
       items: body.items || [],
       couponCode: body.couponCode,
+      paymentMethod: "cod",
+      userId: auth.user._id,
     });
 
     if (cart.error) {
@@ -125,6 +128,7 @@ export async function POST(request) {
       amounts: {
         subtotal: cart.subtotal,
         discount: cart.discount,
+        prepaidDiscount: cart.prepaidDiscount,
         shipping: cart.shipping,
         finalAmount: cart.finalAmount,
       },
@@ -134,6 +138,12 @@ export async function POST(request) {
         paymentStatus: "cod",
       },
       orderStatus: "confirmed",
+    });
+
+    await consumeCouponUsageForOrder({
+      coupon: cart.coupon,
+      userId: auth.user._id,
+      order,
     });
 
     try {

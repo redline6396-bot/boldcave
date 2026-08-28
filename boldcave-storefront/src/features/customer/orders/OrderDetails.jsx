@@ -383,6 +383,7 @@ export default function OrderDetails() {
 
   const subtotal = Number(order.amounts?.subtotal) || 0;
   const discount = Number(order.amounts?.discount) || 0;
+  const prepaidDiscount = Number(order.amounts?.prepaidDiscount) || 0;
   const finalAmount = Number(order.amounts?.finalAmount) || 0;
 
   const trackingUrl = order.shiprocket?.trackingUrl;
@@ -794,6 +795,22 @@ export default function OrderDetails() {
 
           <div className="mt-4 max-w-[520px] space-y-3 text-[13px]">
             <SummaryRow label="Subtotal" value={formatPrice(subtotal)} />
+            {discount > 0 && (
+              <SummaryRow
+                label={
+                  order.coupon?.code
+                    ? `Coupon (${order.coupon.code})`
+                    : "Coupon Discount"
+                }
+                value={`-${formatPrice(discount)}`}
+              />
+            )}
+            {prepaidDiscount > 0 && (
+              <SummaryRow
+                label="Online Payment Discount (10%)"
+                value={`-${formatPrice(prepaidDiscount)}`}
+              />
+            )}
             <SummaryRow label="Shipping" value="FREE" />
 
             <div className="border-t border-neutral-200 pt-3">
@@ -840,15 +857,19 @@ export default function OrderDetails() {
 
                 {discount > 0 && (
                   <SummaryRow
-                    label="Discount"
+                    label={
+                      order.coupon?.code
+                        ? `Coupon (${order.coupon.code})`
+                        : "Coupon Discount"
+                    }
                     value={`-${formatPrice(discount)}`}
                   />
                 )}
 
-                {order.coupon?.code && (
+                {prepaidDiscount > 0 && (
                   <SummaryRow
-                    label="Coupon"
-                    value={order.coupon.code}
+                    label="Online Payment Discount (10%)"
+                    value={`-${formatPrice(prepaidDiscount)}`}
                   />
                 )}
 

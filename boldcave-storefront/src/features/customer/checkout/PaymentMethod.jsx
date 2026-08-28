@@ -8,10 +8,12 @@ export default function PaymentMethod({
   codAvailable,
   serviceable,
   disabled = false,
+  prepaidDiscountSettings,
 }) {
   const codDisabled =
     disabled || serviceable === false || codAvailable === false;
   const onlineDisabled = disabled || serviceable === false;
+  const prepaidOfferText = getPrepaidOfferText(prepaidDiscountSettings);
 
   return (
     <section>
@@ -24,7 +26,7 @@ export default function PaymentMethod({
           active={value === "razorpay"}
           icon={CreditCard}
           title="Pay Online"
-          text="Pay securely using Razorpay"
+          text={prepaidOfferText}
           onClick={() => onChange("razorpay")}
           disabled={onlineDisabled}
         />
@@ -44,6 +46,18 @@ export default function PaymentMethod({
       </div>
     </section>
   );
+}
+
+function getPrepaidOfferText(settings = {}) {
+  if (settings?.enabled === false || Number(settings?.discountValue || 0) <= 0) {
+    return "Pay securely online";
+  }
+
+  if (settings.discountType === "fixed") {
+    return `Save Rs ${Number(settings.discountValue || 0).toLocaleString("en-IN")} with online payment`;
+  }
+
+  return `Save ${Number(settings.discountValue || 0).toLocaleString("en-IN")}% with online payment`;
 }
 
 function PaymentOption({

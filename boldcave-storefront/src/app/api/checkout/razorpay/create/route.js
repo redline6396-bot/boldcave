@@ -67,6 +67,8 @@ export async function POST(request) {
     const cart = await calculateCart({
       items: body.items || [],
       couponCode: body.couponCode,
+      paymentMethod: "razorpay",
+      userId: auth.user._id,
     });
 
     if (cart.error) {
@@ -116,6 +118,7 @@ export async function POST(request) {
       amounts: {
         subtotal: cart.subtotal,
         discount: cart.discount,
+        prepaidDiscount: cart.prepaidDiscount,
         shipping: cart.shipping,
         finalAmount: cart.finalAmount,
       },

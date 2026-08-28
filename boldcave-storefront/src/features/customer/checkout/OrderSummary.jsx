@@ -10,7 +10,9 @@ const FALLBACK_IMAGE =
 
 const money = (value) =>
   `₹${new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 0,
+    minimumFractionDigits:
+      Math.round((Number(value) || 0) * 100) % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
   }).format(Number(value) || 0)}`;
 
 export default function OrderSummary({
@@ -19,6 +21,7 @@ export default function OrderSummary({
   items,
   subtotal,
   discount,
+  prepaidDiscount = 0,
   total,
   couponCode,
   shipping = null,
@@ -42,6 +45,10 @@ export default function OrderSummary({
 
   const mrpDiscount = Math.max(0, mrpTotal - subtotal);
   const couponDiscount = Math.max(0, Number(discount) || 0);
+  const onlinePaymentDiscount = Math.max(
+    0,
+    Number(prepaidDiscount) || 0
+  );
   const shippingNumber =
     typeof shipping === "number" ? Math.max(0, shipping) : null;
 
@@ -173,6 +180,14 @@ export default function OrderSummary({
                       : "Coupon Discount"
                   }
                   value={`-${money(couponDiscount)}`}
+                  positive
+                />
+              )}
+
+              {onlinePaymentDiscount > 0 && (
+                <SummaryRow
+                  label="Online Payment Discount (10%)"
+                  value={`-${money(onlinePaymentDiscount)}`}
                   positive
                 />
               )}

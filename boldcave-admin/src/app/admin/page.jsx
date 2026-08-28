@@ -24,6 +24,13 @@ const RANGE_OPTIONS = [
   { label: 'Last 30 days', value: '30d' },
 ];
 
+const DEFAULT_PREPAID_DISCOUNT = {
+  enabled: true,
+  discountType: 'percentage',
+  discountValue: 10,
+  allowCouponStacking: true,
+};
+
 const STATUS_META = {
   confirmed: {
     label: 'Confirmed',
@@ -154,6 +161,30 @@ const Dashboard = () => {
     }
   };
 
+  const savePrepaidDiscount = async (prepaidDiscount) => {
+    try {
+      setStoreSettingsSaving(true);
+      const response = await api.patch('/api/admin/store-settings', {
+        prepaidDiscount,
+      });
+
+      setDashboard((current) => ({
+        ...current,
+        storeSettings: response.data.data || {
+          ...(current?.storeSettings || {}),
+          prepaidDiscount,
+        },
+      }));
+
+      showSuccess('Prepaid offer updated.');
+    } catch (error) {
+      const message = getErrorMessage(error, 'Unable to update prepaid offer');
+      showError(message);
+    } finally {
+      setStoreSettingsSaving(false);
+    }
+  };
+
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
@@ -236,11 +267,18 @@ const Dashboard = () => {
         </div>
       </header>
 
-      <StoreStatusCard
-        acceptingOrders={dashboard.storeSettings?.acceptingOrders !== false}
-        saving={storeSettingsSaving}
-        onToggle={toggleAcceptingOrders}
-      />
+      <section className='grid gap-4 xl:grid-cols-2'>
+        <StoreStatusCard
+          acceptingOrders={dashboard.storeSettings?.acceptingOrders !== false}
+          saving={storeSettingsSaving}
+          onToggle={toggleAcceptingOrders}
+        />
+        <PrepaidOfferCard
+          prepaidDiscount={dashboard.storeSettings?.prepaidDiscount}
+          saving={storeSettingsSaving}
+          onSave={savePrepaidDiscount}
+        />
+      </section>
 
       <section className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>
         {cards.map((card) => (
@@ -342,6 +380,98 @@ function StoreStatusCard({ acceptingOrders, saving, onToggle }) {
           />
         </button>
       </div>
+    </section>
+  );
+}
+
+function PrepaidOfferCard({ prepaidDiscount, saving, onSave }) {
+  const normalized = {
+    ...DEFAULT_PREPAID_DISCOUNT,
+    ...(prepaidDiscount || {}),
+  };
+  const [draft, setDraft] = useState(normalized);
+
+  useEffect(() => {
+    setDraft({
+      ...DEFAULT_PREPAID_DISCOUNT,
+      ...(prepaidDiscount || {}),
+    });
+  }, [prepaidDiscount]);
+
+  const submit = (event) => {
+    event.preventDefault();
+    onSave({
+      enabled: Boolean(draft.enabled),
+      discountType: draft.discountType === 'fixed' ? 'fixed' : 'percentage',
+      discountValue: Number(draft.discountValue) || 0,
+      allowCouponStacking: Boolean(draft.allowCouponStacking),
+    });
+  };
+
+  return (
+    <section className='rounded-[12px] border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]'>
+      <form onSubmit={submit} className='space-y-4'>
+        <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
+          <div className='flex items-start gap-3'>
+            <span className='flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-slate-100 text-slate-700'>
+              <TicketPercent size={19} strokeWidth={1.8} />
+            </span>
+            <div>
+              <p className='text-sm font-semibold text-slate-950'>Prepaid offer</p>
+              <p className='mt-1 text-xs text-slate-500'>
+                Controls the automatic online-payment discount used at checkout.
+              </p>
+            </div>
+          </div>
+
+          <label className='inline-flex items-center gap-2 text-xs font-medium text-slate-600'>
+            <input
+              type='checkbox'
+              checked={draft.enabled}
+              onChange={(event) => setDraft((current) => ({ ...current, enabled: event.target.checked }))}
+            />
+            Enabled
+          </label>
+        </div>
+
+        <div className='grid gap-3 sm:grid-cols-[1fr_120px]'>
+          <select
+            value={draft.discountType}
+            onChange={(event) => setDraft((current) => ({ ...current, discountType: event.target.value }))}
+            className='h-10 rounded-[8px] border border-slate-200 px-3 text-sm outline-none focus:border-slate-950'
+          >
+            <option value='percentage'>Percentage</option>
+            <option value='fixed'>Fixed amount</option>
+          </select>
+          <input
+            type='number'
+            min='0'
+            step='0.01'
+            value={draft.discountValue}
+            onChange={(event) => setDraft((current) => ({ ...current, discountValue: event.target.value }))}
+            className='h-10 rounded-[8px] border border-slate-200 px-3 text-sm outline-none focus:border-slate-950'
+          />
+        </div>
+
+        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+          <label className='inline-flex items-center gap-2 text-xs font-medium text-slate-600'>
+            <input
+              type='checkbox'
+              checked={draft.allowCouponStacking}
+              onChange={(event) => setDraft((current) => ({ ...current, allowCouponStacking: event.target.checked }))}
+            />
+            Allow coupon stacking
+          </label>
+
+          <button
+            type='submit'
+            disabled={saving}
+            className='h-9 cursor-pointer rounded-[8px] bg-slate-950 px-4 text-xs font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60'
+          >
+            {saving ? 'Saving...' : 'Save offer'}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }

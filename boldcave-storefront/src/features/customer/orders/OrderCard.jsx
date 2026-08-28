@@ -121,6 +121,7 @@ export default function OrderCard({ order }) {
   const items = order.items || [];
   const itemCount = getItemCount(items);
   const orderStatus = String(order.orderStatus || "confirmed").toLowerCase();
+  const isCancelledOrder = orderStatus === "cancelled";
 
   const paymentMethod = getPaymentMethodLabel(order.payment?.method);
   const paymentStatus = getPaymentStatusLabel(
@@ -229,18 +230,18 @@ export default function OrderCard({ order }) {
           </div>
 
           <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-4">
-            {trackingAvailable ? (
+            {trackingAvailable && !isCancelledOrder ? (
               <Link
                 href={`/orders/${encodeURIComponent(orderId)}#order-tracking`}
                 className="cursor-pointer text-[11px] font-medium text-neutral-600 transition-colors hover:text-neutral-950"
               >
                 Track order
               </Link>
-            ) : (
+            ) : !isCancelledOrder ? (
               <span className="hidden text-[10px] text-neutral-400 sm:inline">
                 Tracking after dispatch
               </span>
-            )}
+            ) : null}
 
             <Link
               href={`/orders/${encodeURIComponent(orderId)}`}

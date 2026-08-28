@@ -53,7 +53,7 @@ export default function CouponProvider({ children }) {
   }, []);
 
   const applyCoupon = useCallback(
-    async (codeOverride) => {
+    async (codeOverride, options = {}) => {
       const code = String(codeOverride ?? couponCode).trim().toUpperCase();
       const items = cartPayload(cart);
 
@@ -74,7 +74,11 @@ export default function CouponProvider({ children }) {
       setMessage("");
 
       try {
-        const result = await validateCoupon({ items, couponCode: code });
+        const result = await validateCoupon({
+          items,
+          couponCode: code,
+          paymentMethod: options.paymentMethod,
+        });
         setCouponCode(code);
         setAppliedCoupon(result.coupon || null);
         setDiscount(Number(result.discount) || 0);
@@ -101,12 +105,12 @@ export default function CouponProvider({ children }) {
     [cart, couponCode]
   );
 
-  const revalidateCoupon = useCallback(async () => {
+  const revalidateCoupon = useCallback(async (options = {}) => {
     if (!appliedCoupon?.code && !couponCode) {
       return null;
     }
 
-    return applyCoupon(appliedCoupon?.code || couponCode);
+    return applyCoupon(appliedCoupon?.code || couponCode, options);
   }, [appliedCoupon?.code, applyCoupon, couponCode]);
 
   useEffect(() => {

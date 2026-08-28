@@ -42,6 +42,9 @@ export async function PATCH(request) {
       ...(body.acceptingOrders !== undefined
         ? { acceptingOrders: body.acceptingOrders !== false }
         : {}),
+      ...(body.prepaidDiscount !== undefined
+        ? { prepaidDiscount: body.prepaidDiscount }
+        : {}),
     });
 
     return applyAdminCors(

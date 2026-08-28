@@ -59,10 +59,12 @@ const razorpayAttemptSchema = new mongoose.Schema(
     amounts: {
       subtotal: { type: Number, required: true, min: 0 },
       discount: { type: Number, default: 0, min: 0 },
+      prepaidDiscount: { type: Number, default: 0, min: 0 },
       shipping: { type: Number, default: 0, min: 0 },
       finalAmount: { type: Number, required: true, min: 0 },
     },
     coupon: {
+      couponId: { type: mongoose.Schema.Types.ObjectId, ref: "Coupon", default: null },
       code: { type: String, default: null },
       discount: { type: Number, default: 0 },
     },
@@ -92,6 +94,8 @@ const REQUIRED_ATTEMPT_ITEM_PATHS = [
   "items.lengthCm",
   "items.breadthCm",
   "items.heightCm",
+  "coupon.couponId",
+  "amounts.prepaidDiscount",
 ];
 
 if (

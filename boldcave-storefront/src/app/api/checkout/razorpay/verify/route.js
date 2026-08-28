@@ -2,7 +2,10 @@ import connectDB from "@/lib/db";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
 import { syncUserProfileFromCheckoutAddress } from "@/lib/auth/users";
-import { deductStock } from "@/lib/orders/pricing";
+import {
+  consumeCouponUsageForOrder,
+  deductStock,
+} from "@/lib/orders/pricing";
 import { verifyRazorpaySignature } from "@/lib/payments/razorpay";
 import { syncShiprocketOrder } from "@/lib/shipping/shiprocket";
 import { isAcceptingOrders } from "@/lib/storeSettings";
@@ -145,6 +148,12 @@ export async function POST(request) {
         razorpaySignature: body.razorpay_signature,
       },
       orderStatus: "confirmed",
+    });
+
+    await consumeCouponUsageForOrder({
+      coupon: claimedAttempt.coupon,
+      userId: claimedAttempt.user,
+      order,
     });
 
     try {

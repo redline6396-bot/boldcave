@@ -127,11 +127,20 @@ export async function logoutCurrentUser() {
   return requestJson("/api/auth/logout", jsonOptions("POST"));
 }
 
-export async function validateCoupon({ items, couponCode }) {
+export async function validateCoupon({ items, couponCode, paymentMethod }) {
   return requestJson(
     "/api/coupons/validate",
-    jsonOptions("POST", { items, couponCode })
+    jsonOptions("POST", { items, couponCode, paymentMethod })
   );
+}
+
+export async function fetchEligibleCoupons({ subtotal = 0 } = {}) {
+  const params = new URLSearchParams();
+  params.set("subtotal", String(Number(subtotal) || 0));
+  const data = await requestJson(`/api/coupons/eligible?${params}`, {
+    cache: "no-store",
+  });
+  return data?.coupons || [];
 }
 
 export async function checkShippingServiceability({ pincode, cod = false, items = [] }) {

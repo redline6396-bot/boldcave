@@ -18,9 +18,26 @@ const storeSettingsSchema = new mongoose.Schema(
       enum: ["test", "live"],
       default: "live",
     },
+    prepaidDiscount: {
+      enabled: { type: Boolean, default: true },
+      discountType: {
+        type: String,
+        enum: ["percentage", "fixed"],
+        default: "percentage",
+      },
+      discountValue: { type: Number, default: 10, min: 0 },
+      allowCouponStacking: { type: Boolean, default: true },
+    },
   },
   { timestamps: true }
 );
+
+if (
+  mongoose.models.StoreSettings &&
+  !mongoose.models.StoreSettings.schema?.path("prepaidDiscount.enabled")
+) {
+  delete mongoose.models.StoreSettings;
+}
 
 const StoreSettings =
   mongoose.models.StoreSettings ||

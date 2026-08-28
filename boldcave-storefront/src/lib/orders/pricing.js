@@ -1,5 +1,6 @@
 import Product from "@/models/Product";
 import Coupon from "@/models/Coupon";
+import CouponUsage from "@/models/CouponUsage";
 import Review from "@/models/Review";
 import Order from "@/models/Order";
 import mongoose from "mongoose";
@@ -11,6 +12,13 @@ import {
   toPositiveInteger,
 } from "@/lib/validation";
 import { clearProductCache } from "@/lib/productCache";
+import {
+  calculateDiscountBreakdown,
+} from "@/lib/orders/paymentDiscounts";
+import {
+  getStoreSettings,
+  serializePrepaidDiscountSettings,
+} from "@/lib/storeSettings";
 import {
   COMBO_VARIANT_SIZE,
   findVariantByIdentifier,
@@ -58,7 +66,45 @@ export async function getReviewStats(productId) {
   };
 }
 
-export async function calculateCouponDiscount(code, subtotal) {
+function normalizeOptionalLimit(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return Math.floor(number);
+}
+
+function userMatchesCoupon(coupon, userId) {
+  const eligibleUserIds = (coupon?.eligibleUserIds || [])
+    .map((id) => String(id || ""))
+    .filter(Boolean);
+
+  if (!eligibleUserIds.length) return true;
+  if (!userId) return false;
+
+  return eligibleUserIds.includes(String(userId));
+}
+
+async function hasPreviousOrder(userId, { excludeOrderId = null } = {}) {
+  if (!userId || !isObjectId(userId)) return false;
+  const filter = { user: userId };
+  if (excludeOrderId && isObjectId(excludeOrderId)) {
+    filter._id = { $ne: excludeOrderId };
+  }
+
+  const existingOrder = await Order.exists(filter);
+  return Boolean(existingOrder);
+}
+
+async function getUserCouponUsageCount(couponId, userId) {
+  if (!couponId || !userId || !isObjectId(userId)) return 0;
+  return CouponUsage.countDocuments({ couponId, userId });
+}
+
+export async function calculateCouponDiscount(
+  code,
+  subtotal,
+  { userId = null, excludeOrderId = null } = {}
+) {
   const normalizedCode = normalizeCouponCode(code);
   if (!normalizedCode) {
     return { code: null, discount: 0, coupon: null };
@@ -86,6 +132,16 @@ export async function calculateCouponDiscount(code, subtotal) {
     };
   }
 
+  if (coupon.startsAt && new Date(coupon.startsAt) > new Date()) {
+    return {
+      error: {
+        code: "COUPON_NOT_STARTED",
+        message: "This coupon is not active yet",
+        status: 400,
+      },
+    };
+  }
+
   if (new Date(coupon.expiryDate) <= new Date()) {
     return {
       error: {
@@ -106,6 +162,73 @@ export async function calculateCouponDiscount(code, subtotal) {
     };
   }
 
+  const usageLimit = normalizeOptionalLimit(coupon.usageLimit);
+  if (usageLimit !== null && Number(coupon.usedCount || 0) >= usageLimit) {
+    return {
+      error: {
+        code: "COUPON_USAGE_LIMIT_REACHED",
+        message: "Coupon usage limit reached",
+        status: 409,
+      },
+    };
+  }
+
+  if (!userMatchesCoupon(coupon, userId)) {
+    return {
+      error: {
+        code: "COUPON_NOT_AVAILABLE_FOR_ACCOUNT",
+        message: "This coupon is not available for your account",
+        status: 403,
+      },
+    };
+  }
+
+  if (coupon.firstOrderOnly) {
+    if (!userId) {
+      return {
+        error: {
+          code: "COUPON_LOGIN_REQUIRED",
+          message: "Sign in to use this coupon",
+          status: 401,
+        },
+      };
+    }
+
+    if (await hasPreviousOrder(userId, { excludeOrderId })) {
+      return {
+        error: {
+          code: "COUPON_FIRST_ORDER_ONLY",
+          message: "This coupon is only available on your first order",
+          status: 403,
+        },
+      };
+    }
+  }
+
+  const perCustomerLimit = normalizeOptionalLimit(coupon.perCustomerLimit);
+  if (perCustomerLimit !== null) {
+    if (!userId) {
+      return {
+        error: {
+          code: "COUPON_LOGIN_REQUIRED",
+          message: "Sign in to use this coupon",
+          status: 401,
+        },
+      };
+    }
+
+    const userUsageCount = await getUserCouponUsageCount(coupon._id, userId);
+    if (userUsageCount >= perCustomerLimit) {
+      return {
+        error: {
+          code: "COUPON_PER_CUSTOMER_LIMIT_REACHED",
+          message: "You have already used this coupon",
+          status: 409,
+        },
+      };
+    }
+  }
+
   let discount = 0;
   if (coupon.discountType === "percentage") {
     discount = (subtotal * coupon.discountValue) / 100;
@@ -116,10 +239,108 @@ export async function calculateCouponDiscount(code, subtotal) {
   discount = Math.min(subtotal, Math.round(discount * 100) / 100);
 
   return {
+    couponId: coupon._id,
     code: coupon.code,
     discount,
     coupon,
   };
+}
+
+export async function consumeCouponUsageForOrder({
+  coupon,
+  userId,
+  order,
+} = {}) {
+  const couponId = coupon?.couponId || coupon?._id;
+  const orderId = order?._id;
+  const orderNumber = String(order?.orderNumber || "").trim();
+
+  if (!couponId || !userId || !orderId || !orderNumber) {
+    return { consumed: false, skipped: true };
+  }
+
+  const existingUsage = await CouponUsage.findOne({ couponId, orderId });
+  if (existingUsage) {
+    return { consumed: false, idempotent: true };
+  }
+
+  const latestCoupon = await Coupon.findById(couponId);
+  if (!latestCoupon) {
+    const error = new Error("Coupon not found");
+    error.code = "COUPON_NOT_FOUND";
+    throw error;
+  }
+
+  const validation = await calculateCouponDiscount(
+    latestCoupon.code,
+    Number(order?.amounts?.subtotal) || 0,
+    {
+      userId,
+      excludeOrderId: orderId,
+    }
+  );
+  if (validation.error) {
+    const error = new Error(validation.error.message);
+    error.code = validation.error.code;
+    error.status = validation.error.status;
+    throw error;
+  }
+
+  const perCustomerLimit = normalizeOptionalLimit(latestCoupon.perCustomerLimit);
+  if (perCustomerLimit !== null) {
+    const usageCount = await getUserCouponUsageCount(couponId, userId);
+    if (usageCount >= perCustomerLimit) {
+      const error = new Error("You have already used this coupon");
+      error.code = "COUPON_PER_CUSTOMER_LIMIT_REACHED";
+      error.status = 409;
+      throw error;
+    }
+  }
+
+  const usageLimit = normalizeOptionalLimit(latestCoupon.usageLimit);
+  const usageLimitFilter =
+    usageLimit === null
+      ? {}
+      : {
+          $expr: {
+            $lt: [{ $ifNull: ["$usedCount", 0] }, "$usageLimit"],
+          },
+        };
+
+  const incrementResult = await Coupon.updateOne(
+    {
+      _id: couponId,
+      ...usageLimitFilter,
+    },
+    { $inc: { usedCount: 1 } }
+  );
+
+  if (incrementResult.modifiedCount !== 1) {
+    const error = new Error("Coupon usage limit reached");
+    error.code = "COUPON_USAGE_LIMIT_REACHED";
+    error.status = 409;
+    throw error;
+  }
+
+  try {
+    await CouponUsage.create({
+      couponId,
+      userId,
+      orderId,
+      orderNumber,
+      usedAt: new Date(),
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      await Coupon.updateOne({ _id: couponId }, { $inc: { usedCount: -1 } });
+      return { consumed: false, idempotent: true };
+    }
+
+    await Coupon.updateOne({ _id: couponId }, { $inc: { usedCount: -1 } });
+    throw error;
+  }
+
+  return { consumed: true };
 }
 
 export function validateAddress(address = {}) {
@@ -244,7 +465,12 @@ async function getCanonicalStockRequirements(requirements = []) {
 
 export const SHIPPING_AMOUNT = 0;
 
-export async function calculateCart({ items = [], couponCode = "" }) {
+export async function calculateCart({
+  items = [],
+  couponCode = "",
+  paymentMethod = "cod",
+  userId = null,
+} = {}) {
   if (!Array.isArray(items) || items.length === 0) {
     return {
       error: {
@@ -423,31 +649,48 @@ export async function calculateCart({ items = [], couponCode = "" }) {
   }
 
   const subtotal = normalizedItems.reduce((total, item) => total + item.lineTotal, 0);
-  const couponResult = await calculateCouponDiscount(couponCode, subtotal);
+  const couponResult = await calculateCouponDiscount(couponCode, subtotal, {
+    userId,
+  });
 
   if (couponResult.error) {
     return { error: couponResult.error };
   }
 
-  const discount = couponResult.discount || 0;
   const shipping = SHIPPING_AMOUNT;
-  const finalAmount = Math.max(
-    0,
-    Math.round((subtotal - discount + shipping) * 100) / 100
+  const storeSettings = await getStoreSettings();
+  const prepaidDiscountSettings = serializePrepaidDiscountSettings(
+    storeSettings?.prepaidDiscount
   );
+  const discountBreakdown = calculateDiscountBreakdown({
+    subtotal,
+    couponDiscount: couponResult.discount || 0,
+    shipping,
+    paymentMethod,
+    prepaidDiscountSettings,
+  });
+  const discount = discountBreakdown.couponDiscount;
+  const prepaidDiscount = discountBreakdown.prepaidDiscount;
+  const finalAmount = discountBreakdown.finalAmount;
+  const couponApplied = Boolean(couponResult.code && discount > 0);
 
   return {
     items: normalizedItems.map(({ lineTotal, ...item }) => item),
     subtotal,
     discount,
+    prepaidDiscount,
     shipping,
     finalAmount,
-    coupon: couponResult.code
+    discountWinner: discountBreakdown.discountWinner,
+    prepaidDiscountSettings,
+    coupon: couponApplied
       ? {
+          couponId: couponResult.couponId,
           code: couponResult.code,
           discount,
         }
       : {
+          couponId: null,
           code: null,
           discount: 0,
         },

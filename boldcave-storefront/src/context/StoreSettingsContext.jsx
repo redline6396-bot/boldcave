@@ -9,12 +9,14 @@ import {
   useState,
 } from "react";
 import { fetchStoreSettings } from "@/lib/clientApi";
+import { DEFAULT_PREPAID_DISCOUNT_SETTINGS } from "@/lib/orders/paymentDiscounts";
 
 const StoreSettingsContext = createContext(null);
 
 export function StoreSettingsProvider({ children }) {
   const [settings, setSettings] = useState({
     acceptingOrders: true,
+    prepaidDiscount: DEFAULT_PREPAID_DISCOUNT_SETTINGS,
     updatedAt: null,
   });
   const [loading, setLoading] = useState(true);
@@ -24,6 +26,8 @@ export function StoreSettingsProvider({ children }) {
       const nextSettings = await fetchStoreSettings();
       const normalizedSettings = {
         acceptingOrders: nextSettings?.acceptingOrders !== false,
+        prepaidDiscount:
+          nextSettings?.prepaidDiscount || DEFAULT_PREPAID_DISCOUNT_SETTINGS,
         updatedAt: nextSettings?.updatedAt || null,
       };
       setSettings(normalizedSettings);

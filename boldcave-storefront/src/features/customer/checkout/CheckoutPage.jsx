@@ -34,6 +34,9 @@ import {
   verifyPhoneOtp,
   verifyRazorpayCheckout,
 } from "@/lib/clientApi";
+import {
+  calculateDiscountBreakdown,
+} from "@/lib/orders/paymentDiscounts";
 import CouponSection from "@/features/customer/checkout/CouponSection";
 import DeliveryAddress, {
   emptyAddress,
@@ -59,7 +62,9 @@ const DEMO_PINCODES = {
 
 const money = (value) =>
   `₹${new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 0,
+    minimumFractionDigits:
+      Math.round((Number(value) || 0) * 100) % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
   }).format(Number(value) || 0)}`;
 
 const normalizePhone = (value) => {
@@ -167,9 +172,10 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     updateQuantity,
   } = useCart();
 
-  const { appliedCoupon, discount, removeCoupon } = useCoupon();
+  const { appliedCoupon, discount, removeCoupon, revalidateCoupon } = useCoupon();
   const {
     acceptingOrders,
+    prepaidDiscount: prepaidDiscountSettings,
     loading: storeSettingsLoading,
     refreshStoreSettings,
   } = useStoreSettings();
@@ -214,7 +220,16 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
 
   const items = getCartItems();
   const subtotal = getCartTotal();
-  const total = Math.max(0, subtotal - discount);
+  const discountBreakdown = calculateDiscountBreakdown({
+    subtotal,
+    couponDiscount: Math.max(0, Number(discount) || 0),
+    shipping: 0,
+    paymentMethod,
+    prepaidDiscountSettings,
+  });
+  const couponDiscount = discountBreakdown.couponDiscount;
+  const prepaidDiscount = discountBreakdown.prepaidDiscount;
+  const total = discountBreakdown.finalAmount;
   const couponCode = appliedCoupon?.code || "";
 
   const itemCount = items.reduce(
@@ -254,6 +269,11 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     isAuthenticated &&
     Boolean(user?.phone) &&
     normalizePhone(checkoutPhone) === normalizePhone(user.phone);
+
+  useEffect(() => {
+    if (!appliedCoupon?.code) return;
+    revalidateCoupon({ paymentMethod });
+  }, [appliedCoupon?.code, paymentMethod, revalidateCoupon]);
 
   useEffect(() => {
     if (
@@ -1210,6 +1230,9 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
               <div className="mt-3">
                 <CouponSection
                   disabled={hasUnresolvedCart || submitting}
+                  paymentMethod={paymentMethod}
+                  subtotal={subtotal}
+                  showEligibleOffers={false}
                 />
               </div>
             )}
@@ -1298,6 +1321,9 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                   </p>
                   <CouponSection
                     disabled={hasUnresolvedCart || submitting}
+                    paymentMethod={paymentMethod}
+                    subtotal={subtotal}
+                    showEligibleOffers={isAuthenticated && phoneVerified}
                   />
                 </div>
 
@@ -1310,6 +1336,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                         codAvailable={codAvailable}
                         serviceable
                         disabled={submitting}
+                        prepaidDiscountSettings={prepaidDiscountSettings}
                       />
                     </div>
                   )}
@@ -1405,7 +1432,8 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
         onClose={() => setSummaryOpen(false)}
         items={items}
         subtotal={subtotal}
-        discount={discount}
+        discount={couponDiscount}
+        prepaidDiscount={prepaidDiscount}
         total={total}
         couponCode={couponCode}
         shipping={0}
