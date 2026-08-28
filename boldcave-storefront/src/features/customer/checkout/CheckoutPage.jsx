@@ -273,7 +273,16 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   useEffect(() => {
     if (!appliedCoupon?.code) return;
     revalidateCoupon({ paymentMethod });
-  }, [appliedCoupon?.code, paymentMethod, revalidateCoupon]);
+  }, [
+    appliedCoupon?.code,
+    paymentMethod,
+    prepaidDiscountSettings?.allowCouponStacking,
+    prepaidDiscountSettings?.discountType,
+    prepaidDiscountSettings?.discountValue,
+    prepaidDiscountSettings?.enabled,
+    revalidateCoupon,
+    subtotal,
+  ]);
 
   useEffect(() => {
     if (
@@ -1233,6 +1242,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                   paymentMethod={paymentMethod}
                   subtotal={subtotal}
                   showEligibleOffers={false}
+                  identityHint="Verify your mobile to view eligible offers"
                 />
               </div>
             )}

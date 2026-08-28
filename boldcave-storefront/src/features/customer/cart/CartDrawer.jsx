@@ -12,6 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useCoupon } from "@/context/CouponContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
@@ -33,6 +34,7 @@ const formatRupees = (value) => `₹${formatPrice(value)}`;
 export default function CartDrawer({ isOpen, onClose }) {
   const router = useRouter();
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const { isAuthenticated, user } = useAuth();
 
   const {
     cart,
@@ -60,6 +62,7 @@ export default function CartDrawer({ isOpen, onClose }) {
   const totalSavings = mrpDiscount + Math.max(0, Number(discount) || 0);
 
   const isResolving = cart.length > 0 && items.length === 0;
+  const canShowEligibleOffers = isAuthenticated && user?.phoneVerified;
 
   useEffect(() => {
     if (!isOpen) {
@@ -278,7 +281,16 @@ export default function CartDrawer({ isOpen, onClose }) {
                   - few products: uses remaining space and sits at the bottom of the scroll area
                   - many products: naturally follows the final product and scrolls into view */}
               <div className="mt-auto border-t border-neutral-200 pb-4 pt-3 sm:pb-5 sm:pt-4">
-                <CouponSection />
+                <CouponSection
+                  subtotal={sellingSubtotal}
+                  showEligibleOffers={canShowEligibleOffers}
+                  maxVisibleOffers={2}
+                  identityHint={
+                    canShowEligibleOffers
+                      ? ""
+                      : "More offers available at checkout"
+                  }
+                />
               </div>
             </div>
           ) : (

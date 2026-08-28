@@ -87,6 +87,9 @@ export async function updateStoreSettings({
   };
 
   if (Object.keys(updates).length) {
+    Object.keys(updates).forEach((key) => {
+      delete update.$setOnInsert[key];
+    });
     update.$set = updates;
   }
 

@@ -1,6 +1,6 @@
 import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
-import { handleRouteError, noStoreHeaders, readJson, success } from "@/lib/api/response";
+import { failure, handleRouteError, noStoreHeaders, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
 import {
   getSerializedStoreSettings,
@@ -54,6 +54,26 @@ export async function PATCH(request) {
       })
     );
   } catch (error) {
-    return applyAdminCors(request, handleRouteError(error));
+    console.error("Store settings update failed", {
+      name: error?.name,
+      code: error?.code,
+      message: error?.message,
+    });
+
+    if (error?.name === "ValidationError") {
+      return applyAdminCors(
+        request,
+        failure("STORE_SETTINGS_VALIDATION_FAILED", error.message, 400)
+      );
+    }
+
+    return applyAdminCors(
+      request,
+      failure(
+        "STORE_SETTINGS_UPDATE_FAILED",
+        "Unable to save store settings. Please check the values and retry.",
+        500
+      )
+    );
   }
 }

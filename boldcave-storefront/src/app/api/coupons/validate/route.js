@@ -27,8 +27,17 @@ export async function POST(request) {
       );
     }
 
+    const couponWasEntered = Boolean(body.code || body.couponCode);
+    const couponApplied = Boolean(result.coupon?.code);
+    const message =
+      couponWasEntered && !couponApplied && result.discountWinner === "prepaid"
+        ? "Online payment offer gives you a better saving."
+        : couponApplied
+          ? "Coupon applied successfully"
+          : "No coupon applied";
+
     return success({
-      valid: Boolean(result.coupon?.code),
+      valid: couponApplied,
       discount: result.discount,
       subtotal: result.subtotal,
       shipping: result.shipping,
@@ -41,7 +50,7 @@ export async function POST(request) {
             discount: result.coupon.discount,
           }
         : { code: null, discount: 0 },
-      message: result.coupon?.code ? "Coupon applied successfully" : "No coupon applied",
+      message,
     });
   } catch (error) {
     return handleRouteError(error, "COUPON_VALIDATE_FAILED");

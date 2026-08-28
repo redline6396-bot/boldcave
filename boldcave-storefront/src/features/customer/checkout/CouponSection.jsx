@@ -17,6 +17,8 @@ export default function CouponSection({
   paymentMethod = "cod",
   subtotal = 0,
   showEligibleOffers = false,
+  maxVisibleOffers = 3,
+  identityHint = "",
 }) {
   const {
     couponCode,
@@ -32,7 +34,13 @@ export default function CouponSection({
 
   const [showLocalFeedback, setShowLocalFeedback] = useState(false);
   const [eligibleCoupons, setEligibleCoupons] = useState([]);
+  const [showAllOffers, setShowAllOffers] = useState(false);
   const applied = Boolean(appliedCoupon?.code);
+  const visibleOfferLimit = Math.max(1, Number(maxVisibleOffers) || 3);
+  const visibleEligibleCoupons = showAllOffers
+    ? eligibleCoupons
+    : eligibleCoupons.slice(0, visibleOfferLimit);
+  const hasMoreEligibleCoupons = eligibleCoupons.length > visibleOfferLimit;
 
   useEffect(() => {
     if (!showLocalFeedback) return undefined;
@@ -67,10 +75,12 @@ export default function CouponSection({
     };
   }, [disabled, showEligibleOffers, subtotal]);
 
+  useEffect(() => {
+    setShowAllOffers(false);
+  }, [eligibleCoupons.length, showEligibleOffers]);
+
   const handleCouponAction = async () => {
     if (applied) {
-      setShowLocalFeedback(false);
-      removeCoupon();
       return;
     }
 
@@ -84,31 +94,37 @@ export default function CouponSection({
     await applyCoupon(code, { paymentMethod });
   };
 
+  const couponOfferLabel = (coupon) => {
+    if (coupon.discountType === "percentage") {
+      return `${Number(coupon.discountValue) || 0}% off`;
+    }
+
+    return `Save ${money(coupon.discount || coupon.discountValue)}`;
+  };
+
   return (
     <section>
       {showEligibleOffers && eligibleCoupons.length > 0 && !applied && (
-        <div className="mb-2 rounded-[10px] border border-[#e0e4e8] bg-white px-3 py-2">
-          <div className="mb-1.5 flex items-center justify-between gap-3">
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#364354]">
-              Offers available for you
-            </p>
-          </div>
+        <div className="mb-2">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#4d5968]">
+            Available offers
+          </p>
 
-          <div className="grid gap-1.5">
-            {eligibleCoupons.slice(0, 3).map((coupon) => (
+          <div className="divide-y divide-[#eceff2] border-y border-[#eceff2]">
+            {visibleEligibleCoupons.map((coupon) => (
               <button
                 key={coupon.id || coupon.code}
                 type="button"
                 onClick={() => handleApplyEligibleCoupon(coupon.code)}
                 disabled={disabled || validating}
-                className="flex min-h-[36px] cursor-pointer items-center justify-between gap-3 rounded-[8px] border border-[#e7eaee] bg-[#fafafa] px-2.5 py-2 text-left transition-colors hover:border-[#cfd6de] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-[38px] w-full cursor-pointer items-center justify-between gap-3 py-2 text-left transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-[11px] font-semibold tracking-[0.04em] text-[#111b28]">
+                  <span className="block truncate text-[11px] font-semibold tracking-[0.06em] text-[#111b28]">
                     {coupon.code}
                   </span>
                   <span className="mt-0.5 block text-[10px] text-[#687483]">
-                    Save {money(coupon.discount)}
+                    {couponOfferLabel(coupon)}
                   </span>
                 </span>
                 <span className="shrink-0 text-[10px] font-semibold text-[#111b28] underline underline-offset-4">
@@ -117,6 +133,16 @@ export default function CouponSection({
               </button>
             ))}
           </div>
+
+          {hasMoreEligibleCoupons && !showAllOffers && (
+            <button
+              type="button"
+              onClick={() => setShowAllOffers(true)}
+              className="mt-1.5 cursor-pointer p-0 text-[10px] font-medium text-[#4d5968] underline underline-offset-4"
+            >
+              View more offers
+            </button>
+          )}
         </div>
       )}
 
@@ -147,32 +173,47 @@ export default function CouponSection({
           className={[
             "min-w-[82px] shrink-0 border-l px-3 text-[10.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-35 sm:min-w-[96px] sm:px-4 sm:text-[11px]",
             applied
-              ? "cursor-pointer border-[#d3d9e1] bg-white text-[#4b5563]"
+              ? "cursor-default border-[#d3d9e1] bg-white text-[#4b5563]"
               : "cursor-pointer border-black bg-black text-white transition-opacity duration-150 hover:opacity-90",
           ].join(" ")}
         >
-          {validating ? "Checking" : applied ? "Remove" : "Apply"}
+          {validating ? "Checking" : applied ? "Applied" : "Apply"}
         </button>
       </div>
 
       {applied && discount > 0 && (
-        <div className="mt-2 rounded-[9px] border border-[#cde7d4] bg-[#f4fbf6] px-3 py-2">
+        <div className="mt-2 border-y border-[#e7eaee] py-2">
           <div className="flex items-center justify-between gap-3">
-            <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-[#163f27]">
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold tracking-[0.05em] text-[#111b28]">
               <CheckCircle2
                 className="h-3.5 w-3.5 shrink-0"
                 strokeWidth={1.8}
               />
               <span className="truncate">{appliedCoupon.code}</span>
             </span>
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#176b37]">
+            <span className="shrink-0 text-[10px] font-semibold text-[#176b37]">
               Applied
             </span>
           </div>
-          <p className="mt-1 text-[10.5px] font-medium text-[#176b37] sm:text-[11px]">
-            You saved {money(discount)}
-          </p>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <p className="text-[10.5px] text-[#66717e] sm:text-[11px]">
+              You saved {money(discount)}
+            </p>
+            <button
+              type="button"
+              onClick={removeCoupon}
+              className="cursor-pointer text-[10px] font-medium text-[#4d5968] underline underline-offset-4"
+            >
+              Remove
+            </button>
+          </div>
         </div>
+      )}
+
+      {!showEligibleOffers && !applied && identityHint && (
+        <p className="mt-1.5 pl-[46px] text-[10.5px] leading-4 text-[#66717e] sm:pl-[58px] sm:text-[11px]">
+          {identityHint}
+        </p>
       )}
 
       {showLocalFeedback && (error || (!applied && message)) && (
