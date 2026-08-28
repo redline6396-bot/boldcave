@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import Order from "@/models/Order";
 import { calculateShipmentWeightKg } from "@/lib/shipping/shipmentWeight";
 
@@ -19,6 +21,49 @@ function sanitizeShiprocketError(error) {
 
 function hasShiprocketConfig() {
   return Boolean(process.env.SHIPROCKET_EMAIL && process.env.SHIPROCKET_PASSWORD);
+}
+
+function shortSha256(value) {
+  if (!value) return "";
+  return crypto.createHash("sha256").update(String(value)).digest("hex").slice(0, 8);
+}
+
+function maskEmail(email) {
+  const value = String(email || "").trim();
+  const atIndex = value.indexOf("@");
+
+  if (atIndex <= 0) return value ? "***" : "";
+
+  const local = value.slice(0, atIndex);
+  const domain = value.slice(atIndex + 1);
+  const visiblePrefix = local.slice(0, Math.min(2, local.length));
+
+  return `${visiblePrefix}***@${domain}`;
+}
+
+function sanitizeAuthMessage(message) {
+  return String(message || "").slice(0, 180);
+}
+
+function logShiprocketAuthDiagnostic(event, details = {}) {
+  const email = process.env.SHIPROCKET_EMAIL || "";
+  const password = process.env.SHIPROCKET_PASSWORD || "";
+
+  console.info("Shiprocket auth diagnostic", {
+    event,
+    envExists: {
+      SHIPROCKET_EMAIL: Boolean(email),
+      SHIPROCKET_PASSWORD: Boolean(password),
+      SHIPROCKET_PICKUP_PINCODE: Boolean(process.env.SHIPROCKET_PICKUP_PINCODE),
+      SHIPROCKET_PICKUP_LOCATION: Boolean(process.env.SHIPROCKET_PICKUP_LOCATION),
+    },
+    maskedEmail: maskEmail(email),
+    emailLength: email.length,
+    passwordLength: password.length,
+    emailFingerprint: shortSha256(email),
+    passwordFingerprint: shortSha256(password),
+    ...details,
+  });
 }
 
 async function shiprocketFetch(path, options = {}) {
@@ -57,23 +102,50 @@ let tokenCache = {
 
 export async function getShiprocketToken() {
   if (!hasShiprocketConfig()) {
+    logShiprocketAuthDiagnostic("missing_config", {
+      cachedTokenUsed: false,
+      freshLoginRequestMade: false,
+    });
     throw new Error("Shiprocket is not configured");
   }
 
   if (tokenCache.token && tokenCache.expiresAt > Date.now() + 60_000) {
+    logShiprocketAuthDiagnostic("cache_hit", {
+      cachedTokenUsed: true,
+      freshLoginRequestMade: false,
+    });
     return tokenCache.token;
   }
 
-  const response = await fetch(`${SHIPROCKET_BASE_URL}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email: process.env.SHIPROCKET_EMAIL,
-      password: process.env.SHIPROCKET_PASSWORD,
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(`${SHIPROCKET_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: process.env.SHIPROCKET_EMAIL,
+        password: process.env.SHIPROCKET_PASSWORD,
+      }),
+    });
+  } catch (error) {
+    logShiprocketAuthDiagnostic("fresh_login_network_error", {
+      cachedTokenUsed: false,
+      freshLoginRequestMade: true,
+      errorName: error?.name || "Error",
+      message: sanitizeAuthMessage(error?.message),
+    });
+    throw error;
+  }
 
   const data = await response.json().catch(() => ({}));
+  logShiprocketAuthDiagnostic("fresh_login_response", {
+    cachedTokenUsed: false,
+    freshLoginRequestMade: true,
+    httpStatus: response.status,
+    authSucceeded: Boolean(response.ok && data.token),
+    message: sanitizeAuthMessage(data?.message || data?.error),
+  });
+
   if (!response.ok || !data.token) {
     throw new Error(data?.message || "Shiprocket authentication failed");
   }
