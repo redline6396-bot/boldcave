@@ -1,10 +1,20 @@
 import crypto from "node:crypto";
 
 import Order from "@/models/Order";
+import ShiprocketAuthCache from "@/models/ShiprocketAuthCache";
+import connectDB from "@/lib/db";
 import { calculateShipmentWeightKg } from "@/lib/shipping/shipmentWeight";
 
 const SHIPROCKET_BASE_URL = "https://apiv2.shiprocket.in/v1/external";
 const GENERIC_SERVICEABILITY_WEIGHT_KG = 0.5;
+const SHIPROCKET_AUTH_CACHE_PROVIDER = "shiprocket";
+const SHIPROCKET_TOKEN_TTL_MS = 9 * 24 * 60 * 60 * 1000;
+const SHIPROCKET_TOKEN_EXPIRY_BUFFER_MS = 60_000;
+const SHIPROCKET_AUTH_LOCK_TTL_MS = 30_000;
+const SHIPROCKET_AUTH_LOCK_WAIT_MS = 5_000;
+const SHIPROCKET_AUTH_LOCK_POLL_MS = 350;
+const SHIPROCKET_AUTH_COOLDOWN_MS = 5 * 60 * 1000;
+const SHIPROCKET_AUTH_LOCK_OWNER = `${process.pid || "node"}-${crypto.randomUUID()}`;
 
 const ORDER_STATUS_RANK = {
   confirmed: 0,
@@ -23,46 +33,79 @@ function hasShiprocketConfig() {
   return Boolean(process.env.SHIPROCKET_EMAIL && process.env.SHIPROCKET_PASSWORD);
 }
 
-function shortSha256(value) {
-  if (!value) return "";
-  return crypto.createHash("sha256").update(String(value)).digest("hex").slice(0, 8);
-}
-
-function maskEmail(email) {
-  const value = String(email || "").trim();
-  const atIndex = value.indexOf("@");
-
-  if (atIndex <= 0) return value ? "***" : "";
-
-  const local = value.slice(0, atIndex);
-  const domain = value.slice(atIndex + 1);
-  const visiblePrefix = local.slice(0, Math.min(2, local.length));
-
-  return `${visiblePrefix}***@${domain}`;
-}
-
 function sanitizeAuthMessage(message) {
   return String(message || "").slice(0, 180);
 }
 
-function logShiprocketAuthDiagnostic(event, details = {}) {
-  const email = process.env.SHIPROCKET_EMAIL || "";
-  const password = process.env.SHIPROCKET_PASSWORD || "";
-
-  console.info("Shiprocket auth diagnostic", {
+function logShiprocketAuth(event, details = {}) {
+  console.info("Shiprocket auth", {
     event,
-    envExists: {
-      SHIPROCKET_EMAIL: Boolean(email),
-      SHIPROCKET_PASSWORD: Boolean(password),
-      SHIPROCKET_PICKUP_PINCODE: Boolean(process.env.SHIPROCKET_PICKUP_PINCODE),
-      SHIPROCKET_PICKUP_LOCATION: Boolean(process.env.SHIPROCKET_PICKUP_LOCATION),
-    },
-    maskedEmail: maskEmail(email),
-    emailLength: email.length,
-    passwordLength: password.length,
-    emailFingerprint: shortSha256(email),
-    passwordFingerprint: shortSha256(password),
     ...details,
+  });
+}
+
+function getCredentialFingerprint() {
+  return crypto
+    .createHash("sha256")
+    .update(`${process.env.SHIPROCKET_EMAIL || ""}\0${process.env.SHIPROCKET_PASSWORD || ""}`)
+    .digest("hex");
+}
+
+function getTime(value) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function isFutureWithBuffer(value) {
+  return getTime(value) > Date.now() + SHIPROCKET_TOKEN_EXPIRY_BUFFER_MS;
+}
+
+function isUsableMemoryToken(credentialFingerprint) {
+  return (
+    tokenCache.token &&
+    tokenCache.credentialFingerprint === credentialFingerprint &&
+    tokenCache.expiresAt > Date.now() + SHIPROCKET_TOKEN_EXPIRY_BUFFER_MS
+  );
+}
+
+function isUsableSharedToken(cacheDoc, credentialFingerprint) {
+  return (
+    cacheDoc?.accessToken &&
+    cacheDoc.credentialFingerprint === credentialFingerprint &&
+    isFutureWithBuffer(cacheDoc.tokenExpiresAt)
+  );
+}
+
+function isAuthCooldownActive(cacheDoc, credentialFingerprint) {
+  return (
+    cacheDoc?.credentialFingerprint === credentialFingerprint &&
+    getTime(cacheDoc.authCooldownUntil) > Date.now()
+  );
+}
+
+function shouldApplyAuthCooldown(status) {
+  return [401, 403, 429].includes(Number(status));
+}
+
+function createAuthCooldownError(cacheDoc) {
+  const error = new Error("Shiprocket authentication is temporarily paused after a recent failure");
+  error.code = "SHIPROCKET_AUTH_COOLDOWN";
+  error.status = cacheDoc?.lastAuthFailureStatus;
+  return error;
+}
+
+function hydrateMemoryToken(accessToken, tokenExpiresAt, credentialFingerprint) {
+  tokenCache = {
+    token: accessToken,
+    expiresAt: getTime(tokenExpiresAt),
+    credentialFingerprint,
+  };
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
   });
 }
 
@@ -98,26 +141,176 @@ async function shiprocketFetch(path, options = {}) {
 let tokenCache = {
   token: "",
   expiresAt: 0,
+  credentialFingerprint: "",
 };
 
-export async function getShiprocketToken() {
-  if (!hasShiprocketConfig()) {
-    logShiprocketAuthDiagnostic("missing_config", {
-      cachedTokenUsed: false,
-      freshLoginRequestMade: false,
-    });
-    throw new Error("Shiprocket is not configured");
+let authPromise = null;
+
+async function getSharedAuthCache() {
+  await connectDB();
+  return ShiprocketAuthCache.findOne({
+    provider: SHIPROCKET_AUTH_CACHE_PROVIDER,
+  }).lean();
+}
+
+async function acquireRefreshLock() {
+  const now = new Date();
+  const lockUntil = new Date(Date.now() + SHIPROCKET_AUTH_LOCK_TTL_MS);
+  const credentialFingerprint = getCredentialFingerprint();
+
+  try {
+    return await ShiprocketAuthCache.findOneAndUpdate(
+      {
+        provider: SHIPROCKET_AUTH_CACHE_PROVIDER,
+        $and: [
+          {
+            $or: [
+              { refreshLockUntil: { $exists: false } },
+              { refreshLockUntil: null },
+              { refreshLockUntil: { $lte: now } },
+              { refreshLockOwner: SHIPROCKET_AUTH_LOCK_OWNER },
+            ],
+          },
+          {
+            $or: [
+              { credentialFingerprint: { $ne: credentialFingerprint } },
+              { authCooldownUntil: { $exists: false } },
+              { authCooldownUntil: null },
+              { authCooldownUntil: { $lte: now } },
+            ],
+          },
+        ],
+      },
+      {
+        $set: {
+          provider: SHIPROCKET_AUTH_CACHE_PROVIDER,
+          refreshLockUntil: lockUntil,
+          refreshLockOwner: SHIPROCKET_AUTH_LOCK_OWNER,
+        },
+      },
+      { upsert: true, returnDocument: "after" }
+    );
+  } catch (error) {
+    if (error?.code === 11000) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function releaseRefreshLock() {
+  await ShiprocketAuthCache.updateOne(
+    {
+      provider: SHIPROCKET_AUTH_CACHE_PROVIDER,
+      refreshLockOwner: SHIPROCKET_AUTH_LOCK_OWNER,
+    },
+    {
+      $unset: {
+        refreshLockUntil: "",
+        refreshLockOwner: "",
+      },
+    }
+  );
+}
+
+async function saveSuccessfulAuth(accessToken, tokenExpiresAt, credentialFingerprint) {
+  await ShiprocketAuthCache.findOneAndUpdate(
+    { provider: SHIPROCKET_AUTH_CACHE_PROVIDER },
+    {
+      $set: {
+        provider: SHIPROCKET_AUTH_CACHE_PROVIDER,
+        accessToken,
+        tokenExpiresAt,
+        credentialFingerprint,
+      },
+      $unset: {
+        refreshLockUntil: "",
+        refreshLockOwner: "",
+        authCooldownUntil: "",
+        lastAuthFailureStatus: "",
+        lastAuthFailureAt: "",
+        lastAuthFailureMessage: "",
+      },
+    },
+    { upsert: true, returnDocument: "after" }
+  );
+}
+
+async function saveFailedAuth({ status, message, credentialFingerprint }) {
+  const shouldCooldown = shouldApplyAuthCooldown(status);
+  const update = {
+    $set: {
+      provider: SHIPROCKET_AUTH_CACHE_PROVIDER,
+      credentialFingerprint,
+      lastAuthFailureAt: new Date(),
+      lastAuthFailureMessage: sanitizeAuthMessage(message),
+    },
+    $unset: {
+      accessToken: "",
+      tokenExpiresAt: "",
+      refreshLockUntil: "",
+      refreshLockOwner: "",
+    },
+  };
+
+  if (status) {
+    update.$set.lastAuthFailureStatus = status;
+  } else {
+    update.$unset.lastAuthFailureStatus = "";
   }
 
-  if (tokenCache.token && tokenCache.expiresAt > Date.now() + 60_000) {
-    logShiprocketAuthDiagnostic("cache_hit", {
-      cachedTokenUsed: true,
-      freshLoginRequestMade: false,
-    });
-    return tokenCache.token;
+  if (shouldCooldown) {
+    update.$set.authCooldownUntil = new Date(Date.now() + SHIPROCKET_AUTH_COOLDOWN_MS);
+  } else {
+    update.$unset.authCooldownUntil = "";
   }
 
+  await ShiprocketAuthCache.findOneAndUpdate(
+    { provider: SHIPROCKET_AUTH_CACHE_PROVIDER },
+    update,
+    { upsert: true, returnDocument: "after" }
+  );
+}
+
+async function waitForSharedToken(credentialFingerprint) {
+  const deadline = Date.now() + SHIPROCKET_AUTH_LOCK_WAIT_MS;
+
+  while (Date.now() < deadline) {
+    await delay(SHIPROCKET_AUTH_LOCK_POLL_MS);
+    const cacheDoc = await getSharedAuthCache();
+
+    if (isUsableSharedToken(cacheDoc, credentialFingerprint)) {
+      hydrateMemoryToken(
+        cacheDoc.accessToken,
+        cacheDoc.tokenExpiresAt,
+        credentialFingerprint
+      );
+      logShiprocketAuth("shared_cache_hit_after_wait", {
+        cachedTokenUsed: true,
+        sharedCacheHit: true,
+        freshLoginRequestMade: false,
+      });
+      return cacheDoc.accessToken;
+    }
+
+    if (isAuthCooldownActive(cacheDoc, credentialFingerprint)) {
+      logShiprocketAuth("cooldown_active_after_wait", {
+        cachedTokenUsed: false,
+        sharedCacheHit: false,
+        freshLoginRequestMade: false,
+      });
+      throw createAuthCooldownError(cacheDoc);
+    }
+  }
+
+  return "";
+}
+
+async function loginToShiprocket(credentialFingerprint) {
   let response;
+  let data = {};
+
   try {
     response = await fetch(`${SHIPROCKET_BASE_URL}/auth/login`, {
       method: "POST",
@@ -128,18 +321,25 @@ export async function getShiprocketToken() {
       }),
     });
   } catch (error) {
-    logShiprocketAuthDiagnostic("fresh_login_network_error", {
+    logShiprocketAuth("fresh_login_network_error", {
       cachedTokenUsed: false,
+      sharedCacheHit: false,
       freshLoginRequestMade: true,
       errorName: error?.name || "Error",
       message: sanitizeAuthMessage(error?.message),
     });
+    await saveFailedAuth({
+      status: null,
+      message: error?.message || "Network error",
+      credentialFingerprint,
+    });
     throw error;
   }
 
-  const data = await response.json().catch(() => ({}));
-  logShiprocketAuthDiagnostic("fresh_login_response", {
+  data = await response.json().catch(() => ({}));
+  logShiprocketAuth("fresh_login_response", {
     cachedTokenUsed: false,
+    sharedCacheHit: false,
     freshLoginRequestMade: true,
     httpStatus: response.status,
     authSucceeded: Boolean(response.ok && data.token),
@@ -147,15 +347,120 @@ export async function getShiprocketToken() {
   });
 
   if (!response.ok || !data.token) {
-    throw new Error(data?.message || "Shiprocket authentication failed");
+    const message = data?.message || data?.error || "Shiprocket authentication failed";
+    await saveFailedAuth({
+      status: response.status,
+      message,
+      credentialFingerprint,
+    });
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
 
-  tokenCache = {
-    token: data.token,
-    expiresAt: Date.now() + 9 * 24 * 60 * 60 * 1000,
-  };
+  const tokenExpiresAt = new Date(Date.now() + SHIPROCKET_TOKEN_TTL_MS);
+  await saveSuccessfulAuth(data.token, tokenExpiresAt, credentialFingerprint);
+  hydrateMemoryToken(data.token, tokenExpiresAt, credentialFingerprint);
 
-  return tokenCache.token;
+  return data.token;
+}
+
+async function resolveShiprocketToken() {
+  const credentialFingerprint = getCredentialFingerprint();
+
+  await connectDB();
+
+  const cacheDoc = await getSharedAuthCache();
+
+  if (isUsableSharedToken(cacheDoc, credentialFingerprint)) {
+    hydrateMemoryToken(cacheDoc.accessToken, cacheDoc.tokenExpiresAt, credentialFingerprint);
+    logShiprocketAuth("shared_cache_hit", {
+      cachedTokenUsed: true,
+      sharedCacheHit: true,
+      freshLoginRequestMade: false,
+    });
+    return cacheDoc.accessToken;
+  }
+
+  if (isAuthCooldownActive(cacheDoc, credentialFingerprint)) {
+    logShiprocketAuth("cooldown_active", {
+      cachedTokenUsed: false,
+      sharedCacheHit: false,
+      freshLoginRequestMade: false,
+    });
+    throw createAuthCooldownError(cacheDoc);
+  }
+
+  const lockDoc = await acquireRefreshLock();
+
+  if (lockDoc?.refreshLockOwner === SHIPROCKET_AUTH_LOCK_OWNER) {
+    try {
+      return await loginToShiprocket(credentialFingerprint);
+    } finally {
+      await releaseRefreshLock().catch(() => {});
+    }
+  }
+
+  logShiprocketAuth("refresh_lock_wait", {
+    cachedTokenUsed: false,
+    sharedCacheHit: false,
+    freshLoginRequestMade: false,
+  });
+
+  const sharedToken = await waitForSharedToken(credentialFingerprint);
+  if (sharedToken) return sharedToken;
+
+  const recoveredLockDoc = await acquireRefreshLock();
+  if (recoveredLockDoc?.refreshLockOwner === SHIPROCKET_AUTH_LOCK_OWNER) {
+    try {
+      return await loginToShiprocket(credentialFingerprint);
+    } finally {
+      await releaseRefreshLock().catch(() => {});
+    }
+  }
+
+  const error = new Error("Shiprocket authentication is already in progress");
+  error.code = "SHIPROCKET_AUTH_IN_PROGRESS";
+  throw error;
+}
+
+export async function getShiprocketToken() {
+  if (!hasShiprocketConfig()) {
+    logShiprocketAuth("missing_config", {
+      cachedTokenUsed: false,
+      sharedCacheHit: false,
+      freshLoginRequestMade: false,
+    });
+    throw new Error("Shiprocket is not configured");
+  }
+
+  const credentialFingerprint = getCredentialFingerprint();
+
+  if (isUsableMemoryToken(credentialFingerprint)) {
+    logShiprocketAuth("memory_cache_hit", {
+      cachedTokenUsed: true,
+      sharedCacheHit: false,
+      freshLoginRequestMade: false,
+    });
+    return tokenCache.token;
+  }
+
+  if (authPromise) {
+    logShiprocketAuth("in_flight_join", {
+      cachedTokenUsed: false,
+      sharedCacheHit: false,
+      freshLoginRequestMade: false,
+    });
+    return authPromise;
+  }
+
+  authPromise = resolveShiprocketToken();
+
+  try {
+    return await authPromise;
+  } finally {
+    authPromise = null;
+  }
 }
 
 function normalizeServiceabilityWeight(weightKg) {
