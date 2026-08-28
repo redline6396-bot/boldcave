@@ -77,6 +77,18 @@ const orderSchema = new mongoose.Schema(
       razorpayOrderId: { type: String, index: true },
       razorpayPaymentId: { type: String },
       razorpaySignature: { type: String },
+      refundStatus: {
+        type: String,
+        enum: ["not_required", "required", "pending", "refunded", "failed"],
+        default: "not_required",
+      },
+      razorpayRefundId: { type: String },
+      refundAmount: { type: Number, min: 0 },
+      refundIdempotencyKey: { type: String },
+      refundInitiatedAt: { type: Date },
+      refundedAt: { type: Date },
+      refundLastCheckedAt: { type: Date },
+      refundError: { type: String },
     },
     orderStatus: {
       type: String,
@@ -109,6 +121,35 @@ const orderSchema = new mongoose.Schema(
       lastSyncedAt: { type: Date },
       syncStartedAt: { type: Date },
     },
+    cancellation: {
+      status: {
+        type: String,
+        enum: ["none", "processing", "cancelled", "failed"],
+        default: "none",
+        index: true,
+      },
+      reason: { type: String, trim: true },
+      cancelledAt: { type: Date },
+      cancelledBy: {
+        type: String,
+        enum: ["customer", "admin", "system"],
+      },
+      shiprocketCancelStatus: {
+        type: String,
+        enum: ["not_required", "pending", "cancelled", "failed"],
+        default: "not_required",
+      },
+      shiprocketCancelError: { type: String },
+    },
+    stockRestoration: {
+      status: {
+        type: String,
+        enum: ["not_required", "pending", "restoring", "restored", "failed"],
+        default: "not_required",
+      },
+      restoredAt: { type: Date },
+      error: { type: String },
+    },
   },
   { timestamps: true }
 );
@@ -124,6 +165,16 @@ const REQUIRED_ORDER_ITEM_PATHS = [
   "items.lengthCm",
   "items.breadthCm",
   "items.heightCm",
+  "payment.refundStatus",
+  "payment.razorpayRefundId",
+  "payment.refundAmount",
+  "payment.refundIdempotencyKey",
+  "payment.refundInitiatedAt",
+  "payment.refundedAt",
+  "payment.refundLastCheckedAt",
+  "cancellation.status",
+  "cancellation.shiprocketCancelStatus",
+  "stockRestoration.status",
 ];
 
 if (

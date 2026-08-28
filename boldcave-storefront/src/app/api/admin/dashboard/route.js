@@ -193,7 +193,7 @@ export async function GET(request) {
         { $sort: { revenue: -1, units: -1 } },
         { $limit: 5 },
       ]),
-      getSerializedStoreSettings({ includeOtpMode: true }),
+      getSerializedStoreSettings(),
     ]);
 
     const seriesByDate = new Map(

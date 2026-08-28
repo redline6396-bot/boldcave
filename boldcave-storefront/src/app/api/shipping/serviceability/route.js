@@ -1,6 +1,11 @@
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
+import connectDB from "@/lib/db";
+import { calculateCart } from "@/lib/orders/pricing";
 import { lookupIndianPincode } from "@/lib/shipping/pincodeLookup";
-import { checkServiceability } from "@/lib/shipping/shiprocket";
+import {
+  checkServiceability,
+  validateCheckoutServiceability,
+} from "@/lib/shipping/shiprocket";
 import { isValidPincode } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -15,6 +20,45 @@ function locationDetails(location) {
   };
 }
 
+async function getServiceabilityResult({ pincode, cod, items }) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return checkServiceability({
+      deliveryPincode: pincode,
+      cod,
+    });
+  }
+
+  await connectDB();
+  const cart = await calculateCart({ items });
+  if (cart.error) {
+    return {
+      serviceable: false,
+      code: cart.error.code,
+      message: cart.error.message,
+      status: cart.error.status,
+      details: cart.error.details,
+    };
+  }
+
+  const serviceability = await validateCheckoutServiceability({
+    deliveryPincode: pincode,
+    cod,
+    items: cart.items,
+  });
+
+  if (!serviceability.ok) {
+    return {
+      serviceable: false,
+      code: serviceability.code,
+      message: serviceability.message,
+      status: serviceability.status,
+      retryable: serviceability.retryable,
+    };
+  }
+
+  return serviceability.result;
+}
+
 export async function POST(request) {
   let location = { city: "", state: "" };
 
@@ -27,10 +71,24 @@ export async function POST(request) {
     }
 
     location = await lookupIndianPincode(pincode);
-    const result = await checkServiceability({
-      deliveryPincode: pincode,
+    const result = await getServiceabilityResult({
+      pincode,
       cod: Boolean(body.cod),
+      items: body.items,
     });
+
+    if (result.status && !result.serviceable) {
+      return failure(
+        result.code || "SHIPROCKET_TEMPORARY_ERROR",
+        result.message || "Shipping serviceability could not be checked right now",
+        result.status,
+        {
+          ...(result.details || {}),
+          ...locationDetails(location),
+          retryable: result.retryable,
+        }
+      );
+    }
 
     return success({
       ...result,

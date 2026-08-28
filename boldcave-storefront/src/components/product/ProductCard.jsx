@@ -82,6 +82,22 @@ const getComboSizeSummary = (comboItems = []) => {
     .join(" + ");
 };
 
+const splitNotes = (value) =>
+  String(value || "")
+    .split(/[\u2022\u00b7|,]/)
+    .map((note) => note.trim())
+    .filter(Boolean);
+
+const getProductNotesLine = (product) => {
+  const topNotes = Array.isArray(product?.fragranceNotes?.top)
+    ? product.fragranceNotes.top.flatMap(splitNotes)
+    : [];
+
+  if (topNotes.length) return topNotes.slice(0, 3).join(` ${BULLET} `);
+
+  return splitNotes(product?.fragranceProfile).slice(0, 3).join(` ${BULLET} `);
+};
+
 export default function ProductCard({ product }) {
   const router = useRouter();
   const { addToCart } = useCart();
@@ -139,9 +155,7 @@ export default function ProductCard({ product }) {
   const hasHoverImage = Boolean(hoverImage);
   const productUrl = `/product/${product.slug}`;
 
-  const profileLine =
-    product.fragranceNotes?.top?.slice(0, 3).join(" | ") ||
-    product.fragranceProfile;
+  const profileLine = getProductNotesLine(product);
   const comboNamesLine = isCombo ? getComboNamesLine(product.comboItems) : "";
   const comboSizeSummary = isCombo ? getComboSizeSummary(product.comboItems) : "";
 

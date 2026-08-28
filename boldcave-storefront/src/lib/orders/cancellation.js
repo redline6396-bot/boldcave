@@ -1,0 +1,749 @@
+import mongoose from "mongoose";
+
+import connectDB from "@/lib/db";
+import { restoreStock } from "@/lib/orders/pricing";
+import {
+  buildFullRefundRequest,
+  createRazorpayFullRefund,
+  fetchRazorpayPaymentRefunds,
+  fetchRazorpayRefund,
+  getRefundAmountPaise,
+  getRefundIdempotencyKey,
+  RazorpayRefundError,
+} from "@/lib/payments/razorpay";
+import {
+  cancelShiprocketShipmentByAwb,
+  cancelShiprocketOrder,
+  mapShiprocketStatusToOrderStatus,
+} from "@/lib/shipping/shiprocket";
+import { cleanString, isObjectId } from "@/lib/validation";
+import Order from "@/models/Order";
+
+export const CANCELLABLE_ORDER_STATUSES = ["confirmed", "processing"];
+
+export class CancellationError extends Error {
+  constructor(code, message, status = 400, details = undefined) {
+    super(message);
+    this.name = "CancellationError";
+    this.code = code;
+    this.status = status;
+    this.details = details;
+  }
+}
+
+function sanitizeError(error) {
+  return String(error?.message || "Cancellation failed").slice(0, 300);
+}
+
+function customerSafeRefundError() {
+  return "Your refund could not be completed automatically. Our team will review it.";
+}
+
+function getOrderQuery(orderId) {
+  return isObjectId(orderId)
+    ? { _id: orderId }
+    : { orderNumber: String(orderId || "") };
+}
+
+function normalizeReason(reason) {
+  return cleanString(reason, 500);
+}
+
+function isPrepaidRazorpay(order) {
+  return (
+    order?.payment?.method === "razorpay" &&
+    order?.payment?.paymentStatus === "paid"
+  );
+}
+
+function mapRefundStatus(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "processed") return "refunded";
+  if (normalized === "failed") return "failed";
+  return "pending";
+}
+
+function dateFromUnixSeconds(value) {
+  const timestamp = Number(value);
+  return Number.isFinite(timestamp) && timestamp > 0
+    ? new Date(timestamp * 1000)
+    : new Date();
+}
+
+function getRefundAmountRupees(refund, amountPaise) {
+  const paise = Number(refund?.amount) || Number(amountPaise) || 0;
+  return Math.round(paise) / 100;
+}
+
+function getStoredRefundId(order) {
+  return String(order?.payment?.razorpayRefundId || "").trim();
+}
+
+function getStoredRefundKey(order) {
+  return String(order?.payment?.refundIdempotencyKey || "").trim();
+}
+
+function refundMatchesOrder(refund, order, idempotencyKey) {
+  if (!refund) return false;
+  const notes = refund.notes || {};
+  return (
+    refund.receipt === idempotencyKey ||
+    notes.refundIdempotencyKey === idempotencyKey ||
+    notes.orderNumber === order.orderNumber ||
+    notes.orderId === String(order._id)
+  );
+}
+
+function getRefundFields(refund, { amountPaise, idempotencyKey }) {
+  const refundStatus = mapRefundStatus(refund?.status);
+  const now = new Date();
+  const fields = {
+    "payment.refundStatus": refundStatus,
+    "payment.razorpayRefundId": refund?.id || "",
+    "payment.refundAmount": getRefundAmountRupees(refund, amountPaise),
+    "payment.refundIdempotencyKey": idempotencyKey,
+    "payment.refundInitiatedAt": refund?.created_at
+      ? dateFromUnixSeconds(refund.created_at)
+      : now,
+    "payment.refundLastCheckedAt": now,
+    "payment.refundError":
+      refundStatus === "failed" ? customerSafeRefundError() : "",
+  };
+
+  if (refundStatus === "refunded") {
+    fields["payment.refundedAt"] = now;
+  }
+
+  return fields;
+}
+
+async function persistRefundState(orderId, refund, options) {
+  const fields = getRefundFields(refund, options);
+  const unset = {};
+
+  if (fields["payment.refundStatus"] !== "refunded") {
+    unset["payment.refundedAt"] = "";
+  }
+
+  const update = { $set: fields };
+  if (Object.keys(unset).length) update.$unset = unset;
+
+  return Order.findByIdAndUpdate(orderId, update, { returnDocument: "after" });
+}
+
+async function markRefundIntent(order, { amountPaise, idempotencyKey }) {
+  return Order.findOneAndUpdate(
+    {
+      _id: order._id,
+      "payment.method": "razorpay",
+      "payment.paymentStatus": "paid",
+      "payment.refundStatus": { $ne: "refunded" },
+    },
+    {
+      $set: {
+        "payment.refundStatus": "pending",
+        "payment.refundAmount": Math.round(amountPaise) / 100,
+        "payment.refundIdempotencyKey": idempotencyKey,
+        "payment.refundError": "",
+      },
+      $unset: {
+        "payment.refundedAt": "",
+      },
+    },
+    { returnDocument: "after" }
+  );
+}
+
+async function reconcileExistingRefund(order, { amountPaise, idempotencyKey }) {
+  const paymentId = order.payment?.razorpayPaymentId;
+  const storedRefundId = getStoredRefundId(order);
+
+  if (storedRefundId) {
+    const refund = await fetchRazorpayRefund({
+      razorpayPaymentId: paymentId,
+      refundId: storedRefundId,
+    });
+    return persistRefundState(order._id, refund, { amountPaise, idempotencyKey });
+  }
+
+  const refunds = await fetchRazorpayPaymentRefunds(paymentId);
+  const match = (refunds?.items || []).find((refund) =>
+    refundMatchesOrder(refund, order, idempotencyKey)
+  );
+
+  return match
+    ? persistRefundState(order._id, match, { amountPaise, idempotencyKey })
+    : null;
+}
+
+async function processPrepaidRefund(order) {
+  const razorpayPaymentId = String(order.payment?.razorpayPaymentId || "").trim();
+  const amountPaise = getRefundAmountPaise(order);
+  const idempotencyKey = getStoredRefundKey(order) || getRefundIdempotencyKey(order);
+
+  if (!razorpayPaymentId) {
+    throw new CancellationError(
+      "RAZORPAY_PAYMENT_ID_MISSING",
+      "Refund cannot be started for this payment.",
+      409
+    );
+  }
+
+  if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
+    throw new CancellationError(
+      "REFUND_AMOUNT_INVALID",
+      "Refund amount is invalid for this order.",
+      409
+    );
+  }
+
+  await markRefundIntent(order, { amountPaise, idempotencyKey });
+
+  let refreshedOrder = await Order.findById(order._id);
+  if (refreshedOrder?.payment?.refundStatus === "refunded") {
+    return refreshedOrder;
+  }
+
+  try {
+    if (
+      getStoredRefundId(refreshedOrder) ||
+      ["pending", "failed"].includes(refreshedOrder?.payment?.refundStatus)
+    ) {
+      const reconciledOrder = await reconcileExistingRefund(refreshedOrder, {
+        amountPaise,
+        idempotencyKey,
+      });
+
+      if (reconciledOrder) {
+        if (reconciledOrder.payment?.refundStatus === "failed") {
+          throw new RazorpayRefundError(customerSafeRefundError(), {
+            status: 502,
+            refundStatus: "failed",
+          });
+        }
+        return reconciledOrder;
+      }
+    }
+
+    const refundBody = buildFullRefundRequest({
+      order: refreshedOrder || order,
+      amountPaise,
+      idempotencyKey,
+    });
+    refundBody.notes.refundIdempotencyKey = idempotencyKey;
+
+    const refund = await createRazorpayFullRefund({
+      razorpayPaymentId,
+      amountPaise,
+      idempotencyKey,
+      body: refundBody,
+    });
+
+    refreshedOrder = await persistRefundState(order._id, refund, {
+      amountPaise,
+      idempotencyKey,
+    });
+
+    if (refreshedOrder?.payment?.refundStatus === "failed") {
+      throw new RazorpayRefundError(customerSafeRefundError(), {
+        status: 502,
+        refundStatus: "failed",
+      });
+    }
+
+    return refreshedOrder;
+  } catch (error) {
+    if (error instanceof CancellationError) throw error;
+
+    await Order.findByIdAndUpdate(order._id, {
+      $set: {
+        "payment.refundStatus": "failed",
+        "payment.refundAmount": Math.round(amountPaise) / 100,
+        "payment.refundIdempotencyKey": idempotencyKey,
+        "payment.refundLastCheckedAt": new Date(),
+        "payment.refundError": customerSafeRefundError(),
+      },
+    });
+
+    throw new CancellationError(
+      "RAZORPAY_REFUND_FAILED",
+      customerSafeRefundError(),
+      error?.status || 502
+    );
+  }
+}
+
+function shipmentStatusIndicatesMovement(rawStatus) {
+  const status = String(rawStatus || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+
+  if (!status) return false;
+  if (status.includes("pickup scheduled")) return false;
+  if (status.includes("ready to ship")) return false;
+  if (status.includes("awb assigned")) return false;
+  if (status.includes("manifest generated")) return false;
+
+  return (
+    status.includes("out for pickup") ||
+    status.includes("picked up") ||
+    status.includes("pickup done") ||
+    status.includes("picked by") ||
+    status.includes("handed over") ||
+    status.includes("handed to courier") ||
+    status.includes("handover") ||
+    status.includes("shipped") ||
+    status.includes("dispatched") ||
+    status.includes("in transit") ||
+    status.includes("intransit") ||
+    status.includes("transit") ||
+    status.includes("out for delivery") ||
+    status.includes("outfordelivery") ||
+    status === "ofd" ||
+    (status.includes("delivered") && !status.includes("rto"))
+  );
+}
+
+function assertCancellable(order) {
+  if (order.orderStatus === "cancelled") {
+    throw new CancellationError(
+      "ORDER_ALREADY_CANCELLED",
+      "This order is already cancelled.",
+      409
+    );
+  }
+
+  if (!CANCELLABLE_ORDER_STATUSES.includes(order.orderStatus)) {
+    throw new CancellationError(
+      "ORDER_NOT_CANCELLABLE",
+      "This order can no longer be cancelled.",
+      409
+    );
+  }
+
+  const mappedShipmentStatus = mapShiprocketStatusToOrderStatus(
+    order.shiprocket?.shipmentStatus
+  );
+
+  if (
+    mappedShipmentStatus &&
+    !CANCELLABLE_ORDER_STATUSES.includes(mappedShipmentStatus)
+  ) {
+    throw new CancellationError(
+      "SHIPMENT_ALREADY_STARTED",
+      "This order can no longer be cancelled after shipment has started.",
+      409
+    );
+  }
+
+  if (shipmentStatusIndicatesMovement(order.shiprocket?.shipmentStatus)) {
+    throw new CancellationError(
+      "SHIPMENT_ALREADY_STARTED",
+      "This order can no longer be cancelled after shipment has started.",
+      409
+    );
+  }
+}
+
+async function loadOrder({ orderId, userId }) {
+  const query = getOrderQuery(orderId);
+  if (userId) query.user = userId;
+
+  const order = await Order.findOne(query);
+  if (!order) {
+    throw new CancellationError("ORDER_NOT_FOUND", "Order not found", 404);
+  }
+
+  return order;
+}
+
+function getClaimFilter(order, userId) {
+  const filter = {
+    _id: order._id,
+    orderStatus: { $in: CANCELLABLE_ORDER_STATUSES },
+    $or: [
+      { "cancellation.status": { $exists: false } },
+      { "cancellation.status": "none" },
+      { "cancellation.status": "failed" },
+    ],
+  };
+
+  if (userId) filter.user = userId;
+  return filter;
+}
+
+async function failClaimedCancellation(orderId, updates = {}) {
+  return Order.findByIdAndUpdate(
+    orderId,
+    {
+      $set: {
+        "cancellation.status": "failed",
+        ...updates,
+      },
+    },
+    { returnDocument: "after" }
+  );
+}
+
+async function finalizeCancellation({
+  orderId,
+  actor,
+  reason,
+  shiprocketCancelStatus,
+}) {
+  const session = await mongoose.startSession();
+  let finalOrder = null;
+
+  try {
+    await session.withTransaction(async () => {
+      const order = await Order.findOne({
+        _id: orderId,
+        orderStatus: { $in: CANCELLABLE_ORDER_STATUSES },
+        "cancellation.status": "processing",
+        "stockRestoration.status": { $ne: "restored" },
+      }).session(session);
+
+      if (!order) {
+        throw new CancellationError(
+          "CANCELLATION_FINALIZE_CONFLICT",
+          "Cancellation could not be finalized. Please refresh and try again.",
+          409
+        );
+      }
+
+      order.stockRestoration.status = "restoring";
+      order.stockRestoration.error = "";
+      await order.save({ session });
+
+      await restoreStock(order.items, { session });
+
+      const now = new Date();
+      order.orderStatus = "cancelled";
+      order.cancellation.status = "cancelled";
+      order.cancellation.reason = reason;
+      order.cancellation.cancelledBy = actor;
+      order.cancellation.cancelledAt = now;
+      order.cancellation.shiprocketCancelStatus = shiprocketCancelStatus;
+      order.cancellation.shiprocketCancelError = "";
+      order.stockRestoration.status = "restored";
+      order.stockRestoration.restoredAt = now;
+      order.stockRestoration.error = "";
+      await order.save({ session });
+
+      finalOrder = order;
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  return finalOrder;
+}
+
+export async function cancelOrder({
+  orderId,
+  actor,
+  reason,
+  userId = null,
+}) {
+  await connectDB();
+
+  const normalizedReason = normalizeReason(reason);
+  if (!normalizedReason) {
+    throw new CancellationError(
+      "CANCELLATION_REASON_REQUIRED",
+      "Cancellation reason is required.",
+      400
+    );
+  }
+
+  if (!["customer", "admin"].includes(actor)) {
+    throw new CancellationError("INVALID_ACTOR", "Invalid cancellation actor.", 400);
+  }
+
+  const order = await loadOrder({ orderId, userId });
+  assertCancellable(order);
+  const prepaidRazorpay = isPrepaidRazorpay(order);
+
+  const hasShiprocketCancellationTarget = Boolean(
+    order.shiprocket?.awbCode || order.shiprocket?.shiprocketOrderId
+  );
+  const shiprocketAlreadyCancelled =
+    order.cancellation?.shiprocketCancelStatus === "cancelled";
+
+  const claimedOrder = await Order.findOneAndUpdate(
+    getClaimFilter(order, userId),
+    {
+      $set: {
+        "cancellation.status": "processing",
+        "cancellation.reason": normalizedReason,
+        "cancellation.cancelledBy": actor,
+        "cancellation.shiprocketCancelStatus": shiprocketAlreadyCancelled
+          ? "cancelled"
+          : hasShiprocketCancellationTarget
+            ? "pending"
+            : "not_required",
+        "cancellation.shiprocketCancelError": "",
+        "stockRestoration.status": "pending",
+        "stockRestoration.error": "",
+      },
+      $unset: {
+        "cancellation.cancelledAt": "",
+        "stockRestoration.restoredAt": "",
+      },
+    },
+    { returnDocument: "after" }
+  );
+
+  if (!claimedOrder) {
+    const latestOrder = await loadOrder({ orderId, userId });
+
+    if (latestOrder.orderStatus === "cancelled") {
+      throw new CancellationError(
+        "ORDER_ALREADY_CANCELLED",
+        "This order is already cancelled.",
+        409,
+        { order: latestOrder }
+      );
+    }
+
+    if (latestOrder.cancellation?.status === "processing") {
+      throw new CancellationError(
+        "CANCELLATION_IN_PROGRESS",
+        "Cancellation is already in progress.",
+        409,
+        { order: latestOrder }
+      );
+    }
+
+    assertCancellable(latestOrder);
+    throw new CancellationError(
+      "CANCELLATION_CLAIM_FAILED",
+      "Cancellation could not be started. Please retry.",
+      409,
+      { order: latestOrder }
+    );
+  }
+
+  try {
+    assertCancellable(claimedOrder);
+  } catch (error) {
+    const failedOrder = await failClaimedCancellation(claimedOrder._id, {
+      "cancellation.shiprocketCancelStatus": "failed",
+      "cancellation.shiprocketCancelError": sanitizeError(error),
+      "stockRestoration.status": "not_required",
+      "stockRestoration.error": "",
+    });
+
+    if (error instanceof CancellationError) {
+      error.details = { ...(error.details || {}), order: failedOrder };
+      throw error;
+    }
+
+    throw error;
+  }
+
+  const claimedAwbCode = String(claimedOrder.shiprocket?.awbCode || "").trim();
+  const claimedShiprocketOrderId = claimedOrder.shiprocket?.shiprocketOrderId;
+  const claimedHasShiprocketTarget = Boolean(
+    claimedAwbCode || claimedShiprocketOrderId
+  );
+  const claimedShiprocketAlreadyCancelled =
+    claimedOrder.cancellation?.shiprocketCancelStatus === "cancelled";
+  let shiprocketCancelStatus =
+    claimedOrder.cancellation?.shiprocketCancelStatus || "not_required";
+
+  if (claimedHasShiprocketTarget && !claimedShiprocketAlreadyCancelled) {
+    try {
+      if (claimedAwbCode) {
+        await cancelShiprocketShipmentByAwb(claimedAwbCode);
+      } else {
+        await cancelShiprocketOrder(claimedShiprocketOrderId);
+      }
+      shiprocketCancelStatus = "cancelled";
+      await Order.findByIdAndUpdate(claimedOrder._id, {
+        $set: {
+          "cancellation.shiprocketCancelStatus": "cancelled",
+          "cancellation.shiprocketCancelError": "",
+        },
+      });
+    } catch (error) {
+      const failedOrder = await failClaimedCancellation(claimedOrder._id, {
+        "cancellation.shiprocketCancelStatus": "failed",
+        "cancellation.shiprocketCancelError": sanitizeError(error),
+        "stockRestoration.status": "not_required",
+        "stockRestoration.error": "",
+      });
+
+      throw new CancellationError(
+        "SHIPROCKET_CANCEL_FAILED",
+        "Shiprocket cancellation failed. The order was not cancelled.",
+        502,
+        { order: failedOrder }
+      );
+    }
+  }
+
+  if (prepaidRazorpay) {
+    try {
+      await processPrepaidRefund(claimedOrder);
+    } catch (error) {
+      const failedOrder = await failClaimedCancellation(claimedOrder._id, {
+        "cancellation.shiprocketCancelStatus": shiprocketCancelStatus,
+        "cancellation.shiprocketCancelError":
+          shiprocketCancelStatus === "failed" ? sanitizeError(error) : "",
+        "stockRestoration.status": "not_required",
+        "stockRestoration.error": "",
+      });
+
+      if (error instanceof CancellationError) {
+        error.details = { ...(error.details || {}), order: failedOrder };
+        throw error;
+      }
+
+      throw new CancellationError(
+        "RAZORPAY_REFUND_FAILED",
+        customerSafeRefundError(),
+        error?.status || 502,
+        { order: failedOrder }
+      );
+    }
+  }
+
+  try {
+    const finalOrder = await finalizeCancellation({
+      orderId: claimedOrder._id,
+      actor,
+      reason: normalizedReason,
+      shiprocketCancelStatus,
+    });
+
+    return {
+      order: finalOrder,
+      shiprocketCancelStatus,
+      stockRestored: true,
+      refundStatus: finalOrder?.payment?.refundStatus,
+      refundAmount: finalOrder?.payment?.refundAmount,
+      refundedAt: finalOrder?.payment?.refundedAt,
+    };
+  } catch (error) {
+    const failedOrder = await failClaimedCancellation(claimedOrder._id, {
+      "cancellation.shiprocketCancelStatus": shiprocketCancelStatus,
+      "cancellation.shiprocketCancelError":
+        shiprocketCancelStatus === "failed" ? sanitizeError(error) : "",
+      "stockRestoration.status": "failed",
+      "stockRestoration.error": sanitizeError(error),
+    });
+
+    if (error instanceof CancellationError) {
+      error.details = { ...(error.details || {}), order: failedOrder };
+      throw error;
+    }
+
+    throw new CancellationError(
+      "STOCK_RESTORE_FAILED",
+      "Cancellation could not be completed. The order was not cancelled.",
+      500,
+      { order: failedOrder }
+    );
+  }
+}
+
+export async function retryOrderRefund({ orderId }) {
+  await connectDB();
+
+  const order = await loadOrder({ orderId });
+  if (!isPrepaidRazorpay(order)) {
+    throw new CancellationError(
+      "REFUND_NOT_AVAILABLE",
+      "Refund retry is only available for paid Razorpay orders.",
+      400
+    );
+  }
+
+  if (order.payment?.refundStatus === "refunded") {
+    return {
+      order,
+      refundStatus: "refunded",
+      refundAmount: order.payment?.refundAmount,
+      refundedAt: order.payment?.refundedAt,
+      idempotent: true,
+    };
+  }
+
+  const cancellationStatus = order.cancellation?.status;
+  if (!["failed", "processing", "cancelled"].includes(cancellationStatus)) {
+    throw new CancellationError(
+      "REFUND_RETRY_NOT_ALLOWED",
+      "Refund retry is not available for this order state.",
+      409
+    );
+  }
+
+  if (order.orderStatus !== "cancelled") {
+    assertCancellable(order);
+
+    const shiprocketCancelStatus =
+      order.cancellation?.shiprocketCancelStatus || "not_required";
+    if (!["cancelled", "not_required"].includes(shiprocketCancelStatus)) {
+      throw new CancellationError(
+        "SHIPROCKET_CANCEL_REQUIRED",
+        "Cancel Shiprocket before retrying the refund.",
+        409,
+        { order }
+      );
+    }
+  }
+
+  let refundedOrder;
+  try {
+    refundedOrder = await processPrepaidRefund(order);
+  } catch (error) {
+    const failedOrder =
+      order.orderStatus === "cancelled"
+        ? await Order.findById(order._id)
+        : await failClaimedCancellation(order._id, {
+            "cancellation.shiprocketCancelStatus":
+              order.cancellation?.shiprocketCancelStatus || "not_required",
+            "stockRestoration.status": "not_required",
+            "stockRestoration.error": "",
+          });
+
+    if (error instanceof CancellationError) {
+      error.details = { ...(error.details || {}), order: failedOrder };
+      throw error;
+    }
+
+    throw new CancellationError(
+      "RAZORPAY_REFUND_FAILED",
+      customerSafeRefundError(),
+      error?.status || 502,
+      { order: failedOrder }
+    );
+  }
+
+  if (refundedOrder.orderStatus === "cancelled") {
+    return {
+      order: refundedOrder,
+      refundStatus: refundedOrder.payment?.refundStatus,
+      refundAmount: refundedOrder.payment?.refundAmount,
+      refundedAt: refundedOrder.payment?.refundedAt,
+    };
+  }
+
+  const finalOrder = await finalizeCancellation({
+    orderId: refundedOrder._id,
+    actor: refundedOrder.cancellation?.cancelledBy || "admin",
+    reason: refundedOrder.cancellation?.reason || "Refund retry",
+    shiprocketCancelStatus:
+      refundedOrder.cancellation?.shiprocketCancelStatus || "cancelled",
+  });
+
+  return {
+    order: finalOrder,
+    refundStatus: finalOrder.payment?.refundStatus,
+    refundAmount: finalOrder.payment?.refundAmount,
+    refundedAt: finalOrder.payment?.refundedAt,
+    stockRestored: true,
+  };
+}

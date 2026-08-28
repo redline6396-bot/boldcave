@@ -513,6 +513,50 @@ export async function deductStock(items) {
   clearProductCache();
 }
 
+export async function restoreStock(items, { session } = {}) {
+  const canonicalResult = await getCanonicalStockRequirements(getStockRequirements(items));
+
+  if (canonicalResult.issues.length) {
+    const error = new Error("Stock restoration failed");
+    error.code = "STOCK_RESTORE_FAILED";
+    error.items = canonicalResult.issues;
+    throw error;
+  }
+
+  for (const requirement of canonicalResult.requirements) {
+    const query = Product.updateOne(
+      {
+        _id: requirement.productId,
+        "variants.size": requirement.size,
+      },
+      {
+        $inc: {
+          "variants.$.stock": requirement.quantity,
+        },
+      }
+    );
+
+    if (session) query.session(session);
+
+    const result = await query;
+    if (result.modifiedCount !== 1) {
+      const error = new Error("Stock restoration failed");
+      error.code = "STOCK_RESTORE_FAILED";
+      error.items = [
+        {
+          productId: requirement.productId,
+          size: requirement.size,
+          quantity: requirement.quantity,
+          reason: "VARIANT_UNAVAILABLE",
+        },
+      ];
+      throw error;
+    }
+  }
+
+  clearProductCache();
+}
+
 export async function hasVerifiedPurchase(userId, productId) {
   const order = await Order.findOne({
     user: userId,

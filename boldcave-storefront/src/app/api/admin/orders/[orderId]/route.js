@@ -63,6 +63,28 @@ export async function PATCH(request, { params }) {
     const order = await findOrder(orderId);
     if (!order) return applyAdminCors(request, failure("ORDER_NOT_FOUND", "Order not found", 404));
 
+    if (status === "cancelled") {
+      return applyAdminCors(
+        request,
+        failure(
+          "USE_CANCEL_ENDPOINT",
+          "Use the dedicated cancel action to cancel an order.",
+          400
+        )
+      );
+    }
+
+    if (order.orderStatus === "cancelled") {
+      return applyAdminCors(
+        request,
+        failure(
+          "ORDER_STATUS_TERMINAL",
+          "Cancelled orders cannot be reactivated.",
+          409
+        )
+      );
+    }
+
     if (
       COURIER_CONTROLLED_STATUSES.includes(order.orderStatus) &&
       status !== "cancelled"

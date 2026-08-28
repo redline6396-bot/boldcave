@@ -134,10 +134,10 @@ export async function validateCoupon({ items, couponCode }) {
   );
 }
 
-export async function checkShippingServiceability({ pincode, cod = false }) {
+export async function checkShippingServiceability({ pincode, cod = false, items = [] }) {
   return requestJson(
     "/api/shipping/serviceability",
-    jsonOptions("POST", { pincode, cod })
+    jsonOptions("POST", { pincode, cod, items })
   );
 }
 
@@ -207,6 +207,14 @@ export async function fetchMyOrders() {
 
 export async function fetchOrder(orderId) {
   const data = await requestJson(`/api/orders/${encodeURIComponent(orderId)}`);
+  return data?.order || null;
+}
+
+export async function cancelCustomerOrder(orderId, reason) {
+  const data = await requestJson(
+    `/api/orders/${encodeURIComponent(orderId)}/cancel`,
+    jsonOptions("POST", { reason })
+  );
   return data?.order || null;
 }
 

@@ -94,7 +94,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [storeSettingsSaving, setStoreSettingsSaving] = useState(false);
-  const [otpModeSaving, setOtpModeSaving] = useState(false);
   const [error, setError] = useState('');
   const hasLoadedDashboardRef = useRef(false);
   const { error: showError, success: showSuccess } = useContext(NotificationContext);
@@ -152,32 +151,6 @@ const Dashboard = () => {
       showError(message);
     } finally {
       setStoreSettingsSaving(false);
-    }
-  };
-
-  const updateOtpMode = async (otpMode) => {
-    if (otpMode === dashboard?.storeSettings?.otpMode) return;
-
-    try {
-      setOtpModeSaving(true);
-      const response = await api.patch('/api/admin/store-settings', {
-        otpMode,
-      });
-
-      setDashboard((current) => ({
-        ...current,
-        storeSettings: response.data.data || {
-          ...(current?.storeSettings || {}),
-          otpMode,
-        },
-      }));
-
-      showSuccess(`OTP mode set to ${otpMode === 'test' ? 'TEST' : 'LIVE'}.`);
-    } catch (error) {
-      const message = getErrorMessage(error, 'Unable to update OTP mode');
-      showError(message);
-    } finally {
-      setOtpModeSaving(false);
     }
   };
 
@@ -267,12 +240,6 @@ const Dashboard = () => {
         acceptingOrders={dashboard.storeSettings?.acceptingOrders !== false}
         saving={storeSettingsSaving}
         onToggle={toggleAcceptingOrders}
-      />
-
-      <OtpModeCard
-        mode={dashboard.storeSettings?.otpMode || 'live'}
-        saving={otpModeSaving}
-        onChange={updateOtpMode}
       />
 
       <section className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>
@@ -374,42 +341,6 @@ function StoreStatusCard({ acceptingOrders, saving, onToggle }) {
             ].join(' ')}
           />
         </button>
-      </div>
-    </section>
-  );
-}
-
-function OtpModeCard({ mode, saving, onChange }) {
-  const currentMode = mode === 'test' ? 'test' : 'live';
-
-  return (
-    <section className='rounded-[12px] border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]'>
-      <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
-        <div>
-          <p className='text-sm font-semibold text-slate-950'>OTP Mode</p>
-          <p className='mt-1 text-xs text-slate-500'>
-            TEST uses mock OTP when enabled. LIVE sends SMS through the configured provider.
-          </p>
-        </div>
-
-        <div className='inline-flex w-fit rounded-[10px] border border-slate-200 bg-slate-50 p-1'>
-          {['test', 'live'].map((option) => (
-            <button
-              key={option}
-              type='button'
-              onClick={() => onChange(option)}
-              disabled={saving}
-              className={[
-                'h-8 cursor-pointer rounded-[8px] px-4 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-                currentMode === option
-                  ? 'bg-slate-950 text-white'
-                  : 'text-slate-600 hover:bg-white hover:text-slate-950',
-              ].join(' ')}
-            >
-              {option.toUpperCase()}
-            </button>
-          ))}
-        </div>
       </div>
     </section>
   );

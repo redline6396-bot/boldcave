@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, Package, Search } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Copy, ExternalLink, Package, Search } from 'lucide-react';
 import { NotificationContext } from '@/context/NotificationContext';
 import { api, formatDate, getErrorMessage, getId, money } from '@/lib/api';
 
 const ORDER_STATUSES = ['confirmed', 'processing', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'cancelled'];
-const ADMIN_MANUAL_ORDER_STATUSES = ['confirmed', 'processing', 'cancelled'];
+const ADMIN_MANUAL_ORDER_STATUSES = ['confirmed', 'processing'];
 const PAYMENT_STATUSES = ['pending', 'paid', 'failed', 'cod'];
+const CANCELLABLE_ORDER_STATUSES = ['confirmed', 'processing'];
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
@@ -18,6 +19,8 @@ export default function OrdersPage() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState({});
   const [busyId, setBusyId] = useState('');
+  const [cancelReasons, setCancelReasons] = useState({});
+  const [copiedOrderId, setCopiedOrderId] = useState('');
   const { success, error: showError } = useContext(NotificationContext);
 
   const loadOrders = useCallback(async () => {
@@ -75,6 +78,36 @@ export default function OrdersPage() {
     }
   };
 
+  const updateCancelReason = (id, value) => {
+    setCancelReasons((current) => ({ ...current, [id]: value }));
+  };
+
+  const cancelOrder = async (order) => {
+    const id = getId(order);
+    const reason = String(cancelReasons[id] || '').trim();
+
+    if (!reason) {
+      showError('Cancellation reason is required');
+      return;
+    }
+
+    try {
+      setBusyId(`cancel:${id}`);
+      const response = await api.post(`/api/admin/orders/${id}/cancel`, { reason });
+      setOrders((current) => current.map((entry) => (getId(entry) === id ? response.data.data.order : entry)));
+      setCancelReasons((current) => ({ ...current, [id]: '' }));
+      success('Order cancelled');
+    } catch (err) {
+      const updatedOrder = err?.response?.data?.error?.details?.order;
+      if (updatedOrder) {
+        setOrders((current) => current.map((entry) => (getId(entry) === id ? updatedOrder : entry)));
+      }
+      showError(getErrorMessage(err, 'Unable to cancel order'));
+    } finally {
+      setBusyId('');
+    }
+  };
+
   const retryShiprocketSync = async (order) => {
     const id = getId(order);
     try {
@@ -86,6 +119,37 @@ export default function OrdersPage() {
       showError(getErrorMessage(err, 'Unable to retry Shiprocket sync'));
     } finally {
       setBusyId('');
+    }
+  };
+
+  const retryRefund = async (order) => {
+    const id = getId(order);
+    try {
+      setBusyId(`refund:${id}`);
+      const response = await api.post(`/api/admin/orders/${id}/refund/retry`);
+      setOrders((current) => current.map((entry) => (getId(entry) === id ? response.data.data.order : entry)));
+      success('Refund retry checked');
+    } catch (err) {
+      const updatedOrder = err?.response?.data?.error?.details?.order;
+      if (updatedOrder) {
+        setOrders((current) => current.map((entry) => (getId(entry) === id ? updatedOrder : entry)));
+      }
+      showError(getErrorMessage(err, 'Unable to retry refund'));
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const copyOrderId = async (orderId) => {
+    try {
+      await globalThis.navigator?.clipboard?.writeText(orderId);
+      setCopiedOrderId(orderId);
+      success('Copied');
+      globalThis.setTimeout(() => {
+        setCopiedOrderId((current) => (current === orderId ? '' : current));
+      }, 1400);
+    } catch {
+      showError('Copy failed');
     }
   };
 
@@ -129,12 +193,22 @@ export default function OrdersPage() {
           {visibleOrders.map((order) => {
             const id = getId(order);
             const isOpen = Boolean(expanded[id]);
+            const displayOrderId = order.orderNumber || id;
             return (
               <section key={id} className='rounded border border-gray-200 bg-white'>
-                <button onClick={() => setExpanded((current) => ({ ...current, [id]: !current[id] }))} className='flex w-full items-center justify-between gap-4 px-5 py-4 text-left'>
-                  <div className='min-w-0'>
+                <div className='flex w-full items-center justify-between gap-4 px-5 py-4 text-left'>
+                  <div className='min-w-0 flex-1'>
                     <div className='flex flex-wrap items-center gap-3'>
-                      <p className='font-semibold text-gray-950'>{order.orderNumber || id}</p>
+                      <p className='font-semibold text-gray-950'>{displayOrderId}</p>
+                      <button
+                        type='button'
+                        onClick={() => copyOrderId(displayOrderId)}
+                        className='inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-950'
+                        aria-label='Copy order ID'
+                        title='Copy order ID'
+                      >
+                        {copiedOrderId === displayOrderId ? <Check size={15} strokeWidth={1.8} /> : <Copy size={15} strokeWidth={1.7} />}
+                      </button>
                       <Badge>{displayValue(order.orderStatus)}</Badge>
                       <Badge tone='muted'>{displayValue(order.payment?.method)} / {displayValue(order.payment?.paymentStatus)}</Badge>
                     </div>
@@ -143,8 +217,15 @@ export default function OrdersPage() {
                     </p>
                     <p className='mt-1 text-xs text-gray-400'>{formatDate(order.createdAt)}</p>
                   </div>
-                  {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                </button>
+                  <button
+                    type='button'
+                    onClick={() => setExpanded((current) => ({ ...current, [id]: !current[id] }))}
+                    className='inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-950'
+                    aria-label={isOpen ? 'Collapse order details' : 'Expand order details'}
+                  >
+                    {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                  </button>
+                </div>
 
                 {isOpen && (
                   <div className='space-y-5 border-t border-gray-100 px-5 py-5'>
@@ -171,7 +252,7 @@ export default function OrdersPage() {
                         <select
                           value={order.orderStatus}
                           onChange={(event) => updateStatus(order, event.target.value)}
-                          disabled={busyId === id}
+                          disabled={busyId === id || order.orderStatus === 'cancelled'}
                           className='w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'
                         >
                           {!ADMIN_MANUAL_ORDER_STATUSES.includes(order.orderStatus) && (
@@ -225,6 +306,67 @@ export default function OrdersPage() {
                       order.shiprocket?.shipmentStatus ? `Shipment Status: ${order.shiprocket.shipmentStatus}` : '',
                       order.shiprocket?.syncStatus ? `Sync: ${order.shiprocket.syncStatus}` : '',
                     ]} />
+                    {order.payment?.method === 'razorpay' && order.payment?.refundStatus && order.payment.refundStatus !== 'not_required' && (
+                      <div className='rounded border border-gray-200 p-4 text-sm'>
+                        <div className='flex flex-wrap items-start justify-between gap-3'>
+                          <div>
+                            <p className='mb-3 text-xs font-semibold uppercase text-gray-500'>Refund</p>
+                            <div className='space-y-1 text-gray-600'>
+                              <p>Refund Status: <span className='font-semibold text-gray-950'>{displayValue(order.payment.refundStatus)}</span></p>
+                              <p>Refund Amount: <span className='font-semibold text-gray-950'>{money(order.payment.refundAmount || order.amounts?.finalAmount)}</span></p>
+                              {order.payment.razorpayRefundId && <p>Razorpay Refund: <span className='font-semibold text-gray-950'>{order.payment.razorpayRefundId}</span></p>}
+                              {order.payment.refundInitiatedAt && <p>Initiated At: <span className='font-semibold text-gray-950'>{formatDate(order.payment.refundInitiatedAt)}</span></p>}
+                              {order.payment.refundedAt && <p>Refunded At: <span className='font-semibold text-gray-950'>{formatDate(order.payment.refundedAt)}</span></p>}
+                            </div>
+                          </div>
+                          {order.payment.refundStatus === 'failed' && (
+                            <button
+                              type='button'
+                              onClick={() => retryRefund(order)}
+                              disabled={busyId === `refund:${id}`}
+                              className='inline-flex w-fit rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50'
+                            >
+                              {busyId === `refund:${id}` ? 'Retrying...' : 'Retry Refund'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {order.cancellation?.status === 'failed' && (
+                      <div className='rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700'>
+                        <p className='font-semibold'>Cancellation failed</p>
+                        <p className='mt-1'>{order.cancellation?.shiprocketCancelError || order.stockRestoration?.error || 'Please review and retry if still eligible.'}</p>
+                      </div>
+                    )}
+                    {order.orderStatus === 'cancelled' && (
+                      <div className='rounded border border-red-100 bg-red-50 p-4 text-sm text-red-700'>
+                        <p className='font-semibold'>Cancelled</p>
+                        <p className='mt-1'>
+                          {[order.cancellation?.cancelledBy ? `By ${displayValue(order.cancellation.cancelledBy)}` : '', order.cancellation?.reason ? `Reason: ${order.cancellation.reason}` : ''].filter(Boolean).join(' | ') || 'Order cancelled'}
+                        </p>
+                      </div>
+                    )}
+                    {CANCELLABLE_ORDER_STATUSES.includes(order.orderStatus) && (
+                      <div className='rounded border border-gray-200 p-4'>
+                        <p className='mb-3 text-xs font-semibold uppercase text-gray-500'>Cancel Order</p>
+                        <textarea
+                          value={cancelReasons[id] || ''}
+                          onChange={(event) => updateCancelReason(id, event.target.value)}
+                          disabled={busyId === `cancel:${id}`}
+                          rows={3}
+                          placeholder='Enter cancellation reason'
+                          className='w-full resize-none rounded border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black disabled:opacity-60'
+                        />
+                        <button
+                          type='button'
+                          onClick={() => cancelOrder(order)}
+                          disabled={busyId === `cancel:${id}`}
+                          className='mt-3 inline-flex w-fit rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50'
+                        >
+                          {busyId === `cancel:${id}` ? 'Cancelling...' : 'Cancel Order'}
+                        </button>
+                      </div>
+                    )}
                     {['failed', 'not_configured'].includes(order.shiprocket?.syncStatus) && !order.shiprocket?.shiprocketOrderId && !order.shiprocket?.shipmentId && (
                       <button
                         type='button'

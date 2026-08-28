@@ -22,7 +22,7 @@ export async function GET(request) {
     await connectDB();
     return applyAdminCors(
       request,
-      success(await getSerializedStoreSettings({ includeOtpMode: true }), 200, {
+      success(await getSerializedStoreSettings(), 200, {
         headers: noStoreHeaders,
       })
     );
@@ -42,12 +42,11 @@ export async function PATCH(request) {
       ...(body.acceptingOrders !== undefined
         ? { acceptingOrders: body.acceptingOrders !== false }
         : {}),
-      ...(body.otpMode !== undefined ? { otpMode: body.otpMode } : {}),
     });
 
     return applyAdminCors(
       request,
-      success(serializeStoreSettings(settings, { includeOtpMode: true }), 200, {
+      success(serializeStoreSettings(settings), 200, {
         headers: noStoreHeaders,
       })
     );

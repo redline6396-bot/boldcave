@@ -1,6 +1,8 @@
 import Order from "@/models/Order";
+import { calculateShipmentWeightKg } from "@/lib/shipping/shipmentWeight";
 
 const SHIPROCKET_BASE_URL = "https://apiv2.shiprocket.in/v1/external";
+const GENERIC_SERVICEABILITY_WEIGHT_KG = 0.5;
 
 const ORDER_STATUS_RANK = {
   confirmed: 0,
@@ -84,7 +86,21 @@ export async function getShiprocketToken() {
   return tokenCache.token;
 }
 
-export async function checkServiceability({ deliveryPincode, cod = false }) {
+function normalizeServiceabilityWeight(weightKg) {
+  const number = Number(weightKg);
+
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new Error("Shiprocket serviceability weight is invalid");
+  }
+
+  return Number(number.toFixed(3));
+}
+
+export async function checkServiceability({
+  deliveryPincode,
+  cod = false,
+  weightKg = GENERIC_SERVICEABILITY_WEIGHT_KG,
+}) {
   if (!/^\d{6}$/.test(String(deliveryPincode || ""))) {
     return {
       serviceable: false,
@@ -102,7 +118,7 @@ export async function checkServiceability({ deliveryPincode, cod = false }) {
     pickup_postcode: pickupPostcode,
     delivery_postcode: deliveryPincode,
     cod: cod ? "1" : "0",
-    weight: "0.5",
+    weight: String(normalizeServiceabilityWeight(weightKg)),
   });
 
   const data = await shiprocketFetch(`/courier/serviceability/?${params.toString()}`);
@@ -128,9 +144,30 @@ export async function checkServiceability({ deliveryPincode, cod = false }) {
   };
 }
 
-export async function validateCheckoutServiceability({ deliveryPincode, cod = false }) {
+export async function validateCheckoutServiceability({
+  deliveryPincode,
+  cod = false,
+  items = [],
+}) {
   try {
-    const result = await checkServiceability({ deliveryPincode, cod });
+    const shipmentWeightKg = calculateShipmentWeightKg(items);
+
+    if (shipmentWeightKg <= 0) {
+      return {
+        ok: false,
+        code: "SHIPMENT_WEIGHT_MISSING",
+        message:
+          "Delivery availability could not be verified right now. Please retry.",
+        status: 503,
+        retryable: false,
+      };
+    }
+
+    const result = await checkServiceability({
+      deliveryPincode,
+      cod,
+      weightKg: shipmentWeightKg,
+    });
 
     if (!result.serviceable) {
       return {
@@ -244,6 +281,36 @@ export async function createShiprocketOrder(order) {
   return shiprocketFetch("/orders/create/adhoc", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function cancelShiprocketOrder(shiprocketOrderId) {
+  const numericOrderId = Number(shiprocketOrderId);
+
+  if (!Number.isInteger(numericOrderId) || numericOrderId <= 0) {
+    const error = new Error("Shiprocket order ID is invalid");
+    error.code = "SHIPROCKET_CANCEL_ID_INVALID";
+    throw error;
+  }
+
+  return shiprocketFetch("/orders/cancel", {
+    method: "POST",
+    body: JSON.stringify({ ids: [numericOrderId] }),
+  });
+}
+
+export async function cancelShiprocketShipmentByAwb(awbCode) {
+  const awb = String(awbCode || "").trim();
+
+  if (!awb) {
+    const error = new Error("Shiprocket AWB is invalid");
+    error.code = "SHIPROCKET_CANCEL_AWB_INVALID";
+    throw error;
+  }
+
+  return shiprocketFetch("/orders/cancel/shipment/awbs", {
+    method: "POST",
+    body: JSON.stringify({ awbs: [awb] }),
   });
 }
 

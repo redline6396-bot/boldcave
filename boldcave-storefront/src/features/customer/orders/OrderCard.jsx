@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check, Copy } from "lucide-react";
 
 const formatDate = (value) =>
   value
@@ -72,8 +73,51 @@ function getStatusClass(status) {
   return "border-neutral-950 bg-neutral-950 text-white";
 }
 
+function CopyOrderIdButton({ orderId }) {
+  const [copyState, setCopyState] = useState("");
+
+  useEffect(() => {
+    if (!copyState) return undefined;
+    const timeout = window.setTimeout(() => setCopyState(""), 1400);
+    return () => window.clearTimeout(timeout);
+  }, [copyState]);
+
+  const copyOrderId = async () => {
+    try {
+      await navigator.clipboard.writeText(orderId);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+  };
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={copyOrderId}
+        className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-950"
+        aria-label="Copy order ID"
+        title="Copy order ID"
+      >
+        {copyState === "copied" ? (
+          <Check className="h-3.5 w-3.5" strokeWidth={1.8} />
+        ) : (
+          <Copy className="h-3.5 w-3.5" strokeWidth={1.7} />
+        )}
+      </button>
+      {copyState && (
+        <span className="text-[10px] font-medium text-neutral-500">
+          {copyState === "copied" ? "Copied" : "Copy failed"}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function OrderCard({ order }) {
   const orderId = getOrderId(order);
+  const displayOrderId = order.orderNumber || orderId;
   const items = order.items || [];
   const itemCount = getItemCount(items);
   const orderStatus = String(order.orderStatus || "confirmed").toLowerCase();
@@ -90,9 +134,12 @@ export default function OrderCard({ order }) {
     <article className="w-full max-w-[900px] overflow-hidden rounded-[9px] border border-neutral-200 bg-white">
       <header className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5 sm:py-5">
         <div className="min-w-0">
-          <p className="break-all text-[13px] font-semibold text-neutral-950 sm:text-[14px]">
-            {order.orderNumber || orderId}
-          </p>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+            <p className="break-all text-[13px] font-semibold text-neutral-950 sm:text-[14px]">
+              {displayOrderId}
+            </p>
+            <CopyOrderIdButton orderId={displayOrderId} />
+          </div>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-neutral-500 sm:text-[12px]">
             <span>{formatDate(order.createdAt)}</span>

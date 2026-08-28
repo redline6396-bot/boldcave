@@ -86,6 +86,7 @@ export async function POST(request) {
     const serviceability = await validateCheckoutServiceability({
       deliveryPincode: deliveryAddress.pincode,
       cod: true,
+      items: cart.items,
     });
 
     if (!serviceability.ok) {

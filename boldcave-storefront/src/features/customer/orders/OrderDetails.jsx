@@ -5,14 +5,31 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft,
+  Check,
   ChevronDown,
   ChevronUp,
+  Copy,
   ExternalLink,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { fetchOrder, fetchOrderTracking } from "@/lib/clientApi";
+import {
+  cancelCustomerOrder,
+  fetchOrder,
+  fetchOrderTracking,
+} from "@/lib/clientApi";
 
 const ordersHref = "/profile?section=orders";
+const CANCELLABLE_ORDER_STATUSES = ["confirmed", "processing"];
+const CANCELLATION_REASONS = [
+  "Ordered by mistake",
+  "Need to change product or variant",
+  "Incorrect delivery details",
+  "Delivery timeline does not work for me",
+  "Payment-related issue",
+  "Found an alternative option",
+  "No longer need the order",
+  "Other",
+];
 
 const formatDate = (value) =>
   value
@@ -123,6 +140,70 @@ function getStatusClass(status) {
   return "border-neutral-950 bg-neutral-950 text-white";
 }
 
+function getRefundCopy(refundStatus) {
+  if (refundStatus === "refunded") {
+    return {
+      title: "Refunded",
+      description: "has been refunded to your original payment method.",
+    };
+  }
+
+  if (refundStatus === "failed") {
+    return {
+      title: "Refund update",
+      description:
+        "Your refund is taking longer than expected. Please contact support if you need help.",
+    };
+  }
+
+  return {
+    title: "Refund initiated",
+    description: "will be refunded to your original payment method.",
+  };
+}
+
+function CopyOrderIdButton({ orderId }) {
+  const [copyState, setCopyState] = useState("");
+
+  useEffect(() => {
+    if (!copyState) return undefined;
+    const timeout = window.setTimeout(() => setCopyState(""), 1400);
+    return () => window.clearTimeout(timeout);
+  }, [copyState]);
+
+  const copyOrderId = async () => {
+    try {
+      await navigator.clipboard.writeText(orderId);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+  };
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={copyOrderId}
+        className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-950"
+        aria-label="Copy order ID"
+        title="Copy order ID"
+      >
+        {copyState === "copied" ? (
+          <Check className="h-3.5 w-3.5" strokeWidth={1.8} />
+        ) : (
+          <Copy className="h-3.5 w-3.5" strokeWidth={1.7} />
+        )}
+      </button>
+      {copyState && (
+        <span className="text-[10px] font-medium text-neutral-500">
+          {copyState === "copied" ? "Copied" : "Copy failed"}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function formatAddressLine(...parts) {
   return parts.filter(Boolean).join(", ");
 }
@@ -165,6 +246,11 @@ export default function OrderDetails() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [priceDetailsOpen, setPriceDetailsOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [selectedCancelReason, setSelectedCancelReason] = useState("");
+  const [customCancelReason, setCustomCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [cancelling, setCancelling] = useState(false);
 
   const loadOrder = useCallback(() => {
     if (!isAuthenticated || !orderId) return;
@@ -303,6 +389,58 @@ export default function OrderDetails() {
   const awbCode = order.shiprocket?.awbCode;
   const courierName = order.shiprocket?.courierName;
   const shipmentStatus = order.shiprocket?.shipmentStatus;
+  const cancellation = order.cancellation || {};
+  const isCancelledOrder = status === "cancelled";
+  const canCancelOrder = CANCELLABLE_ORDER_STATUSES.includes(status);
+  const displayOrderId = order.orderNumber || getOrderId(order);
+  const refundStatus = String(order.payment?.refundStatus || "not_required");
+  const showRefundInfo =
+    order.payment?.method === "razorpay" &&
+    ["pending", "refunded", "failed"].includes(refundStatus);
+  const refundAmount =
+    Number(order.payment?.refundAmount) || Number(order.amounts?.finalAmount) || 0;
+  const refundCopy = getRefundCopy(refundStatus);
+
+  const handleCancelOrder = async (event) => {
+    event.preventDefault();
+    const reason =
+      selectedCancelReason === "Other"
+        ? customCancelReason.trim()
+        : selectedCancelReason;
+
+    if (!selectedCancelReason) {
+      setCancelError("Please select a cancellation reason.");
+      return;
+    }
+
+    if (selectedCancelReason === "Other" && !reason) {
+      setCancelError("Please enter your reason.");
+      return;
+    }
+
+    try {
+      setCancelling(true);
+      setCancelError("");
+      const updatedOrder = await cancelCustomerOrder(
+        order.orderNumber || getOrderId(order),
+        reason
+      );
+      if (updatedOrder) setOrder(updatedOrder);
+      setCancelOpen(false);
+      setSelectedCancelReason("");
+      setCustomCancelReason("");
+    } catch (cancelRequestError) {
+      setCancelError(
+        cancelRequestError.message ||
+          "Cancellation could not be completed right now."
+      );
+      if (cancelRequestError.details?.order) {
+        setOrder(cancelRequestError.details.order);
+      }
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const totalUnits = items.reduce(
     (total, item) => total + (Number(item.quantity) || 0),
@@ -334,9 +472,12 @@ export default function OrderDetails() {
                 Order Details
               </p>
 
-              <h1 className="mt-1.5 break-all text-[20px] font-semibold leading-tight sm:text-[24px]">
-                {order.orderNumber || getOrderId(order)}
-              </h1>
+              <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+                <h1 className="break-all text-[20px] font-semibold leading-tight sm:text-[24px]">
+                  {displayOrderId}
+                </h1>
+                <CopyOrderIdButton orderId={displayOrderId} />
+              </div>
 
               <p className="mt-1.5 text-[12px] text-neutral-500">
                 Placed on {formatDate(order.createdAt)} · {totalUnits}{" "}
@@ -364,25 +505,173 @@ export default function OrderDetails() {
                 {getStatusMessage(status)}
               </p>
 
-              {!trackingUrl && !awbCode && (
+              {!isCancelledOrder && !trackingUrl && !awbCode && (
                 <p className="mt-1 text-[11px] text-neutral-400">
                   Tracking will be available after dispatch.
                 </p>
               )}
             </div>
 
-            {trackingUrl && (
-              <a
-                href={trackingUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-10 w-fit cursor-pointer items-center justify-center gap-2 rounded-[6px] bg-neutral-950 px-4 text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
-              >
-                Track shipment
-                <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
-              </a>
-            )}
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              {trackingUrl && (
+                <a
+                  href={trackingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-10 w-fit cursor-pointer items-center justify-center gap-2 rounded-[6px] bg-neutral-950 px-4 text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+                >
+                  Track shipment
+                  <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
+                </a>
+              )}
+
+              {canCancelOrder && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancelOpen((current) => !current);
+                    setCancelError("");
+                  }}
+                  className="inline-flex h-10 w-fit cursor-pointer items-center justify-center rounded-[6px] border border-neutral-300 px-4 text-[11px] font-semibold text-neutral-700 transition-colors hover:border-neutral-950 hover:text-neutral-950"
+                >
+                  Cancel order →
+                </button>
+              )}
+            </div>
           </div>
+
+          {canCancelOrder && (
+            <p className="mt-3 text-[11px] leading-5 text-neutral-400">
+              You can cancel this order until it has been picked up for
+              delivery.
+            </p>
+          )}
+
+          {isCancelledOrder && cancellation.reason && (
+            <div className="mt-4 rounded-[8px] border border-neutral-200 bg-neutral-50 px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-500">
+                Cancellation reason
+              </p>
+              <p className="mt-1 text-[12px] leading-5 text-neutral-950">
+                {cancellation.reason}
+              </p>
+            </div>
+          )}
+
+          {showRefundInfo && (
+            <div className="mt-4 rounded-[8px] border border-neutral-200 bg-neutral-50 px-4 py-3">
+              <p className="text-[12px] font-semibold text-neutral-950">
+                {refundCopy.title}
+              </p>
+              <p className="mt-1 text-[12px] leading-5 text-neutral-500">
+                {refundStatus === "failed"
+                  ? refundCopy.description
+                  : `${formatPrice(refundAmount)} ${refundCopy.description}`}
+              </p>
+              {refundStatus === "pending" && (
+                <p className="mt-1 text-[11px] leading-5 text-neutral-400">
+                  Refund processing time depends on your bank or payment
+                  provider.
+                </p>
+              )}
+            </div>
+          )}
+
+          {cancelOpen && canCancelOrder && (
+            <form
+              onSubmit={handleCancelOrder}
+              className="mt-4 rounded-[8px] border border-neutral-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,15,15,0.06)]"
+            >
+              <h2 className="text-[15px] font-semibold text-neutral-950">
+                Why are you cancelling this order?
+              </h2>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {CANCELLATION_REASONS.map((reason) => {
+                  const selected = selectedCancelReason === reason;
+
+                  return (
+                    <button
+                      key={reason}
+                      type="button"
+                      disabled={cancelling}
+                      onClick={() => {
+                        setSelectedCancelReason(reason);
+                        setCancelError("");
+                      }}
+                      className={[
+                        "flex min-h-10 w-full cursor-pointer items-center gap-3 rounded-[7px] border px-3 py-2 text-left text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:text-[12px]",
+                        selected
+                          ? "border-neutral-950 bg-neutral-950 text-white"
+                          : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400",
+                      ].join(" ")}
+                    >
+                      <span
+                        className={[
+                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                          selected
+                            ? "border-white"
+                            : "border-neutral-400 bg-white",
+                        ].join(" ")}
+                        aria-hidden="true"
+                      >
+                        {selected && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                        )}
+                      </span>
+                      <span className="font-medium">{reason}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selectedCancelReason === "Other" && (
+                <label className="mt-4 block">
+                  <span className="text-[12px] font-semibold text-neutral-950">
+                    Tell us more
+                  </span>
+                  <textarea
+                    value={customCancelReason}
+                    onChange={(event) => {
+                      setCustomCancelReason(event.target.value);
+                      setCancelError("");
+                    }}
+                    rows={3}
+                    disabled={cancelling}
+                    className="mt-2 w-full resize-none rounded-[7px] border border-neutral-300 bg-white px-3 py-2 text-[13px] text-neutral-950 outline-none transition-colors focus:border-neutral-950 disabled:opacity-60"
+                    placeholder="Please enter your reason..."
+                  />
+                </label>
+              )}
+
+              {cancelError && (
+                <p className="mt-3 text-[12px] text-red-700">{cancelError}</p>
+              )}
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={cancelling}
+                  onClick={() => {
+                    setCancelOpen(false);
+                    setCancelError("");
+                    setSelectedCancelReason("");
+                    setCustomCancelReason("");
+                  }}
+                  className="inline-flex h-9 cursor-pointer items-center justify-center rounded-[6px] border border-neutral-300 px-4 text-[11px] font-semibold text-neutral-700 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Keep Order
+                </button>
+                <button
+                  type="submit"
+                  disabled={cancelling}
+                  className="inline-flex h-9 cursor-pointer items-center justify-center rounded-[6px] bg-red-700 px-4 text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {cancelling ? "Cancelling..." : "Cancel Order"}
+                </button>
+              </div>
+            </form>
+          )}
         </section>
 
         <section className="mt-4 overflow-hidden rounded-[10px] border border-neutral-200 bg-white">

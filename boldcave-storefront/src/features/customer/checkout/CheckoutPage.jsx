@@ -438,6 +438,11 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
         const result = await checkShippingServiceability({
           pincode: pin,
           cod: false,
+          items: getCartItems().map((item) => ({
+            productId: item.productId,
+            size: item.size,
+            quantity: item.quantity,
+          })),
         });
 
         const location = extractLocation(result);
@@ -535,7 +540,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
         return providerResult;
       }
     },
-    [normalizedAddress]
+    [getCartItems, normalizedAddress]
   );
 
   useEffect(() => {

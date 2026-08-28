@@ -2,6 +2,18 @@ import crypto from "node:crypto";
 import Razorpay from "razorpay";
 
 let instance = null;
+const RAZORPAY_API_BASE_URL = "https://api.razorpay.com/v1";
+const REFUND_TIMEOUT_MS = 15000;
+
+export class RazorpayRefundError extends Error {
+  constructor(message = "Razorpay refund failed", details = {}) {
+    super(message);
+    this.name = "RazorpayRefundError";
+    this.code = "RAZORPAY_REFUND_FAILED";
+    this.status = details.status || 502;
+    this.details = details;
+  }
+}
 
 export function getRazorpayInstance() {
   const keyId = process.env.RAZORPAY_KEY_ID;
@@ -19,6 +31,158 @@ export function getRazorpayInstance() {
   }
 
   return instance;
+}
+
+function getRazorpayCredentials() {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+  if (!keyId || !keySecret) {
+    throw new Error("Razorpay is not configured");
+  }
+
+  return { keyId, keySecret };
+}
+
+function getBasicAuthHeader() {
+  const { keyId, keySecret } = getRazorpayCredentials();
+  return `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`;
+}
+
+function parseRazorpayJson(text) {
+  if (!text?.trim()) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeRazorpayError(body, fallback) {
+  const error = body?.error || body;
+  return String(
+    error?.description ||
+      error?.reason ||
+      error?.message ||
+      fallback ||
+      "Razorpay refund failed"
+  ).slice(0, 300);
+}
+
+async function razorpayRest(path, { method = "GET", headers = {}, body } = {}) {
+  const controller = new globalThis.AbortController();
+  const timeout = setTimeout(() => controller.abort(), REFUND_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${RAZORPAY_API_BASE_URL}${path}`, {
+      method,
+      headers: {
+        Authorization: getBasicAuthHeader(),
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    const data = parseRazorpayJson(text);
+
+    if (!response.ok) {
+      throw new RazorpayRefundError(sanitizeRazorpayError(data, response.statusText), {
+        status: response.status,
+        razorpayStatus: response.status,
+        razorpayCode: data?.error?.code || "",
+      });
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof RazorpayRefundError) {
+      throw error;
+    }
+
+    throw new RazorpayRefundError("Razorpay refund request could not be completed.", {
+      status: 502,
+      networkError: true,
+      name: error?.name,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export function getRefundAmountPaise(order) {
+  return Math.round(Number(order?.amounts?.finalAmount || 0) * 100);
+}
+
+export function getRefundIdempotencyKey(order) {
+  const source = String(order?.orderNumber || order?._id || "").trim();
+  const safeSource = source.replace(/[^a-zA-Z0-9_-]/g, "-");
+  const key = `refund-${safeSource}`.replace(/-+/g, "-").slice(0, 60);
+  return key.length >= 10 ? key : `refund-order-${String(order?._id || "unknown")}`;
+}
+
+export function buildFullRefundRequest({ order, amountPaise, idempotencyKey }) {
+  return {
+    amount: amountPaise,
+    speed: "normal",
+    receipt: idempotencyKey,
+    notes: {
+      orderNumber: order.orderNumber,
+      orderId: String(order._id),
+    },
+  };
+}
+
+export async function createRazorpayFullRefund({
+  razorpayPaymentId,
+  amountPaise,
+  idempotencyKey,
+  body,
+}) {
+  if (!razorpayPaymentId) {
+    throw new RazorpayRefundError("Razorpay payment ID is missing", { status: 400 });
+  }
+
+  if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
+    throw new RazorpayRefundError("Refund amount is invalid", { status: 400 });
+  }
+
+  if (!/^[a-zA-Z0-9_-]{10,}$/.test(idempotencyKey || "")) {
+    throw new RazorpayRefundError("Refund idempotency key is invalid", { status: 400 });
+  }
+
+  return razorpayRest(
+    `/payments/${encodeURIComponent(razorpayPaymentId)}/refund`,
+    {
+      method: "POST",
+      headers: {
+        "X-Refund-Idempotency": idempotencyKey,
+      },
+      body,
+    }
+  );
+}
+
+export async function fetchRazorpayPaymentRefunds(razorpayPaymentId) {
+  if (!razorpayPaymentId) {
+    throw new RazorpayRefundError("Razorpay payment ID is missing", { status: 400 });
+  }
+
+  return razorpayRest(
+    `/payments/${encodeURIComponent(razorpayPaymentId)}/refunds?count=100`
+  );
+}
+
+export async function fetchRazorpayRefund({ razorpayPaymentId, refundId }) {
+  if (!razorpayPaymentId || !refundId) {
+    throw new RazorpayRefundError("Razorpay refund lookup is invalid", { status: 400 });
+  }
+
+  return razorpayRest(
+    `/payments/${encodeURIComponent(razorpayPaymentId)}/refunds/${encodeURIComponent(refundId)}`
+  );
 }
 
 export async function createRazorpayOrder({ amount, receipt, notes = {} }) {
@@ -50,6 +214,30 @@ export function verifyRazorpaySignature({
 
   const expected = Buffer.from(expectedSignature);
   const received = Buffer.from(String(razorpaySignature || ""));
+
+  if (expected.length !== received.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expected, received);
+}
+
+export function verifyRazorpayWebhookSignature({
+  rawBody,
+  signature,
+  secret = process.env.RAZORPAY_WEBHOOK_SECRET,
+}) {
+  if (!secret) {
+    throw new Error("RAZORPAY_WEBHOOK_SECRET is not configured");
+  }
+
+  const expectedSignature = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody)
+    .digest("hex");
+
+  const expected = Buffer.from(expectedSignature);
+  const received = Buffer.from(String(signature || ""));
 
   if (expected.length !== received.length) {
     return false;

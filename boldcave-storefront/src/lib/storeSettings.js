@@ -1,23 +1,19 @@
 import StoreSettings from "@/models/StoreSettings";
 
 const GLOBAL_STORE_SETTINGS_KEY = "global";
-const OTP_MODES = ["test", "live"];
 
-function normalizeOtpMode(value) {
-  return OTP_MODES.includes(value) ? value : "live";
+function getEnvOtpMode() {
+  return process.env.OTP_PROVIDER === "mock" &&
+    process.env.OTP_MOCK_ENABLED === "true"
+    ? "test"
+    : "live";
 }
 
-export function serializeStoreSettings(settings, { includeOtpMode = false } = {}) {
-  const serialized = {
+export function serializeStoreSettings(settings) {
+  return {
     acceptingOrders: settings?.acceptingOrders !== false,
     updatedAt: settings?.updatedAt || null,
   };
-
-  if (includeOtpMode) {
-    serialized.otpMode = normalizeOtpMode(settings?.otpMode);
-  }
-
-  return serialized;
 }
 
 export async function getStoreSettings() {
@@ -27,7 +23,6 @@ export async function getStoreSettings() {
       $setOnInsert: {
         key: GLOBAL_STORE_SETTINGS_KEY,
         acceptingOrders: true,
-        otpMode: "live",
       },
     },
     {
@@ -38,26 +33,21 @@ export async function getStoreSettings() {
   );
 }
 
-export async function getSerializedStoreSettings(options = {}) {
-  return serializeStoreSettings(await getStoreSettings(), options);
+export async function getSerializedStoreSettings() {
+  return serializeStoreSettings(await getStoreSettings());
 }
 
-export async function updateStoreSettings({ acceptingOrders, otpMode } = {}) {
+export async function updateStoreSettings({ acceptingOrders } = {}) {
   const updates = {};
 
   if (acceptingOrders !== undefined) {
     updates.acceptingOrders = acceptingOrders !== false;
   }
 
-  if (otpMode !== undefined) {
-    updates.otpMode = normalizeOtpMode(otpMode);
-  }
-
   const update = {
     $setOnInsert: {
       key: GLOBAL_STORE_SETTINGS_KEY,
       acceptingOrders: true,
-      otpMode: "live",
     },
   };
 
@@ -82,6 +72,5 @@ export async function isAcceptingOrders() {
 }
 
 export async function getOtpMode() {
-  const settings = await getStoreSettings();
-  return normalizeOtpMode(settings?.otpMode);
+  return getEnvOtpMode();
 }
