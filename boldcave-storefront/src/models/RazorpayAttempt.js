@@ -37,7 +37,7 @@ const attemptItemSchema = new mongoose.Schema(
 
 const razorpayAttemptSchema = new mongoose.Schema(
   {
-    orderNumber: { type: String, required: true, unique: true, index: true },
+    orderNumber: { type: String, required: true, unique: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     customer: {
       firstName: { type: String, trim: true },
@@ -68,7 +68,7 @@ const razorpayAttemptSchema = new mongoose.Schema(
       code: { type: String, default: null },
       discount: { type: Number, default: 0 },
     },
-    razorpayOrderId: { type: String, required: true, unique: true, index: true },
+    razorpayOrderId: { type: String, required: true, unique: true },
     razorpayPaymentId: { type: String },
     razorpaySignature: { type: String },
     status: {
@@ -79,7 +79,7 @@ const razorpayAttemptSchema = new mongoose.Schema(
     },
     failureReason: { type: String, trim: true },
     finalOrder: { type: mongoose.Schema.Types.ObjectId, ref: "Order", default: null, index: true },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date, required: true },
   },
   { timestamps: true }
 );

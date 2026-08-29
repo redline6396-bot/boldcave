@@ -50,14 +50,6 @@ const RAZORPAY_SCRIPT_URL =
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
 
-const DEMO_PINCODES = {
-  "110017": { city: "SOUTH DELHI", state: "DELHI" },
-  "251001": { city: "MUZAFFARNAGAR", state: "UTTAR PRADESH" },
-  "122001": { city: "GURUGRAM", state: "HARYANA" },
-  "400001": { city: "MUMBAI", state: "MAHARASHTRA" },
-  "560001": { city: "BENGALURU", state: "KARNATAKA" },
-};
-
 const money = (value) =>
   `₹${new Intl.NumberFormat("en-IN", {
     minimumFractionDigits:
@@ -172,7 +164,6 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
 
   const {
     appliedCoupon,
-    couponCode: enteredCouponCode,
     discount,
     removeCoupon,
     revalidateCoupon,
@@ -581,36 +572,6 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
         return unavailable;
       } catch (shippingError) {
         const invalid = shippingError.code === "INVALID_PINCODE";
-
-        if (!invalid) {
-          const providerLocation = extractLocation(shippingError.details || {});
-          const demoLocation = providerLocation.city || providerLocation.state
-            ? providerLocation
-            : (DEMO_PINCODES[pin] || {
-                city: candidate.city || "",
-                state: candidate.state || "",
-              });
-
-          const demoResult = {
-            serviceable: true,
-            message: "Delivery available",
-            city: demoLocation.city,
-            state: demoLocation.state,
-            couriers: [{ cod: true }],
-            demo: true,
-          };
-
-          setServiceability({
-            status: "serviceable",
-            message: "Delivery available",
-            code: "DEMO_SERVICEABLE",
-            result: demoResult,
-            pincode: pin,
-          });
-
-          return demoResult;
-        }
-
         const providerResult = {
           serviceable: false,
           message: invalid
@@ -1089,7 +1050,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
         key: razorpay.keyId,
         amount: razorpay.amount,
         currency: razorpay.currency || "INR",
-        name: "BRAND",
+        name: "Bold Cave",
         description: `Order ${checkout.orderNumber || ""}`.trim(),
         order_id: razorpay.orderId,
         prefill: {
@@ -1525,8 +1486,10 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                   </>
                 ) : paymentMethod === "cod" ? (
                   "Place Order"
-                ) : (
+                ) : paymentMethod === "razorpay" ? (
                   "Continue to Payment"
+                ) : (
+                  "Select a payment method"
                 )}
               </button>
             )}

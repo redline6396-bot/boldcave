@@ -24,7 +24,9 @@ export async function POST(request) {
       phone,
       expiresAt: result.expiresAt,
       provider: result.provider,
-      ...(result.demoOtp ? { demoOtp: result.demoOtp } : {}),
+      ...(process.env.NODE_ENV !== "production" && result.demoOtp
+        ? { demoOtp: result.demoOtp }
+        : {}),
     });
   } catch (error) {
     if (error instanceof OtpRateLimitError) {

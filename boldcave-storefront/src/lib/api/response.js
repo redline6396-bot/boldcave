@@ -30,7 +30,7 @@ export function handleRouteError(error, fallbackCode = "INTERNAL_ERROR") {
   }
 
   if (error?.message?.includes("not configured")) {
-    return failure("CONFIGURATION_ERROR", error.message, 503);
+    return failure("CONFIGURATION_ERROR", "Service is not configured", 503);
   }
 
   console.error("API route error:", error);

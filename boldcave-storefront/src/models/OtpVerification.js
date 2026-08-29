@@ -5,7 +5,7 @@ const otpVerificationSchema = new mongoose.Schema(
     phone: { type: String, required: true, index: true },
     otpHash: { type: String, required: true },
     attempts: { type: Number, default: 0 },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date, required: true },
     consumedAt: { type: Date, default: null },
   },
   { timestamps: true }

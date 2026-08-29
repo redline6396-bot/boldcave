@@ -28,7 +28,6 @@ This document is a comprehensive, READ-ONLY audit of the active backend API laye
 18. [API Response Format](#18-api-response-format)
 19. [Error Codes Reference](#19-error-codes-reference)
 20. [Shared Helpers and Utilities](#20-shared-helpers-and-utilities)
-21. [Internal/Cron API](#21-internalcron-api)
 22. [Data Flow Diagrams](#22-data-flow-diagrams)
 23. [Source of Truth Index](#23-source-of-truth-index)
 24. [Where to Edit](#24-where-to-edit)
@@ -1080,48 +1079,6 @@ All admin routes require `requireAdmin()` and apply CORS via `applyAdminCors()`.
   - Only "products" and "reviews" folders allowed
   - apiKey is public; apiSecret stays server-side
 - **Error Codes**: `CLOUDINARY_NOT_CONFIGURED`, `CLOUDINARY_SIGNATURE_FAILED`
-
----
-
-### 2.4 INTERNAL / CRON ROUTES (Bearer Token Required)
-
-#### POST /api/internal/sync-order-status
-- **File**: src/app/api/internal/sync-order-status/route.js
-- **Auth**: Bearer token matching CRON_SECRET environment variable
-- **Auth Header**:
-  ```
-  Authorization: Bearer <CRON_SECRET>
-  ```
-- **Request Body**:
-  ```json
-  {
-    "limit": "number (optional, default 25, max 100)"
-  }
-  ```
-- **Response**:
-  ```json
-  {
-    "success": true,
-    "data": {
-      "checked": "number",
-      "updated": "number",
-      "errors": [
-        {
-          "orderNumber": "string",
-          "message": "string"
-        }
-      ]
-    }
-  }
-  ```
-- **Behavior**:
-  - Finds orders with awbCode and orderStatus in ["confirmed", "processing", "shipped"]
-  - Calls getTrackingByAwb(awbCode) for each
-  - Extracts shipmentStatus from Shiprocket tracking response
-  - Updates order.shiprocket.shipmentStatus
-  - Non-blocking per order (errors logged but continue)
-- **Error Codes**: `UNAUTHENTICATED`, `ORDER_STATUS_SYNC_FAILED`
-- **Deployment Status**: UNVERIFIED (code exists, but cron job deployment unknown)
 
 ---
 
@@ -2177,7 +2134,6 @@ GET https://apiv2.shiprocket.in/v1/external/courier/track/awb/{awbCode}
 
 ### 12.5 Order Status Sync
 
-**Cron Route**: POST /api/internal/sync-order-status
 
 **Process**:
 1. Find orders with awbCode and orderStatus in ["confirmed", "processing", "shipped"]
@@ -2342,7 +2298,6 @@ All admin routes declare OPTIONS handler that calls adminPreflight.
 | OTP_PROVIDER | lib/auth/otpProvider.js | OTP provider name | Server | NO | Optional | mock |
 | OTP_MOCK_ENABLED | lib/auth/otpProvider.js | Enable mock OTP | Server | NO | Optional | true |
 | OTP_API_KEY | lib/auth/otpProvider.js | OTP provider API key | Server | YES | Optional | XXXX |
-| CRON_SECRET | app/api/internal/sync-order-status/route.js | Secret for cron/internal endpoints | Server | YES | Optional | secret-token |
 | NODE_ENV | Multiple | Environment (production\|development) | Server | NO | Set by framework | development |
 | NEXT_PUBLIC_EMAILJS_USER | app/(customer)/contact/page.jsx | EmailJS public user ID | Client | NO | Optional | XXXX |
 | NEXT_PUBLIC_EMAILJS_SERVICE | app/(customer)/contact/page.jsx | EmailJS service ID | Client | NO | Optional | service_XXXX |
@@ -2365,7 +2320,6 @@ Never exposed to client (JavaScript cannot access):
 - SHIPROCKET_EMAIL, SHIPROCKET_PASSWORD
 - CLOUDINARY_API_SECRET
 - OTP_API_KEY
-- CRON_SECRET
 - Customer session JWT payload (in HttpOnly cookie)
 - Admin session JWT payload (in HttpOnly cookie)
 
@@ -2550,22 +2504,6 @@ return success(data, 200, { headers: noStoreHeaders })
 | Function | Purpose |
 |----------|---------|
 | connectDB() | Get Mongoose connection (cached) |
-
----
-
-## 21. Internal/Cron API
-
-### 21.1 Order Status Sync
-
-**Route**: POST /api/internal/sync-order-status
-
-**Auth**: Bearer token (CRON_SECRET)
-
-**Purpose**: Sync order shipment status from Shiprocket
-
-**Typical Caller**: Vercel Cron, AWS Lambda, external scheduler
-
-**Deployment Status**: CODE_IMPLEMENTED, LIVE_UNVERIFIED (cron job setup unknown)
 
 ---
 
@@ -2790,8 +2728,6 @@ Average and breakdown displayed on product page
 | Coupon Validity | MongoDB Coupon collection | Admin creates/updates | calculateCouponDiscount() fresh lookup |
 | Applied Coupon | MongoDB Order.coupon | Order creation | Cannot change after order |
 | Order | MongoDB Order collection | Order.create() on checkout | Cannot change order items/amounts |
-| Order Status | MongoDB Order.orderStatus | Admin updates or sync-order-status cron | Admin PATCH or cron sync |
-| Shiprocket Sync | MongoDB Order.shiprocket.* | POST /api/internal/sync-order-status | Cron-driven refresh |
 | Tracking | Shiprocket API (real-time) | Customer requests | GET /api/shipping/tracking fresh call |
 | Reviews | MongoDB Review collection | User creates, admin approves | GET filters by approved status |
 | Review Ratings | MongoDB Review.rating aggregated | getReviewStats() aggregation | Every product API call |
@@ -2835,7 +2771,6 @@ Average and breakdown displayed on product page
 | Change order creation payload | src/lib/shipping/shiprocket.js (createShiprocketOrder) |
 | Change token caching | src/lib/shipping/shiprocket.js (tokenCache) |
 | Add tracking logic | src/lib/shipping/shiprocket.js (getTrackingByAwb) |
-| Change sync frequency/logic | src/app/api/internal/sync-order-status/route.js |
 | **Coupons** | |
 | Add coupon field | src/models/Coupon.js |
 | Change coupon validation rules | src/lib/orders/pricing.js (calculateCouponDiscount) |
@@ -2920,7 +2855,6 @@ redlinenext/src/
 │  │  ├── upload/
 │  │  │  └── cloudinary-signature/route.js
 │  │  ├── internal/
-│  │  │  └── sync-order-status/route.js
 │  │  ├── health/
 │  │  │  └── route.js
 │  │  └── ...
@@ -2984,7 +2918,6 @@ redlinenext/src/
 | **Shiprocket Serviceability** | ✅ | ✅ | ❌ | SOURCE_VERIFIED, not tested against live API |
 | **Shiprocket Order Creation** | ✅ | ✅ | ❌ | SOURCE_VERIFIED |
 | **Shiprocket Tracking** | ✅ | ✅ | ❌ | SOURCE_VERIFIED |
-| **Cron Sync** | ✅ | ✅ | ❌ | SOURCE_VERIFIED, cron job deployment UNVERIFIED |
 | **Cloudinary Signature** | ✅ | ✅ | ❌ | SOURCE_VERIFIED, not tested end-to-end |
 | **Product Stock Deduction** | ✅ | ✅ | ❌ | SOURCE_VERIFIED (atomic update) |
 | **Admin CRUD** | ✅ | ✅ | ❌ | SOURCE_VERIFIED |
@@ -3026,3 +2959,4 @@ All code has been verified against actual source files in the workspace. The bui
 **Total Routes**: 36 public/authenticated/admin/internal
 **Models**: Product, User, Order, Review, Coupon, OtpVerification
 **External Services**: Razorpay, Shiprocket, Cloudinary, MongoDB
+

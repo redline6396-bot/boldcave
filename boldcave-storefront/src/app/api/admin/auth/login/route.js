@@ -32,7 +32,7 @@ export async function POST(request) {
   } catch (error) {
     return applyAdminCors(
       request,
-      failure("CONFIGURATION_ERROR", error.message || "Admin auth is not configured", 503)
+      failure("CONFIGURATION_ERROR", "Admin auth is not configured", 503)
     );
   }
 }

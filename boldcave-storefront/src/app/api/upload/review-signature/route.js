@@ -1,4 +1,4 @@
-import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
+import { failure, handleRouteError, success } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
 import { createUploadSignature } from "@/lib/cloudinary/server";
 
@@ -9,14 +9,12 @@ export async function POST(request) {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;
 
-    const body = await readJson(request);
-    const folder = body.folder === "reviews" ? "reviews" : "reviews";
-    const signature = createUploadSignature({ folder });
+    const signature = createUploadSignature({ folder: "reviews" });
 
     return success(signature);
   } catch (error) {
     if (error.message?.includes("not configured")) {
-      return failure("CLOUDINARY_NOT_CONFIGURED", error.message, 503);
+      return failure("CLOUDINARY_NOT_CONFIGURED", "Upload service is not configured.", 503);
     }
 
     return handleRouteError(error, "REVIEW_UPLOAD_SIGNATURE_FAILED");

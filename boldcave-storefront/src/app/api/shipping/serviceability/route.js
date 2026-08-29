@@ -102,7 +102,7 @@ export async function POST(request) {
     });
   } catch (error) {
     if (error.message?.includes("not configured")) {
-      return failure("SHIPROCKET_NOT_CONFIGURED", error.message, 503);
+      return failure("SHIPROCKET_NOT_CONFIGURED", "Shipping service is not configured.", 503);
     }
 
     return failure(
@@ -143,7 +143,7 @@ export async function GET(request) {
     });
   } catch (error) {
     if (error.message?.includes("not configured")) {
-      return failure("SHIPROCKET_NOT_CONFIGURED", error.message, 503);
+      return failure("SHIPROCKET_NOT_CONFIGURED", "Shipping service is not configured.", 503);
     }
 
     return failure(

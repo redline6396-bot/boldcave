@@ -1,5 +1,11 @@
 import connectDB from "@/lib/db";
-import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
+import {
+  failure,
+  handleRouteError,
+  noStoreHeaders,
+  readJson,
+  success,
+} from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
 import { calculateCart } from "@/lib/orders/pricing";
 
@@ -47,12 +53,16 @@ export async function POST(request) {
       return failure(error.code, error.message, error.status, error.details);
     }
 
-    return success({
-      base: serializePricing(codResult),
-      cod: serializePricing(codResult),
-      online: serializePricing(onlineResult),
-      prepaidDiscountSettings: onlineResult.prepaidDiscountSettings,
-    });
+    return success(
+      {
+        base: serializePricing(codResult),
+        cod: serializePricing(codResult),
+        online: serializePricing(onlineResult),
+        prepaidDiscountSettings: onlineResult.prepaidDiscountSettings,
+      },
+      200,
+      { headers: noStoreHeaders }
+    );
   } catch (error) {
     return handleRouteError(error, "CHECKOUT_PRICING_PREVIEW_FAILED");
   }

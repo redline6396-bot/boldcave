@@ -32,6 +32,22 @@ const formatPrice = (value) =>
 
 const formatRupees = (value) => `₹${formatPrice(value)}`;
 
+function getPrepaidTeaser(settings = {}, couponDiscount = 0) {
+  if (settings?.enabled === false || Number(settings?.discountValue || 0) <= 0) {
+    return "";
+  }
+
+  if (settings?.allowCouponStacking === false && Number(couponDiscount || 0) > 0) {
+    return "Online payment offer available at checkout";
+  }
+
+  if (settings?.discountType === "fixed") {
+    return `Save up to ${formatRupees(settings.discountValue)} when you pay online`;
+  }
+
+  return `Save ${Number(settings.discountValue || 0).toLocaleString("en-IN")}% when you pay online`;
+}
+
 export default function CartDrawer({ isOpen, onClose }) {
   const router = useRouter();
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
@@ -47,7 +63,11 @@ export default function CartDrawer({ isOpen, onClose }) {
   } = useCart();
 
   const { discount } = useCoupon();
-  const { acceptingOrders, refreshStoreSettings } = useStoreSettings();
+  const {
+    acceptingOrders,
+    prepaidDiscount: prepaidDiscountSettings,
+    refreshStoreSettings,
+  } = useStoreSettings();
 
   const items = getCartItems();
   const itemCount = getCartCount();
@@ -61,6 +81,7 @@ export default function CartDrawer({ isOpen, onClose }) {
   const mrpDiscount = Math.max(0, mrpTotal - sellingSubtotal);
   const finalSubtotal = Math.max(0, sellingSubtotal - discount);
   const totalSavings = mrpDiscount + Math.max(0, Number(discount) || 0);
+  const prepaidTeaser = getPrepaidTeaser(prepaidDiscountSettings, discount);
 
   const isResolving = cart.length > 0 && items.length === 0;
   const canShowEligibleOffers = isAuthenticated && user?.phoneVerified;
@@ -325,8 +346,28 @@ export default function CartDrawer({ isOpen, onClose }) {
           <div className="shrink-0 bg-white">
             {/* Subtotal + checkout stay in the bottom dock. */}
             <div className="relative bg-[#f3f3f3] px-4 pb-4 pt-3">
+              <button
+                type="button"
+                onClick={() => setIsSummaryOpen((current) => !current)}
+                aria-expanded={isSummaryOpen}
+                className="flex h-12 w-full cursor-pointer items-center justify-between px-2 text-neutral-950 transition-colors hover:text-neutral-700 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-neutral-500"
+              >
+                <span className="flex items-center gap-2.5 text-[15px] font-medium">
+                  Subtotal
+                  {isSummaryOpen ? (
+                    <ChevronUp className="h-4 w-4" strokeWidth={1.6} />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" strokeWidth={1.6} />
+                  )}
+                </span>
+
+                <span className="text-[16px] font-medium">
+                  {formatRupees(finalSubtotal)}
+                </span>
+              </button>
+
               {isSummaryOpen && (
-                <div className="absolute bottom-[118px] left-0 right-0 z-10 border-y border-neutral-200 bg-white px-5 py-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] sm:px-6">
+                <div className="mb-3 border-y border-neutral-200 bg-white px-2 py-3">
                   <div className="space-y-3 text-[13px] leading-none">
                     <div className="flex items-center justify-between text-neutral-800">
                       <span>MRP Total</span>
@@ -381,25 +422,14 @@ export default function CartDrawer({ isOpen, onClose }) {
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={() => setIsSummaryOpen((current) => !current)}
-                aria-expanded={isSummaryOpen}
-                className="flex h-12 w-full cursor-pointer items-center justify-between px-2 text-neutral-950"
-              >
-                <span className="flex items-center gap-2.5 text-[15px] font-medium">
-                  Subtotal
-                  {isSummaryOpen ? (
-                    <ChevronUp className="h-4 w-4" strokeWidth={1.6} />
-                  ) : (
-                    <ChevronDown className="h-4 w-4" strokeWidth={1.6} />
-                  )}
-                </span>
-
-                <span className="text-[16px] font-medium">
-                  {formatRupees(finalSubtotal)}
-                </span>
-              </button>
+              {prepaidTeaser && (
+                <div className="mb-3 border-t border-neutral-200 px-2 pt-3 text-[11px] leading-4 text-neutral-600">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-950">
+                    Online payment offer
+                  </p>
+                  <p className="mt-1 text-neutral-700">{prepaidTeaser}</p>
+                </div>
+              )}
 
               <button
                 type="button"

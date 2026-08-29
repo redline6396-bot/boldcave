@@ -21,7 +21,10 @@ export async function POST(request) {
     return applyAdminCors(request, success(signature));
   } catch (error) {
     if (error.message?.includes("not configured")) {
-      return applyAdminCors(request, failure("CLOUDINARY_NOT_CONFIGURED", error.message, 503));
+      return applyAdminCors(
+        request,
+        failure("CLOUDINARY_NOT_CONFIGURED", "Upload service is not configured.", 503)
+      );
     }
 
     return applyAdminCors(request, handleRouteError(error, "CLOUDINARY_SIGNATURE_FAILED"));

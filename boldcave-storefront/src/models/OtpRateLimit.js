@@ -2,13 +2,13 @@ import mongoose from "mongoose";
 
 const otpRateLimitSchema = new mongoose.Schema(
   {
-    key: { type: String, required: true, unique: true, index: true },
+    key: { type: String, required: true, unique: true },
     phone: { type: String, required: true, index: true },
     sendCount: { type: Number, default: 0 },
     windowStartedAt: { type: Date, required: true },
     lastSentAt: { type: Date, default: null },
     blockedUntil: { type: Date, default: null },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date, required: true },
   },
   { timestamps: true }
 );

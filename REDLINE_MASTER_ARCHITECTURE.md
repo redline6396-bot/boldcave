@@ -487,12 +487,6 @@ Complete endpoint reference. See Part 4 for detailed request/response schemas.
 |--------|----------|------|---------|
 | POST | /api/upload/cloudinary-signature | requireAdmin | Generate Cloudinary upload signature for admin direct upload |
 
-### Internal / Cron
-
-| Method | Endpoint | Auth | Purpose |
-|--------|----------|------|---------|
-| POST | /api/internal/sync-order-status | Bearer CRON_SECRET | Sync order shipment status from Shiprocket (cron job) |
-
 ### Health
 
 | Method | Endpoint | Auth | Purpose |
@@ -1452,37 +1446,6 @@ Frontend:
      └─ Show "Tracking not available yet"
 ```
 
-### Status Sync (Cron Job)
-
-```
-POST /api/internal/sync-order-status
-  (Bearer Token: CRON_SECRET env var)
-  ↓
-1. Find orders with:
-   ├─ awbCode present
-   └─ orderStatus in ["confirmed", "processing", "shipped"]
-  ↓
-2. For each order (limit 25, max):
-   ├─ GET /courier/track/awb/{awbCode}
-   ├─ Extract shipmentStatus from response
-   ├─ Update order.shiprocket.shipmentStatus
-   └─ On error: log to errors array, continue
-  ↓
-3. Response:
-   {
-     checked: 50,  // orders processed
-     updated: 45,  // with status changes
-     errors: [     // failed trackings
-       { orderNumber: "ORD-...", message: "API timeout" }
-     ]
-   }
-```
-
-**LIVE STATUS**: 
-- Code: ✅ SOURCE_VERIFIED (present in route)
-- Deployment: ❌ LIVE_UNVERIFIED (cron job setup unknown; may not be running)
-
----
 
 ## 15. Reviews Flow
 
@@ -1641,7 +1604,6 @@ SHIPROCKET_EMAIL         Shiprocket login email
 SHIPROCKET_PASSWORD      Shiprocket login password
 CLOUDINARY_API_SECRET    Cloudinary API signing secret
 OTP_API_KEY              OTP provider API key (if using real provider)
-CRON_SECRET              Internal cron/sync endpoint bearer token
 ```
 
 **Where stored**: `.env.local` (local dev) + vercel env (production)
@@ -1710,8 +1672,6 @@ For deployment, required env vars grouped by category:
 ### CORS (Admin API)
 - [ ] ADMIN_ALLOWED_ORIGINS (comma-separated, e.g., "http://localhost:3001,https://admin.example.com")
 
-### Cron (Internal)
-- [ ] CRON_SECRET (for sync-order-status endpoint)
 
 ### Other
 - [ ] NODE_ENV ("production" or "development")
@@ -1784,7 +1744,6 @@ For deployment, required env vars grouped by category:
 | Shiprocket helper | `redlinenext/src/lib/shipping/shiprocket.js` |
 | Shipping serviceability | `redlinenext/src/app/api/shipping/serviceability/route.js` |
 | Tracking | `redlinenext/src/app/api/shipping/tracking/route.js` |
-| Shipment status sync | `redlinenext/src/app/api/internal/sync-order-status/route.js` |
 | Review schema | `redlinenext/src/models/Review.js` |
 | Customer review APIs | `redlinenext/src/app/api/reviews/` |
 | Admin review moderation API | `redlinenext/src/app/api/admin/reviews/` |
@@ -1872,7 +1831,6 @@ From Part 4, items NOT tested at runtime but source-verified:
 | **Razorpay Integration (Live)** | SOURCE_ONLY | Code present; signature verification logic solid; actual payment processing not tested |
 | **Shiprocket Integration (Live)** | SOURCE_ONLY | Token caching, order creation, tracking calls present; live Shiprocket API not tested |
 | **Cloudinary Upload (End-to-End)** | SOURCE_ONLY | Signature generation works; direct upload to Cloudinary + client-side image receive not tested |
-| **Cron Deployment** | UNKNOWN | sync-order-status route exists; cron job execution not verified (may not be running in production) |
 | **Admin CORS Deployment** | SOURCE_ONLY | CORS logic works; admin.example.com origin setup not verified |
 | **Database Connection Pool** | SOURCE_ONLY | Serverless caching configured; production pool behavior under load not tested |
 
@@ -1881,7 +1839,6 @@ From Part 4, items NOT tested at runtime but source-verified:
 - ⚠️ Razorpay = code correct, but test with test keys first
 - ⚠️ Shiprocket = code correct, but coordinate with Shiprocket support for test setup
 - ⚠️ Cloudinary = code correct, but verify admin uploads work end-to-end
-- ⚠️ Cron = set up scheduling manually (Vercel Cron, AWS Lambda, external service, etc.)
 
 ---
 
@@ -2192,7 +2149,6 @@ Admin Browser @ https://admin-redline.example.com
 - [ ] SHIPROCKET_EMAIL, SHIPROCKET_PASSWORD, SHIPROCKET_PICKUP_PINCODE
 - [ ] CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
 - [ ] ADMIN_ALLOWED_ORIGINS=https://admin.example.com
-- [ ] CRON_SECRET (random string for /api/internal/sync-order-status)
 - [ ] OTP_PROVIDER (set to actual provider if not mocking)
 
 **redlineadmin Only**:
@@ -2221,7 +2177,6 @@ Admin Browser @ https://admin-redline.example.com
 - **Customer** (requireUser): auth (send/verify OTP, me, logout), checkout (COD, Razorpay create/verify), orders, reviews (CRUD), shipping (tracking)
 - **Public**: products (list/by-id/by-slug), reviews (public by product), shipping (serviceability), coupons (validate), health
 - **Admin** (requireAdmin + CORS): auth (login, me, logout), dashboard, products (CRUD), orders (get, patch status), users (get, patch status), reviews (get, patch, delete), coupons (CRUD), upload (Cloudinary signature)
-- **Internal** (Bearer CRON_SECRET): sync-order-status (cron job)
 - **Response Envelope**: `{ success: true/false, data: {...}, error: { code, message, details } }`
 - **Auth**: customer_session (30-day JWT cookie) vs admin_session (8-hour JWT cookie); HttpOnly, Secure (prod), SameSite
 
@@ -2288,7 +2243,6 @@ Admin Browser @ https://admin-redline.example.com
 
 **Tracking**: GET /shipping/tracking (customer) → Shiprocket tracking by AWB code
 
-**Status Sync**: Cron job (sync-order-status) polls Shiprocket for shipment status updates (LIVE_UNVERIFIED)
 
 ### REVIEWS
 
@@ -2311,5 +2265,5 @@ Admin Browser @ https://admin-redline.example.com
 - Test Razorpay with live test keys
 - Test Shiprocket with staging account
 - Test Cloudinary upload end-to-end
-- Set up cron job for sync-order-status
 - Implement real OTP provider (if required)
+

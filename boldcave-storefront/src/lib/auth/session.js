@@ -156,7 +156,7 @@ export async function requireUser(request) {
   } catch (error) {
     if (error?.message?.includes("not configured")) {
       return {
-        response: failure("CONFIGURATION_ERROR", error.message, 503),
+        response: failure("CONFIGURATION_ERROR", "Authentication is not configured", 503),
       };
     }
 
@@ -186,7 +186,7 @@ export async function requireAdmin(request) {
   } catch (error) {
     if (error?.message?.includes("not configured")) {
       return {
-        response: failure("CONFIGURATION_ERROR", error.message, 503),
+        response: failure("CONFIGURATION_ERROR", "Authentication is not configured", 503),
       };
     }
 

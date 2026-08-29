@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,6 +23,10 @@ import { getCloudinaryImageUrl, getCloudinarySrcSet } from "@/lib/cloudinary/ima
 
 const FALLBACK_IMAGE =
   "https://upload.wikimedia.org/wikipedia/commons/a/a3/Image-not-found.png";
+const MAIN_GALLERY_IMAGE_WIDTH = 1800;
+const MAIN_GALLERY_IMAGE_WIDTHS = [1000, 1400, 1800, 2200];
+const MAIN_GALLERY_IMAGE_SIZES =
+  "(min-width: 1024px) 600px, (min-width: 820px) 50vw, 100vw";
 
 const formatPrice = (value) =>
   new Intl.NumberFormat("en-IN", {
@@ -180,6 +184,8 @@ export default function ProductDetailClient({
   const gallerySwipeStartRef = useRef(null);
   const galleryWheelLockRef = useRef(false);
   const imagePreloadRequestRef = useRef(0);
+  const preloadedPrimaryImagesRef = useRef(new Set());
+  const pendingPrimaryPreloadsRef = useRef(new Map());
 
   useEffect(() => {
     rememberProducts([product].filter(Boolean));
@@ -216,15 +222,69 @@ export default function ProductDetailClient({
   const galleryImages = product ? getProductImages(product, selectedVariant) : [FALLBACK_IMAGE];
   const selectedGalleryImage = galleryImages[selectedImage] || FALLBACK_IMAGE;
   const displayedPrimaryImage = getCloudinaryImageUrl(displayedImage, {
-    width: 1800,
+    width: MAIN_GALLERY_IMAGE_WIDTH,
     dpr: "auto",
   });
-  const displayedPrimaryImageSrcSet = getCloudinarySrcSet(displayedImage, [
-    1000,
-    1400,
-    1800,
-    2200,
-  ]);
+  const displayedPrimaryImageSrcSet = getCloudinarySrcSet(
+    displayedImage,
+    MAIN_GALLERY_IMAGE_WIDTHS
+  );
+
+  const preloadMainGalleryImage = useCallback((imageSource) => {
+    const imageKey = String(imageSource || "");
+
+    if (!imageKey || imageKey === FALLBACK_IMAGE) {
+      return Promise.resolve(false);
+    }
+
+    if (preloadedPrimaryImagesRef.current.has(imageKey)) {
+      return Promise.resolve(true);
+    }
+
+    const pendingPreload = pendingPrimaryPreloadsRef.current.get(imageKey);
+    if (pendingPreload) {
+      return pendingPreload;
+    }
+
+    const imageUrl =
+      getCloudinaryImageUrl(imageSource, {
+        width: MAIN_GALLERY_IMAGE_WIDTH,
+        dpr: "auto",
+      }) || imageSource;
+    const imageSrcSet = getCloudinarySrcSet(
+      imageSource,
+      MAIN_GALLERY_IMAGE_WIDTHS
+    );
+
+    const preloadPromise = new Promise((resolve) => {
+      const image = new Image();
+      let settled = false;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        preloadedPrimaryImagesRef.current.add(imageKey);
+        pendingPrimaryPreloadsRef.current.delete(imageKey);
+        resolve(true);
+      };
+
+      image.decoding = "async";
+      if (imageSrcSet) {
+        image.srcset = imageSrcSet;
+        image.sizes = MAIN_GALLERY_IMAGE_SIZES;
+      }
+      image.onload = finish;
+      image.onerror = finish;
+      image.src = imageUrl;
+
+      if (image.decode) {
+        image.decode().then(finish).catch(finish);
+      }
+    });
+
+    pendingPrimaryPreloadsRef.current.set(imageKey, preloadPromise);
+    return preloadPromise;
+  }, []);
 
   useEffect(() => {
     if (!selectedGalleryImage || selectedGalleryImage === displayedImage) {
@@ -233,12 +293,6 @@ export default function ProductDetailClient({
 
     const requestId = imagePreloadRequestRef.current + 1;
     imagePreloadRequestRef.current = requestId;
-    const nextImageUrl =
-      getCloudinaryImageUrl(selectedGalleryImage, {
-        width: 1800,
-        dpr: "auto",
-      }) || selectedGalleryImage;
-    const image = new Image();
     let cancelled = false;
 
     const commit = () => {
@@ -247,19 +301,47 @@ export default function ProductDetailClient({
       }
     };
 
-    image.src = nextImageUrl;
-
-    if (image.decode) {
-      image.decode().then(commit).catch(commit);
+    if (preloadedPrimaryImagesRef.current.has(String(selectedGalleryImage))) {
+      commit();
     } else {
-      image.onload = commit;
-      image.onerror = commit;
+      preloadMainGalleryImage(selectedGalleryImage).then(commit);
     }
 
     return () => {
       cancelled = true;
     };
-  }, [displayedImage, selectedGalleryImage]);
+  }, [displayedImage, preloadMainGalleryImage, selectedGalleryImage]);
+
+  useEffect(() => {
+    if (galleryImages.length <= 1) {
+      return undefined;
+    }
+
+    const targets = [selectedImage + 1, selectedImage + 2]
+      .filter((index) => index < galleryImages.length)
+      .map((index) => galleryImages[index])
+      .filter(Boolean);
+
+    if (!targets.length) {
+      return undefined;
+    }
+
+    const warmLikelyImages = () => {
+      targets.forEach((image) => {
+        preloadMainGalleryImage(image);
+      });
+    };
+
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(warmLikelyImages, {
+        timeout: 1800,
+      });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timer = window.setTimeout(warmLikelyImages, 700);
+    return () => window.clearTimeout(timer);
+  }, [galleryImages, preloadMainGalleryImage, selectedImage]);
 
   if (!product) {
     return (
@@ -542,12 +624,15 @@ export default function ProductDetailClient({
                 <img
                   src={displayedPrimaryImage || FALLBACK_IMAGE}
                   srcSet={displayedPrimaryImageSrcSet || undefined}
-                  sizes="(min-width: 1024px) 600px, (min-width: 820px) 50vw, 100vw"
+                  sizes={MAIN_GALLERY_IMAGE_SIZES}
                   alt={product.name}
                   className="h-full w-full object-contain transition-opacity duration-150"
                   loading={displayedImage === galleryImages[0] ? "eager" : "lazy"}
                   fetchPriority={displayedImage === galleryImages[0] ? "high" : "auto"}
                   decoding="async"
+                  onLoad={() => {
+                    preloadedPrimaryImagesRef.current.add(String(displayedImage || ""));
+                  }}
                   onError={(event) => {
                     event.currentTarget.onerror = null;
                     event.currentTarget.src = FALLBACK_IMAGE;
@@ -605,6 +690,9 @@ export default function ProductDetailClient({
                     key={`mobile-${image}-${index}`}
                     type="button"
                     onClick={() => selectGalleryImage(index)}
+                    onPointerEnter={() => preloadMainGalleryImage(image)}
+                    onFocus={() => preloadMainGalleryImage(image)}
+                    onTouchStart={() => preloadMainGalleryImage(image)}
                     className={[
                       "aspect-square min-w-0 cursor-pointer overflow-hidden bg-white transition-opacity",
                       selectedImage === index
@@ -667,6 +755,9 @@ export default function ProductDetailClient({
                     key={`tablet-${image}-${index}`}
                     type="button"
                     onClick={() => selectGalleryImage(index)}
+                    onPointerEnter={() => preloadMainGalleryImage(image)}
+                    onFocus={() => preloadMainGalleryImage(image)}
+                    onTouchStart={() => preloadMainGalleryImage(image)}
                     className={[
                       "aspect-square min-w-0 cursor-pointer overflow-hidden bg-white border transition-colors",
                       selectedImage === index
@@ -711,6 +802,9 @@ export default function ProductDetailClient({
                       key={`${image}-${index}`}
                       type="button"
                       onClick={() => selectGalleryImage(index)}
+                      onPointerEnter={() => preloadMainGalleryImage(image)}
+                      onFocus={() => preloadMainGalleryImage(image)}
+                      onTouchStart={() => preloadMainGalleryImage(image)}
                       className={[
                         "aspect-square min-w-0 cursor-pointer overflow-hidden bg-white border transition-colors",
                         selectedImage === index

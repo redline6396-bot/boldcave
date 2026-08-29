@@ -15,6 +15,8 @@ function serializeEligibleCoupon(coupon, discount) {
     discountValue: coupon.discountValue,
     minimumOrder: coupon.minimumOrder,
     expiryDate: coupon.expiryDate,
+    firstOrderOnly: Boolean(coupon.firstOrderOnly),
+    selectedCustomersOnly: (coupon.eligibleUserIds || []).length > 0,
     discount,
   };
 }

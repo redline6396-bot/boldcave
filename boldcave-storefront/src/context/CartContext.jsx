@@ -152,8 +152,7 @@ export function CartProvider({ children }) {
     try {
       const storedCart = window.localStorage.getItem(CART_STORAGE_KEY);
       setCart(storedCart ? normalizeStoredCart(JSON.parse(storedCart)) : []);
-    } catch (error) {
-      console.warn("Invalid perfume cart data was cleared.", error);
+    } catch {
       window.localStorage.removeItem(CART_STORAGE_KEY);
       setCart([]);
     } finally {
@@ -186,9 +185,7 @@ export function CartProvider({ children }) {
           rememberProducts(products);
         }
       })
-      .catch((error) => {
-        console.warn("Unable to refresh cart product details.", error);
-      });
+      .catch(() => {});
 
     return () => {
       isMounted = false;

@@ -18,15 +18,16 @@ export default function PaymentMethod({
   prepaidDiscountSettings,
   onlineAmount = 0,
   codAmount = 0,
-  prepaidSavings = 0,
+  onlineSavings = 0,
+  loading = false,
 }) {
   const codDisabled =
     disabled || serviceable === false || codAvailable === false;
   const onlineDisabled = disabled || serviceable === false;
-  const onlineSavings = Math.max(0, Number(prepaidSavings) || 0);
+  const paymentSavings = Math.max(0, Number(onlineSavings) || 0);
   const prepaidOfferText = getPrepaidOfferText({
     settings: prepaidDiscountSettings,
-    savings: onlineSavings,
+    savings: paymentSavings,
   });
 
   return (
@@ -40,7 +41,7 @@ export default function PaymentMethod({
           active={value === "razorpay"}
           icon={CreditCard}
           title="Pay Online"
-          text={prepaidOfferText}
+          text={loading ? "Refreshing payment price..." : prepaidOfferText}
           amount={onlineAmount}
           onClick={() => onChange("razorpay")}
           disabled={onlineDisabled}
@@ -51,7 +52,9 @@ export default function PaymentMethod({
           icon={Banknote}
           title="Cash on Delivery"
           text={
-            codAvailable === false
+            loading
+              ? "Refreshing payment price..."
+              : codAvailable === false
               ? "COD is unavailable for this pincode"
               : "Pay when your order arrives"
           }
@@ -74,10 +77,10 @@ function getPrepaidOfferText({ settings = {}, savings = 0 } = {}) {
       settings.discountType === "percentage"
         ? ` (${Number(settings.discountValue || 0).toLocaleString("en-IN")}%)`
         : "";
-    return `Save ${money(savings)}${percent} with online payment`;
+    return `Save ${money(savings)}${percent} online`;
   }
 
-  return "Pay securely online";
+  return settings?.enabled === false ? "Pay securely online" : "Online payment available";
 }
 
 function PaymentOption({
@@ -95,7 +98,7 @@ function PaymentOption({
       onClick={onClick}
       disabled={disabled}
       className={[
-        "flex w-full items-center gap-3 rounded-[13px] border px-4 py-3 text-left",
+        "grid w-full grid-cols-[22px_minmax(0,1fr)_auto_19px] items-center gap-3 rounded-[13px] border px-4 py-3 text-left",
         active
           ? "border-[#182231] bg-[#f8fafb]"
           : "border-[#d8dee5] bg-white",

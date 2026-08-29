@@ -4,6 +4,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 const eslintConfig = defineConfig([
   globalIgnores([
     ".next/**",
+    ".open-next/**",
     "out/**",
     "build/**",
     "node_modules/**",

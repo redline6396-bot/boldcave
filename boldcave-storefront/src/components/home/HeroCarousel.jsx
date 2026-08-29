@@ -4,10 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fetchHomepageSettings } from "@/lib/clientApi";
+import { getCloudinaryImageUrl, getCloudinarySrcSet } from "@/lib/cloudinary/images";
 
 const AUTOPLAY_DELAY = 3000;
 const SWIPE_THRESHOLD = 48;
 const TAP_THRESHOLD = 10;
+const HERO_MOBILE_WIDTHS = [640, 960, 1280];
+const HERO_DESKTOP_WIDTHS = [1280, 1920, 2560, 3200];
 
 const fallbackSlides = [
   {
@@ -51,6 +54,22 @@ const buildHeroSlides = (items) =>
 const getSlideImageKey = (slide) =>
   `${slide.id}:${slide.desktopImage}:${slide.mobileImage}`;
 
+const getHeroImageUrl = (image, width) =>
+  getCloudinaryImageUrl(image, { width }) || image || "";
+
+const getHeroSrcSet = (image, widths) =>
+  getCloudinarySrcSet(image, widths) || image || "";
+
+const getCurrentHeroImage = (slide) => {
+  if (!slide) return "";
+
+  if (typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches) {
+    return slide.mobileImage || slide.desktopImage || "";
+  }
+
+  return slide.desktopImage || slide.mobileImage || "";
+};
+
 export default function HeroCarousel({ initialHeroSlides = [] }) {
   const router = useRouter();
   const [slides, setSlides] = useState(() =>
@@ -69,6 +88,7 @@ export default function HeroCarousel({ initialHeroSlides = [] }) {
   const dragRef = useRef(null);
   const suppressClickRef = useRef(false);
   const scrollFrameRef = useRef(null);
+  const preloadedHeroUrlsRef = useRef(new Set());
 
   useEffect(() => {
     if (hasHeroSlideContent(initialHeroSlides)) {
@@ -136,6 +156,39 @@ export default function HeroCarousel({ initialHeroSlides = [] }) {
     ? Boolean(loadedImages[getSlideImageKey(firstSlide)])
     : false;
   const isHeroReady = isInitialPositionReady && firstSlideLoaded;
+
+  useEffect(() => {
+    if (!isHeroReady || slides.length <= 1) {
+      return undefined;
+    }
+
+    const nextSlide = slides[(activeIndex + 1) % slides.length];
+    const nextSource = getCurrentHeroImage(nextSlide);
+    const width =
+      typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches
+        ? 960
+        : 1920;
+    const preloadUrl = getHeroImageUrl(nextSource, width);
+
+    if (!preloadUrl || preloadedHeroUrlsRef.current.has(preloadUrl)) {
+      return undefined;
+    }
+
+    const warmNextHero = () => {
+      preloadedHeroUrlsRef.current.add(preloadUrl);
+      const image = new Image();
+      image.decoding = "async";
+      image.src = preloadUrl;
+    };
+
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(warmNextHero, { timeout: 1500 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timer = window.setTimeout(warmNextHero, 600);
+    return () => window.clearTimeout(timer);
+  }, [activeIndex, isHeroReady, slides]);
 
   // Reset the horizontal scroll position BEFORE paint.
   // Browsers can restore an overflow container's previous scrollLeft on refresh,
@@ -340,10 +393,8 @@ export default function HeroCarousel({ initialHeroSlides = [] }) {
       <div
         ref={carouselRef}
         className={[
-          "flex w-full cursor-pointer snap-x snap-mandatory touch-pan-y select-none overflow-y-hidden overscroll-x-contain scroll-smooth transition-opacity duration-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden aspect-square sm:h-[45vw] sm:aspect-auto lg:h-[43vw] lg:max-h-[780px] lg:touch-auto",
-          isHeroReady
-            ? "overflow-x-hidden opacity-100 lg:overflow-x-auto"
-            : "pointer-events-none overflow-x-hidden opacity-0",
+          "flex w-full cursor-pointer snap-x snap-mandatory touch-pan-y select-none overflow-x-hidden overflow-y-hidden overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden aspect-square sm:h-[45vw] sm:aspect-auto lg:h-[43vw] lg:max-h-[780px] lg:touch-auto",
+          isInitialPositionReady ? "lg:overflow-x-auto" : "",
         ].join(" ")}
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         onScroll={handleScroll}
@@ -380,23 +431,28 @@ export default function HeroCarousel({ initialHeroSlides = [] }) {
                 {slide.mobileImage && (
                   <source
                     media="(max-width: 639px)"
-                    srcSet={slide.mobileImage}
+                    srcSet={getHeroSrcSet(slide.mobileImage, HERO_MOBILE_WIDTHS)}
+                    sizes="100vw"
                   />
                 )}
                 {slide.desktopImage && (
                   <source
                     media="(min-width: 640px)"
-                    srcSet={slide.desktopImage}
+                    srcSet={getHeroSrcSet(slide.desktopImage, HERO_DESKTOP_WIDTHS)}
+                    sizes="100vw"
                   />
                 )}
 
                 <img
                   ref={(node) => registerImage(node, slide)}
-                  src={slide.desktopImage || slide.mobileImage}
+                  src={getHeroImageUrl(
+                    slide.desktopImage || slide.mobileImage,
+                    index === 0 ? 1920 : 1280
+                  )}
                   alt=""
                   className={[
                     "block h-full w-full max-w-none object-cover object-center transition-opacity duration-200 sm:h-full sm:object-cover lg:h-full lg:object-cover",
-                    isImageLoaded ? "opacity-100" : "opacity-0",
+                    index === 0 || isImageLoaded ? "opacity-100" : "opacity-0",
                   ].join(" ")}
                   loading={index === 0 ? "eager" : "lazy"}
                   fetchPriority={index === 0 ? "high" : "auto"}

@@ -42,9 +42,14 @@ export class OtpTestPhoneNotAllowedError extends Error {
 }
 
 function hashOtp(phone, otp) {
-  const secret = process.env.AUTH_SECRET || process.env.JWT_SECRET || "development-otp-secret";
+  const secret = process.env.AUTH_SECRET || process.env.JWT_SECRET;
+
+  if (!secret && process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_SECRET is not configured");
+  }
+
   return crypto
-    .createHmac("sha256", secret)
+    .createHmac("sha256", secret || "development-otp-secret")
     .update(`${phone}:${otp}`)
     .digest("hex");
 }

@@ -71,7 +71,7 @@ export default function Footer() {
   return (
     <footer className="w-full border-t border-[#202020] bg-black text-white">
       <div className="mx-auto max-w-[1360px] px-5 pt-4 md:px-10 md:pt-5 lg:px-10 lg:pt-4">
-        {/* BRAND */}
+        {/* LOGO */}
         <div className="pb-2 text-center md:pb-4 lg:pb-5">
           <Link
             href="/"
