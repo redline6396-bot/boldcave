@@ -1285,7 +1285,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                   disabled={hasUnresolvedCart || submitting}
                   paymentMethod={paymentMethod}
                   subtotal={subtotal}
-                  showEligibleOffers={false}
+                  
                   identityHint="Verify your mobile to view eligible offers"
                 />
               </div>
@@ -1377,7 +1377,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                     disabled={hasUnresolvedCart || submitting}
                     paymentMethod={paymentMethod}
                     subtotal={subtotal}
-                    showEligibleOffers={isAuthenticated && phoneVerified}
+                  
                     activeDiscount={couponDiscount}
                     inactiveAppliedText={
                       paymentMethod === "razorpay" &&

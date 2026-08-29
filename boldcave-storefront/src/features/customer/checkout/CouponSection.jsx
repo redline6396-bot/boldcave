@@ -122,7 +122,6 @@ export default function CouponSection({
   subtotal = 0,
   showEligibleOffers = false,
   maxVisibleOffers = 3,
-  identityHint = "",
   activeDiscount = null,
   inactiveAppliedText = "",
 }) {
@@ -693,17 +692,6 @@ export default function CouponSection({
         )}
         </div>
       </div>
-
-      {/* =================================================
-          IDENTITY HINT
-      ================================================= */}
-
-      {!applied &&
-        identityHint && (
-          <p className="mt-1.5 pl-[46px] text-[10.5px] leading-4 text-[#66717e] sm:pl-[58px] sm:text-[11px]">
-            {identityHint}
-          </p>
-        )}
 
     </section>
   );
