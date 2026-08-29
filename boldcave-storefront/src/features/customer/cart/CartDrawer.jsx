@@ -19,6 +19,7 @@ import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { getVariantProductImageUrl } from "@/lib/clientApi";
 import { requestCheckoutOpen } from "@/lib/cartEvents";
 import CouponSection from "@/features/customer/checkout/CouponSection";
+import { getCloudinaryImageUrl, getCloudinarySrcSet } from "@/lib/cloudinary/images";
 
 const FALLBACK_IMAGE =
   "https://upload.wikimedia.org/wikipedia/commons/a/a3/Image-not-found.png";
@@ -190,9 +191,13 @@ export default function CartDrawer({ isOpen, onClose }) {
                         className="h-[88px] w-[88px] cursor-pointer overflow-hidden bg-neutral-50"
                       >
                         <img
-                          src={image}
+                          src={getCloudinaryImageUrl(image, { width: 180 })}
+                          srcSet={getCloudinarySrcSet(image, [120, 180, 240]) || undefined}
+                          sizes="88px"
                           alt={product.name}
                           className="h-full w-full object-contain"
+                          loading="lazy"
+                          decoding="async"
                         />
                       </Link>
 

@@ -7,8 +7,8 @@ import { requestCartDrawerOpen } from "@/lib/cartEvents";
 import {
   getProductImageUrl,
   getVariantProductGalleryUrls,
-  getVariantProductImageUrl,
 } from "@/lib/clientApi";
+import { getCloudinaryImageUrl, getCloudinarySrcSet } from "@/lib/cloudinary/images";
 
 const CURRENCY = "\u20b9";
 const PLACEHOLDER_IMAGE =
@@ -98,7 +98,11 @@ const getProductNotesLine = (product) => {
   return splitNotes(product?.fragranceProfile).slice(0, 3).join(` ${BULLET} `);
 };
 
-export default function ProductCard({ product }) {
+function getVariantProductImageSource(product, variant) {
+  return variant?.images?.[0] || variant?.image || product?.images?.[0];
+}
+
+export default function ProductCard({ product, priority = false }) {
   const router = useRouter();
   const { addToCart } = useCart();
 
@@ -109,6 +113,8 @@ export default function ProductCard({ product }) {
   const defaultVariant = getDefaultVariant(variants);
 
   const [selectedSize, setSelectedSize] = useState(defaultVariant?.size || "");
+  const [isHoverRequested, setIsHoverRequested] = useState(false);
+  const [isHoverLoaded, setIsHoverLoaded] = useState(false);
 
   const selectedVariant = useMemo(
     () => variants.find((variant) => variant.size === selectedSize),
@@ -131,33 +137,57 @@ export default function ProductCard({ product }) {
     setSelectedSize(getDefaultVariant(variants)?.size || "");
   }, [selectedSize, variants]);
 
-  if (!product) {
-    return null;
-  }
-
   const isSelectedOutOfStock =
     !selectedVariant || Number(selectedVariant.stock) <= 0;
 
+  const productImageSource = getVariantProductImageSource(product, selectedVariant);
+  const productImageSourceUrl = getProductImageUrl(productImageSource);
   const productImage =
-    getVariantProductImageUrl(product, selectedVariant) || PLACEHOLDER_IMAGE;
+    getCloudinaryImageUrl(productImageSource, {
+      width: 960,
+      dpr: "auto",
+    }) || PLACEHOLDER_IMAGE;
+  const productImageSrcSet = getCloudinarySrcSet(
+    productImageSource,
+    [480, 640, 800, 960, 1200]
+  );
 
   const selectedVariantGallery = getVariantProductGalleryUrls(
     product,
     selectedVariant
   );
 
-  const hoverImage =
-    getProductImageUrl(selectedVariant?.images?.[1]) ||
-    selectedVariantGallery.find((image) => image !== productImage) ||
-    getProductImageUrl(product.images?.[1]) ||
+  const hoverImageSource =
+    selectedVariant?.images?.[1] ||
+    selectedVariantGallery.find((image) => image !== productImageSourceUrl) ||
+    product?.images?.[1] ||
     "";
+  const hoverImage =
+    getCloudinaryImageUrl(hoverImageSource, { width: 960, dpr: "auto" }) ||
+    getProductImageUrl(product?.images?.[1]) ||
+    "";
+  const hoverImageSrcSet = getCloudinarySrcSet(hoverImageSource, [
+    480,
+    800,
+    960,
+    1200,
+  ]);
 
   const hasHoverImage = Boolean(hoverImage);
+  const shouldRenderHoverImage = hasHoverImage && isHoverRequested;
   const productUrl = `/product/${product.slug}`;
 
   const profileLine = getProductNotesLine(product);
   const comboNamesLine = isCombo ? getComboNamesLine(product.comboItems) : "";
   const comboSizeSummary = isCombo ? getComboSizeSummary(product.comboItems) : "";
+
+  useEffect(() => {
+    setIsHoverLoaded(false);
+  }, [hoverImage]);
+
+  if (!product) {
+    return null;
+  }
 
   const handleNavigate = () => {
     router.push(productUrl);
@@ -186,6 +216,8 @@ export default function ProductCard({ product }) {
   return (
     <article
       onClick={handleCardClick}
+      onPointerEnter={() => setIsHoverRequested(true)}
+      onFocusCapture={() => setIsHoverRequested(true)}
       className="group mx-auto w-full max-w-[388px] cursor-pointer border border-[#e8e2d9] bg-white"
     >
       <button
@@ -197,34 +229,47 @@ export default function ProductCard({ product }) {
         <div className="relative aspect-square w-full overflow-hidden bg-white">
           <img
             src={productImage}
+            srcSet={productImageSrcSet || undefined}
+            sizes="(min-width: 1024px) 360px, (min-width: 640px) calc((100vw - 72px) / 2), calc((100vw - 30px) / 2)"
             alt={product.name}
             className={[
               "absolute inset-0 h-full w-full object-contain transition-[opacity,transform] duration-300 ease-out group-hover:scale-[1.025]",
-              hasHoverImage
+              shouldRenderHoverImage && isHoverLoaded
                 ? "opacity-100 group-hover:opacity-0"
                 : "opacity-100",
             ].join(" ")}
             style={{
               filter: isSelectedOutOfStock ? "grayscale(45%)" : undefined,
             }}
-            loading="lazy"
+            loading={priority ? "eager" : "lazy"}
+            fetchPriority={priority ? "high" : "auto"}
+            decoding="async"
             onError={(event) => {
               event.currentTarget.onerror = null;
               event.currentTarget.src = PLACEHOLDER_IMAGE;
             }}
           />
 
-          {hasHoverImage && (
+          {shouldRenderHoverImage && (
             <img
               src={hoverImage}
+              srcSet={hoverImageSrcSet || undefined}
+              sizes="(min-width: 1024px) 360px, (min-width: 640px) calc((100vw - 72px) / 2), calc((100vw - 30px) / 2)"
               alt={`${product.name} alternate view`}
-              className="absolute inset-0 h-full w-full object-contain opacity-0 transition-[opacity,transform] duration-300 ease-out group-hover:scale-[1.025] group-hover:opacity-100"
+              className={[
+                "absolute inset-0 h-full w-full object-contain transition-[opacity,transform] duration-200 ease-out group-hover:scale-[1.025]",
+                isHoverLoaded ? "opacity-0 group-hover:opacity-100" : "opacity-0",
+              ].join(" ")}
               style={{
                 filter: isSelectedOutOfStock ? "grayscale(45%)" : undefined,
               }}
               loading="lazy"
+              fetchPriority="low"
+              decoding="async"
+              onLoad={() => setIsHoverLoaded(true)}
               onError={(event) => {
                 event.currentTarget.style.display = "none";
+                setIsHoverLoaded(true);
               }}
             />
           )}

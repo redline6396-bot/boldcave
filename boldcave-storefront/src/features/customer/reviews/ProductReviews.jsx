@@ -73,6 +73,7 @@ export default function ProductReviews({ productId }) {
   const [ownReview, setOwnReview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -84,6 +85,7 @@ export default function ProductReviews({ productId }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [lightboxImage, setLightboxImage] = useState("");
   const sortMenuRef = useRef(null);
+  const actionPendingRef = useRef(false);
 
   const loadReviews = useCallback(async () => {
     if (!productId) {
@@ -91,7 +93,7 @@ export default function ProductReviews({ productId }) {
     }
 
     setLoading(true);
-    setError("");
+    setLoadError("");
 
     try {
       const [publicResult, mine] = await Promise.all([
@@ -104,8 +106,8 @@ export default function ProductReviews({ productId }) {
       setReviews(publicResult.reviews || []);
       setRating(publicResult.rating || { average: 0, count: 0, breakdown: {} });
       setOwnReview(normalizeReview(mine));
-    } catch (reviewsError) {
-      setError(reviewsError.message || "Unable to load reviews.");
+    } catch {
+      setLoadError("Reviews couldn't be loaded.");
     } finally {
       setLoading(false);
     }
@@ -260,6 +262,8 @@ export default function ProductReviews({ productId }) {
     SORT_OPTIONS[0].label;
 
   const openReviewForm = () => {
+    if (saving) return;
+
     setError("");
     setMessage("");
 
@@ -348,6 +352,9 @@ export default function ProductReviews({ productId }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (actionPendingRef.current) return;
+
+    actionPendingRef.current = true;
     setSaving(true);
     setError("");
     setMessage("");
@@ -393,18 +400,24 @@ export default function ProductReviews({ productId }) {
         setError("You have already reviewed this product. Use edit to update your review.");
         await loadReviews();
       } else {
-        setError(reviewError.message || "Unable to save review.");
+        setError(getReviewSaveError(reviewError));
       }
     } finally {
+      actionPendingRef.current = false;
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!ownReview?.id || !window.confirm("Delete your review?")) {
+    if (
+      actionPendingRef.current ||
+      !ownReview?.id ||
+      !window.confirm("Delete your review?")
+    ) {
       return;
     }
 
+    actionPendingRef.current = true;
     setSaving(true);
     setError("");
     setMessage("");
@@ -415,9 +428,10 @@ export default function ProductReviews({ productId }) {
       setShowForm(false);
       setMessage("Review deleted.");
       await loadReviews();
-    } catch (deleteError) {
-      setError(deleteError.message || "Unable to delete review.");
+    } catch {
+      setError("Could not delete this review. Please try again.");
     } finally {
+      actionPendingRef.current = false;
       setSaving(false);
     }
   };
@@ -434,6 +448,19 @@ export default function ProductReviews({ productId }) {
           <div className="mt-12 flex items-center justify-center gap-3 text-[12px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
             <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.7} />
             Loading reviews
+          </div>
+        ) : loadError ? (
+          <div className="mt-8 border-y border-neutral-200 py-6 text-center">
+            <p className="text-[13px] leading-5 text-neutral-500">
+              {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={loadReviews}
+              className="mt-3 cursor-pointer text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-950 underline underline-offset-4"
+            >
+              Retry
+            </button>
           </div>
         ) : (
           <>
@@ -473,11 +500,11 @@ export default function ProductReviews({ productId }) {
               <div className="flex justify-center lg:justify-end">
                 <button
                   type="button"
-                  onClick={openReviewForm}
+                  onClick={showForm ? closeReviewForm : openReviewForm}
                   disabled={saving}
                   className="h-10 min-w-[176px] cursor-pointer border border-neutral-950 bg-neutral-950 px-6 text-[11px] font-semibold uppercase tracking-[0.08em] text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-100 disabled:text-neutral-400 sm:h-12 sm:min-w-[210px] sm:px-7 sm:text-[12px]"
                 >
-                  {ownReview ? "EDIT REVIEW" : "WRITE A REVIEW"}
+                  {showForm ? "CANCEL REVIEW" : ownReview ? "EDIT REVIEW" : "WRITE A REVIEW"}
                 </button>
               </div>
             </div>
@@ -620,6 +647,7 @@ export default function ProductReviews({ productId }) {
             src={lightboxImage}
             alt="Customer review full size"
             onClick={(event) => event.stopPropagation()}
+            onError={() => setLightboxImage("")}
             className="max-h-[90vh] max-w-[94vw] cursor-default touch-pinch-zoom object-contain"
           />
         </div>
@@ -785,7 +813,7 @@ function InlineReviewForm({
             disabled={saving}
             className="h-12 cursor-pointer border border-neutral-950 bg-neutral-950 px-7 text-[14px] font-semibold text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-300"
           >
-            {saving ? "SUBMITTING" : "SUBMIT REVIEW"}
+            {saving ? (editing ? "UPDATING" : "SUBMITTING") : editing ? "UPDATE REVIEW" : "SUBMIT REVIEW"}
           </button>
         </div>
       </div>
@@ -794,11 +822,16 @@ function InlineReviewForm({
 }
 
 function ReviewMediaPreview({ src, alt, onRemove }) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) return null;
+
   return (
     <div className="relative bg-white">
       <img
         src={src}
         alt={alt}
+        onError={() => setFailed(true)}
         className="h-20 w-20 border border-neutral-300 object-cover"
       />
       <button
@@ -841,10 +874,18 @@ function InteractiveStars({ value, onChange }) {
 }
 
 function ReviewRow({ review, saving, onEdit, onDelete, onPhotoClick }) {
+  const [brokenPhotos, setBrokenPhotos] = useState({});
   const name =
     [review.user?.firstName, review.user?.lastName].filter(Boolean).join(" ") ||
     "Customer";
   const showOwnerActions = Boolean(onEdit || onDelete);
+  const visiblePhotos = (Array.isArray(review.photos) ? review.photos : [])
+    .slice(0, 4)
+    .map((photo, index) => ({ photo, index }))
+    .filter(({ photo, index }) => {
+    const photoUrl = getPhotoUrl(photo);
+    return photoUrl && !brokenPhotos[`${photoUrl}-${index}`];
+    });
 
   return (
     <article className="relative border-b border-neutral-200 py-4 sm:py-6 sm:pb-8">
@@ -879,15 +920,15 @@ function ReviewRow({ review, saving, onEdit, onDelete, onPhotoClick }) {
         {review.text}
       </p>
 
-      {review.photos?.length ? (
+      {visiblePhotos.length ? (
         <div className="mt-3 flex max-w-full flex-wrap gap-2.5 sm:mb-1 sm:mt-4 sm:gap-3">
-          {review.photos.slice(0, 4).map((photo, index) => {
+          {visiblePhotos.map(({ photo, index }) => {
             const photoUrl = getPhotoUrl(photo);
-            if (!photoUrl) return null;
+            const photoKey = `${photoUrl}-${index}`;
 
             return (
               <button
-                key={`${photoUrl}-${index}`}
+                key={photoKey}
                 type="button"
                 onClick={() => onPhotoClick?.(photoUrl)}
                 className="block max-w-[82px] cursor-zoom-in bg-neutral-50 sm:max-w-[112px]"
@@ -896,6 +937,12 @@ function ReviewRow({ review, saving, onEdit, onDelete, onPhotoClick }) {
                 <img
                   src={photoUrl}
                   alt={`Review photo ${index + 1}`}
+                  onError={() =>
+                    setBrokenPhotos((current) => ({
+                      ...current,
+                      [photoKey]: true,
+                    }))
+                  }
                   className="h-auto max-h-[82px] w-auto max-w-full object-contain sm:max-h-[112px]"
                 />
               </button>
@@ -1189,4 +1236,12 @@ function getPhotoUrl(photo) {
   if (!photo) return "";
   if (typeof photo === "string") return photo;
   return photo.url || photo.secure_url || "";
+}
+
+function getReviewSaveError(error) {
+  if (/upload|image|cloudinary/i.test(error?.message || "")) {
+    return "Could not upload review images. Please try again.";
+  }
+
+  return "Could not save your review. Please try again.";
 }

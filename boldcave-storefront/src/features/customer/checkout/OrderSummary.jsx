@@ -186,7 +186,7 @@ export default function OrderSummary({
 
               {onlinePaymentDiscount > 0 && (
                 <SummaryRow
-                  label="Online Payment Discount (10%)"
+                  label="Online payment discount"
                   value={`-${money(onlinePaymentDiscount)}`}
                   positive
                 />

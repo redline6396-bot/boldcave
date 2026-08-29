@@ -14,6 +14,17 @@ const cartPayload = (cart) =>
     quantity,
   }));
 
+function getCustomerCouponError(error) {
+  if (
+    ["COUPON_NOT_FOUND", "COUPON_INACTIVE"].includes(error?.code) ||
+    /coupon code not found/i.test(error?.message || "")
+  ) {
+    return "This coupon code is invalid or unavailable.";
+  }
+
+  return error?.message || "Unable to apply coupon.";
+}
+
 export default function CouponProvider({ children }) {
   const { cart } = useCart();
   const cartSignature = useMemo(() => JSON.stringify(cartPayload(cart)), [cart]);
@@ -96,7 +107,7 @@ export default function CouponProvider({ children }) {
         setDiscount(0);
         setServerSubtotal(0);
         setServerTotal(0);
-        setError(couponError.message || "Unable to apply coupon.");
+        setError(getCustomerCouponError(couponError));
         return null;
       } finally {
         setValidating(false);

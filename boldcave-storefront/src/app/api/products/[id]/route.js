@@ -1,5 +1,6 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, success } from "@/lib/api/response";
+import { publicBrowseCacheHeaders } from "@/lib/api/response";
 import { serializeProductWithCombos } from "@/lib/api/products";
 import { getReviewStats } from "@/lib/orders/pricing";
 import { isObjectId } from "@/lib/validation";
@@ -25,7 +26,7 @@ export async function GET(_request, { params }) {
     const data = await serializeProductWithCombos(product);
     data.rating = await getReviewStats(product._id);
 
-    return success({ product: data });
+    return success({ product: data }, 200, { headers: publicBrowseCacheHeaders });
   } catch (error) {
     return handleRouteError(error);
   }

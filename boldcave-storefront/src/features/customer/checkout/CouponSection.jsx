@@ -19,6 +19,8 @@ export default function CouponSection({
   showEligibleOffers = false,
   maxVisibleOffers = 3,
   identityHint = "",
+  activeDiscount = null,
+  inactiveAppliedText = "",
 }) {
   const {
     couponCode,
@@ -35,7 +37,10 @@ export default function CouponSection({
   const [showLocalFeedback, setShowLocalFeedback] = useState(false);
   const [eligibleCoupons, setEligibleCoupons] = useState([]);
   const [showAllOffers, setShowAllOffers] = useState(false);
+  const displayDiscount =
+    activeDiscount === null ? Number(discount) || 0 : Number(activeDiscount) || 0;
   const applied = Boolean(appliedCoupon?.code);
+  const couponContributes = applied && displayDiscount > 0;
   const visibleOfferLimit = Math.max(1, Number(maxVisibleOffers) || 3);
   const visibleEligibleCoupons = showAllOffers
     ? eligibleCoupons
@@ -99,36 +104,32 @@ export default function CouponSection({
       return `${Number(coupon.discountValue) || 0}% off`;
     }
 
-    return `Save ${money(coupon.discount || coupon.discountValue)}`;
+    return `${money(coupon.discount || coupon.discountValue)} off on this order`;
   };
 
   return (
     <section>
       {showEligibleOffers && eligibleCoupons.length > 0 && !applied && (
-        <div className="mb-2">
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#4d5968]">
-            Available offers
-          </p>
-
-          <div className="divide-y divide-[#eceff2] border-y border-[#eceff2]">
+        <div className="mb-3">
+          <div className="divide-y divide-[#eceff2]">
             {visibleEligibleCoupons.map((coupon) => (
               <button
                 key={coupon.id || coupon.code}
                 type="button"
                 onClick={() => handleApplyEligibleCoupon(coupon.code)}
                 disabled={disabled || validating}
-                className="flex min-h-[38px] w-full cursor-pointer items-center justify-between gap-3 py-2 text-left transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-[44px] w-full cursor-pointer items-center justify-between gap-3 py-2.5 text-left transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-[11px] font-semibold tracking-[0.06em] text-[#111b28]">
+                  <span className="block truncate text-[12px] font-semibold uppercase tracking-[0.06em] text-[#111b28]">
                     {coupon.code}
                   </span>
-                  <span className="mt-0.5 block text-[10px] text-[#687483]">
+                  <span className="mt-1 block text-[11px] leading-4 text-[#687483]">
                     {couponOfferLabel(coupon)}
                   </span>
                 </span>
-                <span className="shrink-0 text-[10px] font-semibold text-[#111b28] underline underline-offset-4">
-                  Apply
+                <span className="shrink-0 border border-[#111b28] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#111b28]">
+                  APPLY
                 </span>
               </button>
             ))}
@@ -146,58 +147,25 @@ export default function CouponSection({
         </div>
       )}
 
-      <div className="flex h-11 min-w-0 overflow-hidden rounded-[10px] border border-[#d2d0d0] bg-white transition-[border-color,box-shadow] focus-within:border-[#111b28] focus-within:shadow-[0_0_0_2px_rgba(0,0,0,0.04)] sm:h-12">
-        <div className="flex w-[46px] shrink-0 items-center justify-center border-r border-[#d3d9e1] bg-white sm:w-[58px]">
-          <BadgePercent
-            className="h-[18px] w-[18px] text-[#111b28] sm:h-[21px] sm:w-[21px]"
-            strokeWidth={1.85}
-          />
-        </div>
-
-        <input
-          value={couponCode}
-          readOnly={applied}
-          onChange={(event) => {
-            setShowLocalFeedback(false);
-            setCouponCode(event.target.value.toUpperCase());
-          }}
-          placeholder="Enter coupon code"
-          disabled={disabled}
-          className="min-w-0 flex-1 bg-white px-3 text-[12px] text-[#182231] outline-none placeholder:text-[#8a939d] disabled:cursor-not-allowed disabled:bg-[#fafafa] sm:px-3.5 sm:text-[13px]"
-        />
-
-        <button
-          type="button"
-          onClick={handleCouponAction}
-          disabled={disabled || validating}
-          className={[
-            "min-w-[82px] shrink-0 border-l px-3 text-[10.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-35 sm:min-w-[96px] sm:px-4 sm:text-[11px]",
-            applied
-              ? "cursor-default border-[#d3d9e1] bg-white text-[#4b5563]"
-              : "cursor-pointer border-black bg-black text-white transition-opacity duration-150 hover:opacity-90",
-          ].join(" ")}
-        >
-          {validating ? "Checking" : applied ? "Applied" : "Apply"}
-        </button>
-      </div>
-
-      {applied && discount > 0 && (
-        <div className="mt-2 border-y border-[#e7eaee] py-2">
+      {applied ? (
+        <div className="py-1">
           <div className="flex items-center justify-between gap-3">
             <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold tracking-[0.05em] text-[#111b28]">
               <CheckCircle2
-                className="h-3.5 w-3.5 shrink-0"
+                className="h-3.5 w-3.5 shrink-0 text-[#176b37]"
                 strokeWidth={1.8}
               />
               <span className="truncate">{appliedCoupon.code}</span>
             </span>
             <span className="shrink-0 text-[10px] font-semibold text-[#176b37]">
-              Applied
+              {couponContributes ? "Applied" : "Entered"}
             </span>
           </div>
           <div className="mt-1 flex items-center justify-between gap-3">
             <p className="text-[10.5px] text-[#66717e] sm:text-[11px]">
-              You saved {money(discount)}
+              {couponContributes
+                ? `You saved ${money(displayDiscount)}`
+                : inactiveAppliedText || "Coupon entered"}
             </p>
             <button
               type="button"
@@ -208,23 +176,54 @@ export default function CouponSection({
             </button>
           </div>
         </div>
-      )}
+      ) : (
+        <>
+          <div className="flex h-11 min-w-0 overflow-hidden rounded-[10px] border border-[#d2d0d0] bg-white transition-[border-color,box-shadow] focus-within:border-[#111b28] focus-within:shadow-[0_0_0_2px_rgba(0,0,0,0.04)] sm:h-12">
+            <div className="flex w-[46px] shrink-0 items-center justify-center border-r border-[#d3d9e1] bg-white sm:w-[58px]">
+              <BadgePercent
+                className="h-[18px] w-[18px] text-[#111b28] sm:h-[21px] sm:w-[21px]"
+                strokeWidth={1.85}
+              />
+            </div>
 
-      {!showEligibleOffers && !applied && identityHint && (
-        <p className="mt-1.5 pl-[46px] text-[10.5px] leading-4 text-[#66717e] sm:pl-[58px] sm:text-[11px]">
-          {identityHint}
-        </p>
-      )}
+            <input
+              value={couponCode}
+              onChange={(event) => {
+                setShowLocalFeedback(false);
+                setCouponCode(event.target.value.toUpperCase());
+              }}
+              placeholder="Enter coupon code"
+              disabled={disabled}
+              className="min-w-0 flex-1 bg-white px-3 text-[12px] text-[#182231] outline-none placeholder:text-[#8a939d] disabled:cursor-not-allowed disabled:bg-[#fafafa] sm:px-3.5 sm:text-[13px]"
+            />
 
-      {showLocalFeedback && (error || (!applied && message)) && (
-        <p
-          className={[
-            "mt-1.5 pl-[46px] text-[10.5px] leading-4 sm:mt-2 sm:pl-[58px] sm:text-[11px]",
-            error ? "text-red-600" : "text-[#66717e]",
-          ].join(" ")}
-        >
-          {error || message}
-        </p>
+            <button
+              type="button"
+              onClick={handleCouponAction}
+              disabled={disabled || validating}
+              className="min-w-[82px] shrink-0 cursor-pointer border-l border-black bg-black px-3 text-[10.5px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35 sm:min-w-[96px] sm:px-4 sm:text-[11px]"
+            >
+              {validating ? "Checking" : "Apply"}
+            </button>
+          </div>
+
+          {identityHint && (
+            <p className="mt-1.5 pl-[46px] text-[10.5px] leading-4 text-[#66717e] sm:pl-[58px] sm:text-[11px]">
+              {identityHint}
+            </p>
+          )}
+
+          {showLocalFeedback && (error || message) && (
+            <p
+              className={[
+                "mt-1.5 pl-[46px] text-[10.5px] leading-4 sm:mt-2 sm:pl-[58px] sm:text-[11px]",
+                error ? "text-red-600" : "text-[#66717e]",
+              ].join(" ")}
+            >
+              {error || message}
+            </p>
+          )}
+        </>
       )}
     </section>
   );

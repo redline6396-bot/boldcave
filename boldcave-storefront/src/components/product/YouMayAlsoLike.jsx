@@ -2,34 +2,10 @@
 
 import { useEffect, useState } from "react";
 import ProductCard from "@/components/product/ProductCard";
-import { fetchProducts } from "@/lib/clientApi";
+import { fetchRelatedProducts } from "@/lib/clientApi";
 
 function getProductId(product) {
   return String(product?._id || product?.id || "");
-}
-
-function pickRandomProducts(products, currentProductId, currentSlug, count = 4) {
-  const filtered = products.filter((product) => {
-    const sameId =
-      currentProductId &&
-      getProductId(product) === String(currentProductId);
-
-    const sameSlug =
-      currentSlug &&
-      product?.slug &&
-      product.slug === currentSlug;
-
-    return !sameId && !sameSlug;
-  });
-
-  const shuffled = [...filtered];
-
-  for (let i = shuffled.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-
-  return shuffled.slice(0, count);
 }
 
 export default function YouMayAlsoLike({
@@ -43,22 +19,11 @@ export default function YouMayAlsoLike({
 
     async function loadProducts() {
       try {
-        const response = await fetchProducts();
-
-        const allProducts = Array.isArray(response)
-          ? response
-          : Array.isArray(response?.products)
-            ? response.products
-            : [];
+        const response = await fetchRelatedProducts(currentProductId);
 
         if (!cancelled) {
           setProducts(
-            pickRandomProducts(
-              allProducts,
-              currentProductId,
-              currentSlug,
-              4
-            )
+            response.filter((product) => product?.slug !== currentSlug)
           );
         }
       } catch {
@@ -97,6 +62,7 @@ export default function YouMayAlsoLike({
             <ProductCard
               key={getProductId(product) || product.slug}
               product={product}
+              priority={false}
             />
           ))}
         </div>

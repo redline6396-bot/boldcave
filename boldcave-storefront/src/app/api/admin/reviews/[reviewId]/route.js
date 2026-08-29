@@ -1,6 +1,7 @@
 import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
+import { serializeAdminReview } from "@/lib/api/reviews";
 import { requireAdmin } from "@/lib/auth/session";
 import { isObjectId } from "@/lib/validation";
 import Review from "@/models/Review";
@@ -28,10 +29,12 @@ export async function PATCH(request, { params }) {
     const review = await Review.findByIdAndUpdate(reviewId, updates, {
       returnDocument: "after",
       runValidators: true,
-    });
+    })
+      .populate("product", "name slug")
+      .populate("user", "firstName lastName phone email");
 
     if (!review) return applyAdminCors(request, failure("REVIEW_NOT_FOUND", "Review not found", 404));
-    return applyAdminCors(request, success({ review }));
+    return applyAdminCors(request, success({ review: serializeAdminReview(review) }));
   } catch (error) {
     return applyAdminCors(request, handleRouteError(error, "REVIEW_UPDATE_FAILED"));
   }

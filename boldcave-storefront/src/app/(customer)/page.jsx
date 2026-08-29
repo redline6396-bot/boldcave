@@ -5,25 +5,38 @@ import OurStorySection from '@/components/home/OurStorySection';
 import FAQSection from '@/components/home/FAQSection';
 import connectDB from '@/lib/db';
 import { getSerializedHomepageSettings } from '@/lib/homepageSettings';
+import { getFeaturedCatalogProducts } from '@/lib/products/public';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   let homepageSettings = null;
+  let featuredProducts = [];
 
   try {
     await connectDB();
-    homepageSettings = await getSerializedHomepageSettings();
+    const [settings, products] = await Promise.all([
+      getSerializedHomepageSettings(),
+      getFeaturedCatalogProducts(),
+    ]);
+    homepageSettings = settings;
+    featuredProducts = products;
   } catch {
     homepageSettings = null;
+    featuredProducts = [];
   }
 
   return (
     <div>
       <HeroCarousel initialHeroSlides={homepageSettings?.heroSlides || []} />
-      <CollectionSection />
+      <CollectionSection
+        initialProducts={featuredProducts}
+        initialSettings={homepageSettings}
+      />
       <OurStorySection />
-      <ReviewsSection />
+      <ReviewsSection
+        initialFeaturedReviews={homepageSettings?.featuredReviews || []}
+      />
       <FAQSection />
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight, ShoppingCart, User } from "lucide-react";
@@ -12,12 +13,19 @@ import {
 } from "react-icons/fa6";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import CartDrawer from "@/features/customer/cart/CartDrawer";
-import CheckoutPage from "@/features/customer/checkout/CheckoutPage";
 import {
   OPEN_CART_DRAWER_EVENT,
   OPEN_CHECKOUT_EVENT,
 } from "@/lib/cartEvents";
+
+const CartDrawer = dynamic(() => import("@/features/customer/cart/CartDrawer"), {
+  ssr: false,
+});
+
+const CheckoutPage = dynamic(
+  () => import("@/features/customer/checkout/CheckoutPage"),
+  { ssr: false }
+);
 
 const ROUTES = {
   shopAll: "/collection",

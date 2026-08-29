@@ -1,48 +1,37 @@
-import connectDB from "@/lib/db";
 import { failure, handleRouteError, success } from "@/lib/api/response";
-import { serializeProductWithCombos } from "@/lib/api/products";
-import { getReviewStats } from "@/lib/orders/pricing";
-import { getProductCache, setProductCache } from "@/lib/productCache";
-import { PRODUCT_CATEGORIES } from "@/lib/validation";
-import Product from "@/models/Product";
+import { publicBrowseCacheHeaders } from "@/lib/api/response";
+import { getCatalogProducts, normalizeCatalogCategory } from "@/lib/products/public";
 
 export const runtime = "nodejs";
 
 export async function GET(request) {
   try {
-    await connectDB();
-
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");
-    const cacheKey = `product-list:${category || "all"}`;
+    const normalizedCategory = normalizeCatalogCategory(category);
+    const idsParam = searchParams.get("ids");
+    const ids = idsParam
+      ? idsParam
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : undefined;
 
-    if (category && !PRODUCT_CATEGORIES.includes(category)) {
+    if (normalizedCategory === null) {
       return failure("INVALID_CATEGORY", "Invalid product category", 400);
     }
 
-    const cached = getProductCache(cacheKey);
-    if (cached) {
-      return success(cached);
-    }
+    const products = await getCatalogProducts({
+      category: normalizedCategory || "",
+      ids,
+    });
 
-    const filter = { status: "published" };
-    if (category === "Men" || category === "Women") {
-      filter.audienceTags = { $in: [category, "Unisex"] };
-    } else if (category === "Unisex") {
-      filter.audienceTags = "Unisex";
-    }
-
-    const products = await Product.find(filter).sort({ createdAt: -1 });
-    const data = await Promise.all(
-      products.map(async (product) => {
-        const serialized = await serializeProductWithCombos(product);
-        serialized.rating = await getReviewStats(product._id);
-        return serialized;
-      })
-    );
-
-    return success(setProductCache(cacheKey, { products: data }));
+    return success({ products }, 200, { headers: publicBrowseCacheHeaders });
   } catch (error) {
+    if (error?.code === "INVALID_PRODUCT_ID") {
+      return failure("INVALID_PRODUCT_ID", "Invalid product id", 400);
+    }
+
     return handleRouteError(error);
   }
 }

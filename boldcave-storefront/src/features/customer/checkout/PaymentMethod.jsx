@@ -2,6 +2,13 @@
 
 import { Banknote, CreditCard } from "lucide-react";
 
+const money = (value) =>
+  `₹${new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits:
+      Math.round((Number(value) || 0) * 100) % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0)}`;
+
 export default function PaymentMethod({
   value,
   onChange,
@@ -9,11 +16,18 @@ export default function PaymentMethod({
   serviceable,
   disabled = false,
   prepaidDiscountSettings,
+  onlineAmount = 0,
+  codAmount = 0,
+  prepaidSavings = 0,
 }) {
   const codDisabled =
     disabled || serviceable === false || codAvailable === false;
   const onlineDisabled = disabled || serviceable === false;
-  const prepaidOfferText = getPrepaidOfferText(prepaidDiscountSettings);
+  const onlineSavings = Math.max(0, Number(prepaidSavings) || 0);
+  const prepaidOfferText = getPrepaidOfferText({
+    settings: prepaidDiscountSettings,
+    savings: onlineSavings,
+  });
 
   return (
     <section>
@@ -27,6 +41,7 @@ export default function PaymentMethod({
           icon={CreditCard}
           title="Pay Online"
           text={prepaidOfferText}
+          amount={onlineAmount}
           onClick={() => onChange("razorpay")}
           disabled={onlineDisabled}
         />
@@ -40,6 +55,7 @@ export default function PaymentMethod({
               ? "COD is unavailable for this pincode"
               : "Pay when your order arrives"
           }
+          amount={codAmount}
           onClick={() => onChange("cod")}
           disabled={codDisabled}
         />
@@ -48,16 +64,20 @@ export default function PaymentMethod({
   );
 }
 
-function getPrepaidOfferText(settings = {}) {
+function getPrepaidOfferText({ settings = {}, savings = 0 } = {}) {
   if (settings?.enabled === false || Number(settings?.discountValue || 0) <= 0) {
     return "Pay securely online";
   }
 
-  if (settings.discountType === "fixed") {
-    return `Save Rs ${Number(settings.discountValue || 0).toLocaleString("en-IN")} with online payment`;
+  if (savings > 0) {
+    const percent =
+      settings.discountType === "percentage"
+        ? ` (${Number(settings.discountValue || 0).toLocaleString("en-IN")}%)`
+        : "";
+    return `Save ${money(savings)}${percent} with online payment`;
   }
 
-  return `Save ${Number(settings.discountValue || 0).toLocaleString("en-IN")}% with online payment`;
+  return "Pay securely online";
 }
 
 function PaymentOption({
@@ -65,6 +85,7 @@ function PaymentOption({
   icon: Icon,
   title,
   text,
+  amount,
   onClick,
   disabled,
 }) {
@@ -92,6 +113,12 @@ function PaymentOption({
         </span>
         <span className="mt-0.5 block text-[11px] leading-4 text-[#707b87]">
           {text}
+        </span>
+      </span>
+
+      <span className="shrink-0 text-right">
+        <span className="block text-[13px] font-semibold text-[#111b28] sm:text-[14px]">
+          {money(amount)}
         </span>
       </span>
 

@@ -50,3 +50,11 @@ export const noStoreHeaders = {
   Pragma: "no-cache",
   Expires: "0",
 };
+
+export const publicBrowseCacheHeaders = {
+  "Cache-Control": "public, s-maxage=120, stale-while-revalidate=600",
+};
+
+export const publicSettingsCacheHeaders = {
+  "Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600",
+};

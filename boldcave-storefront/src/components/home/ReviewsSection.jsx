@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { fetchHomepageSettings } from "@/lib/clientApi";
 
 const REVIEW_SWIPE_THRESHOLD = 42;
 
@@ -19,37 +18,17 @@ const buildFeaturedReviews = (items) =>
     name: review.name,
   }));
 
-export default function ReviewsSection() {
+export default function ReviewsSection({ initialFeaturedReviews = [] }) {
   const scrollerRef = useRef(null);
   const scrollFrameRef = useRef(null);
   const dragRef = useRef(null);
-  const [reviews, setReviews] = useState([]);
+  const [reviews] = useState(() =>
+    hasCompleteFeaturedReviews(initialFeaturedReviews)
+      ? buildFeaturedReviews(initialFeaturedReviews)
+      : []
+  );
   const [activeIndex, setActiveIndex] = useState(0);
   const [loadedImages, setLoadedImages] = useState({});
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadFeaturedReviews() {
-      try {
-        const settings = await fetchHomepageSettings();
-        if (!mounted || !hasCompleteFeaturedReviews(settings?.featuredReviews)) {
-          return;
-        }
-
-        setReviews(buildFeaturedReviews(settings.featuredReviews));
-        setActiveIndex(0);
-      } catch {
-        // Keep reviews empty if homepage settings are unavailable.
-      }
-    }
-
-    loadFeaturedReviews();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const syncActiveReview = () => {
     const scroller = scrollerRef.current;

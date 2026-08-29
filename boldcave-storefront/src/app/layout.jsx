@@ -5,6 +5,8 @@ import CouponProvider from '@/context/CouponContext';
 import NotificationProvider from '@/context/NotificationContext';
 import { StoreSettingsProvider } from '@/context/StoreSettingsContext';
 import RootLayoutClient from '@/components/RootLayoutClient';
+import connectDB from '@/lib/db';
+import { getSerializedStoreSettings } from '@/lib/storeSettings';
 import '@/assets/globals.css';
 
 export const metadata = {
@@ -13,7 +15,16 @@ export const metadata = {
     'Premium fragrances by Bold Cave, created for distinctive personalities and unforgettable presence.',
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  let storeSettings = null;
+
+  try {
+    await connectDB();
+    storeSettings = await getSerializedStoreSettings();
+  } catch {
+    storeSettings = null;
+  }
+
   return (
     <html lang="en">
       <head>
@@ -27,7 +38,7 @@ export default function RootLayout({ children }) {
           <AuthProvider>
             <CartProvider>
               <CouponProvider>
-                <StoreSettingsProvider>
+                <StoreSettingsProvider initialSettings={storeSettings}>
                   <RootLayoutClient>{children}</RootLayoutClient>
                 </StoreSettingsProvider>
               </CouponProvider>

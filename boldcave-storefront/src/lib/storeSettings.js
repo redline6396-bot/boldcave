@@ -1,12 +1,19 @@
 import StoreSettings from "@/models/StoreSettings";
 
 const GLOBAL_STORE_SETTINGS_KEY = "global";
+const STORE_SETTINGS_CACHE_TTL_MS = 60 * 1000;
 const DEFAULT_PREPAID_DISCOUNT = {
   enabled: true,
   discountType: "percentage",
   discountValue: 10,
   allowCouponStacking: true,
 };
+
+const cacheStore = globalThis.__storeSettingsCache || {
+  entry: null,
+};
+
+globalThis.__storeSettingsCache = cacheStore;
 
 function getEnvOtpMode() {
   return process.env.OTP_PROVIDER === "mock" &&
@@ -58,8 +65,25 @@ export async function getStoreSettings() {
   );
 }
 
-export async function getSerializedStoreSettings() {
-  return serializeStoreSettings(await getStoreSettings());
+export function clearStoreSettingsCache() {
+  cacheStore.entry = null;
+}
+
+export async function getSerializedStoreSettings({ cache = true } = {}) {
+  if (cache && cacheStore.entry?.expiresAt > Date.now()) {
+    return cacheStore.entry.value;
+  }
+
+  const value = serializeStoreSettings(await getStoreSettings());
+
+  if (cache) {
+    cacheStore.entry = {
+      value,
+      expiresAt: Date.now() + STORE_SETTINGS_CACHE_TTL_MS,
+    };
+  }
+
+  return value;
 }
 
 export async function updateStoreSettings({
@@ -93,7 +117,7 @@ export async function updateStoreSettings({
     update.$set = updates;
   }
 
-  return StoreSettings.findOneAndUpdate(
+  const settings = await StoreSettings.findOneAndUpdate(
     { key: GLOBAL_STORE_SETTINGS_KEY },
     update,
     {
@@ -102,6 +126,13 @@ export async function updateStoreSettings({
       setDefaultsOnInsert: true,
     }
   );
+
+  cacheStore.entry = {
+    value: serializeStoreSettings(settings),
+    expiresAt: Date.now() + STORE_SETTINGS_CACHE_TTL_MS,
+  };
+
+  return settings;
 }
 
 export async function isAcceptingOrders() {

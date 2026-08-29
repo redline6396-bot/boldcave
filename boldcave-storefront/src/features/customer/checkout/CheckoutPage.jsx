@@ -27,6 +27,7 @@ import { useStoreSettings } from "@/context/StoreSettingsContext";
 import {
   checkShippingServiceability,
   createRazorpayCheckout,
+  fetchCheckoutPricingPreview,
   placeCodOrder,
   sendLoginOtp,
   updateCurrentUser,
@@ -34,9 +35,6 @@ import {
   verifyPhoneOtp,
   verifyRazorpayCheckout,
 } from "@/lib/clientApi";
-import {
-  calculateDiscountBreakdown,
-} from "@/lib/orders/paymentDiscounts";
 import CouponSection from "@/features/customer/checkout/CouponSection";
 import DeliveryAddress, {
   emptyAddress,
@@ -172,7 +170,13 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     updateQuantity,
   } = useCart();
 
-  const { appliedCoupon, discount, removeCoupon, revalidateCoupon } = useCoupon();
+  const {
+    appliedCoupon,
+    couponCode: enteredCouponCode,
+    discount,
+    removeCoupon,
+    revalidateCoupon,
+  } = useCoupon();
   const {
     acceptingOrders,
     prepaidDiscount: prepaidDiscountSettings,
@@ -183,7 +187,10 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   const [address, setAddress] = useState(emptyAddress);
   const [selectedAddressIndex, setSelectedAddressIndex] =
     useState("new");
-  const [paymentMethod, setPaymentMethod] = useState("razorpay");
+  const [paymentMethod, setPaymentMethod] = useState(null);
+  const [pricingPreview, setPricingPreview] = useState(null);
+  const [pricingPreviewLoading, setPricingPreviewLoading] = useState(false);
+  const [pricingPreviewError, setPricingPreviewError] = useState("");
 
   const [serviceability, setServiceability] = useState({
     status: "idle",
@@ -220,17 +227,75 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
 
   const items = getCartItems();
   const subtotal = getCartTotal();
-  const discountBreakdown = calculateDiscountBreakdown({
-    subtotal,
-    couponDiscount: Math.max(0, Number(discount) || 0),
-    shipping: 0,
-    paymentMethod,
-    prepaidDiscountSettings,
-  });
-  const couponDiscount = discountBreakdown.couponDiscount;
-  const prepaidDiscount = discountBreakdown.prepaidDiscount;
-  const total = discountBreakdown.finalAmount;
-  const couponCode = appliedCoupon?.code || "";
+  const previewCouponCode = appliedCoupon?.code || "";
+  const previewItems = useMemo(() => cartPayload(cart), [cart]);
+  const previewItemsSignature = useMemo(
+    () => JSON.stringify(previewItems),
+    [previewItems]
+  );
+  const fallbackBasePricing = useMemo(() => {
+    const couponDiscount = Math.max(0, Number(discount) || 0);
+    const finalAmount = Math.max(0, subtotal - couponDiscount);
+
+    return {
+      subtotal,
+      couponDiscount,
+      prepaidDiscount: 0,
+      shipping: 0,
+      finalAmount,
+      discountWinner: couponDiscount > 0 ? "coupon" : "none",
+      coupon: couponDiscount > 0 && previewCouponCode
+        ? { code: previewCouponCode, discount: couponDiscount }
+        : { code: null, discount: 0 },
+    };
+  }, [discount, previewCouponCode, subtotal]);
+  const basePricing = pricingPreview?.base || fallbackBasePricing;
+  const codPricing = pricingPreview?.cod || basePricing;
+  const onlinePricing = pricingPreview?.online || basePricing;
+  const activePricing =
+    paymentMethod === "razorpay"
+      ? onlinePricing
+      : paymentMethod === "cod"
+        ? codPricing
+        : basePricing;
+  const couponDiscount = Math.max(0, Number(activePricing.couponDiscount) || 0);
+  const prepaidDiscount = Math.max(0, Number(activePricing.prepaidDiscount) || 0);
+  const total = Math.max(0, Number(activePricing.finalAmount) || 0);
+  const couponCode = previewCouponCode;
+  const onlinePaymentSavings = Math.max(
+    0,
+    Number(codPricing.finalAmount || 0) - Number(onlinePricing.finalAmount || 0)
+  );
+
+  const refreshPricingPreview = useCallback(async () => {
+    if (!previewItems.length) {
+      setPricingPreview(null);
+      setPricingPreviewError("");
+      return null;
+    }
+
+    setPricingPreviewLoading(true);
+    setPricingPreviewError("");
+
+    try {
+      const preview = await fetchCheckoutPricingPreview({
+        items: previewItems,
+        couponCode: previewCouponCode,
+      });
+      setPricingPreview(preview);
+      return preview;
+    } catch {
+      setPricingPreview(null);
+      setPricingPreviewError("Payment prices could not be refreshed. Please retry.");
+      return null;
+    } finally {
+      setPricingPreviewLoading(false);
+    }
+  }, [previewCouponCode, previewItems]);
+
+  useEffect(() => {
+    refreshPricingPreview();
+  }, [refreshPricingPreview, previewItemsSignature]);
 
   const itemCount = items.reduce(
     (sum, item) => sum + Number(item.quantity || 0),
@@ -272,10 +337,9 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
 
   useEffect(() => {
     if (!appliedCoupon?.code) return;
-    revalidateCoupon({ paymentMethod });
+    revalidateCoupon({ paymentMethod: "cod" });
   }, [
     appliedCoupon?.code,
-    paymentMethod,
     prepaidDiscountSettings?.allowCouponStacking,
     prepaidDiscountSettings?.discountType,
     prepaidDiscountSettings?.discountValue,
@@ -936,6 +1000,16 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
       return false;
     }
 
+    if (!paymentMethod) {
+      setError("Select a payment method to continue.");
+      return false;
+    }
+
+    if (pricingPreviewError) {
+      setError("Payment prices could not be refreshed. Please retry.");
+      return false;
+    }
+
     return true;
   }, [
     addressError,
@@ -947,6 +1021,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     normalizedAddress,
     paymentMethod,
     phoneVerified,
+    pricingPreviewError,
     acceptingOrders,
     refreshStoreSettings,
     serviceability.pincode,
@@ -1085,7 +1160,12 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
       return;
     }
 
-    handleRazorpaySubmit();
+    if (paymentMethod === "razorpay") {
+      handleRazorpaySubmit();
+      return;
+    }
+
+    setError("Select a payment method to continue.");
   };
 
   const finalDisabled =
@@ -1094,7 +1174,10 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     !acceptingOrders ||
     !phoneVerified ||
     !isAuthenticated ||
+    !paymentMethod ||
     Boolean(addressError) ||
+    pricingPreviewLoading ||
+    Boolean(pricingPreviewError) ||
     serviceability.status === "checking" ||
     (paymentMethod === "cod" && codAvailable === false);
 
@@ -1334,20 +1417,51 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                     paymentMethod={paymentMethod}
                     subtotal={subtotal}
                     showEligibleOffers={isAuthenticated && phoneVerified}
+                    activeDiscount={couponDiscount}
+                    inactiveAppliedText={
+                      paymentMethod === "razorpay" &&
+                      appliedCoupon?.code &&
+                      couponDiscount <= 0 &&
+                      prepaidDiscount > 0
+                        ? "Better online offer applied"
+                        : ""
+                    }
                   />
                 </div>
 
                 {serviceability.status === "serviceable" &&
                   !addressError && (
                     <div className="mt-4">
-                      <PaymentMethod
-                        value={paymentMethod}
-                        onChange={setPaymentMethod}
-                        codAvailable={codAvailable}
-                        serviceable
-                        disabled={submitting}
-                        prepaidDiscountSettings={prepaidDiscountSettings}
-                      />
+                      {pricingPreviewError ? (
+                        <section>
+                          <p className="mb-2.5 text-[12px] font-medium uppercase tracking-[0.025em] text-[#384555]">
+                            Payment options
+                          </p>
+                          <div className="rounded-[12px] border border-[#d8dee5] bg-white px-4 py-3 text-[12px] leading-5 text-[#66717e]">
+                            <p>{pricingPreviewError}</p>
+                            <button
+                              type="button"
+                              onClick={refreshPricingPreview}
+                              className="mt-2 cursor-pointer text-[10px] font-semibold uppercase tracking-[0.08em] text-[#111b28] underline underline-offset-4"
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        </section>
+                      ) : (
+                        <PaymentMethod
+                          value={paymentMethod}
+                          onChange={setPaymentMethod}
+                          codAvailable={codAvailable}
+                          serviceable
+                          disabled={submitting || pricingPreviewLoading}
+                          prepaidDiscountSettings={prepaidDiscountSettings}
+                          onlineAmount={onlinePricing.finalAmount}
+                          codAmount={codPricing.finalAmount}
+                          onlineSavings={onlinePaymentSavings}
+                          loading={pricingPreviewLoading && !pricingPreview}
+                        />
+                      )}
                     </div>
                   )}
               </>

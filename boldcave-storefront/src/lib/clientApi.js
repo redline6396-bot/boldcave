@@ -73,6 +73,20 @@ export async function fetchProducts({ category } = {}) {
   return data?.products || [];
 }
 
+export async function fetchProductsByIds(ids = []) {
+  const safeIds = Array.from(
+    new Set((Array.isArray(ids) ? ids : []).map((id) => String(id || "").trim()).filter(Boolean))
+  );
+
+  if (!safeIds.length) return [];
+
+  const params = new URLSearchParams();
+  params.set("ids", safeIds.join(","));
+
+  const data = await requestJson(`/api/products?${params}`);
+  return data?.products || [];
+}
+
 export async function fetchProductBySlug(slug) {
   const data = await requestJson(`/api/products/slug/${encodeURIComponent(slug)}`);
   return data?.product || null;
@@ -134,6 +148,13 @@ export async function validateCoupon({ items, couponCode, paymentMethod }) {
   );
 }
 
+export async function fetchCheckoutPricingPreview({ items, couponCode } = {}) {
+  return requestJson(
+    "/api/checkout/pricing-preview",
+    jsonOptions("POST", { items, couponCode })
+  );
+}
+
 export async function fetchEligibleCoupons({ subtotal = 0 } = {}) {
   const params = new URLSearchParams();
   params.set("subtotal", String(Number(subtotal) || 0));
@@ -151,15 +172,11 @@ export async function checkShippingServiceability({ pincode, cod = false, items 
 }
 
 export async function fetchStoreSettings() {
-  return requestJson("/api/store-settings", {
-    cache: "no-store",
-  });
+  return requestJson("/api/store-settings");
 }
 
 export async function fetchHomepageSettings() {
-  return requestJson("/api/homepage-settings", {
-    cache: "no-store",
-  });
+  return requestJson("/api/homepage-settings");
 }
 
 export async function placeCodOrder({

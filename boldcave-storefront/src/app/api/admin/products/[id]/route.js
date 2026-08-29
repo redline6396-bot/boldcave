@@ -6,6 +6,7 @@ import { serializeProductWithCombos } from "@/lib/api/products";
 import { clearProductCache } from "@/lib/productCache";
 import { isObjectId } from "@/lib/validation";
 import Product from "@/models/Product";
+import Review from "@/models/Review";
 import { buildProductPayload } from "../route";
 
 export const runtime = "nodejs";
@@ -75,6 +76,8 @@ export async function DELETE(request, { params }) {
     await connectDB();
     const product = await Product.findByIdAndDelete(id);
     if (!product) return applyAdminCors(request, failure("PRODUCT_NOT_FOUND", "Product not found", 404));
+
+    await Review.deleteMany({ product: product._id });
 
     clearProductCache();
     return applyAdminCors(request, success({ deleted: true }));

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import ProductCard from "@/components/product/ProductCard";
-import { fetchHomepageSettings, fetchProducts } from "@/lib/clientApi";
+import { useCart } from "@/context/CartContext";
 
 const sortFeaturedProducts = (products) =>
   [...products]
@@ -38,38 +38,17 @@ const formatCollectionSubtitle = (fragranceCount, personalityCount) => {
   return `${fragranceCount} ${fragranceWord}. ${personalityCount} ${personalityWord}.`;
 };
 
-export default function CollectionSection() {
-  const [products, setProducts] = useState([]);
-  const [settings, setSettings] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+export default function CollectionSection({
+  initialProducts = [],
+  initialSettings = null,
+}) {
+  const { rememberProducts } = useCart();
+  const [products] = useState(() => sortFeaturedProducts(initialProducts));
+  const [settings] = useState(initialSettings);
 
   useEffect(() => {
-    let isMounted = true;
-
-    setIsLoading(true);
-
-    Promise.all([fetchProducts(), fetchHomepageSettings().catch(() => null)])
-      .then(([apiProducts, homepageSettings]) => {
-        if (isMounted) {
-          setProducts(sortFeaturedProducts(apiProducts));
-          setSettings(homepageSettings);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setProducts([]);
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    rememberProducts(products);
+  }, [products, rememberProducts]);
 
   const desktopRows = useMemo(() => buildDesktopRows(products), [products]);
   const hasOddMobileProduct = products.length % 2 === 1;
@@ -127,7 +106,7 @@ export default function CollectionSection() {
                         : "",
                     ].join(" ")}
                   >
-                    <ProductCard product={product} />
+                    <ProductCard product={product} priority={index < 2} />
                   </div>
                 );
               })}
@@ -146,62 +125,19 @@ export default function CollectionSection() {
                         : "grid-cols-[repeat(3,minmax(0,388px))]",
                   ].join(" ")}
                 >
-                  {row.map((product) => (
-                    <ProductCard key={product.id} product={product} />
+                  {row.map((product, productIndex) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      priority={rowIndex === 0 && productIndex < 3}
+                    />
                   ))}
                 </div>
               ))}
             </div>
           </>
-        ) : isLoading ? (
-          <CollectionSkeleton />
         ) : null}
       </div>
     </section>
-  );
-}
-
-function CollectionSkeleton() {
-  return (
-    <>
-      <div className="mt-9 grid grid-cols-2 gap-x-2.5 gap-y-8 sm:mt-14 sm:gap-x-8 sm:gap-y-10 lg:hidden">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <ProductCardSkeleton key={index} />
-        ))}
-      </div>
-
-      <div className="mt-14 hidden space-y-10 lg:mt-11 lg:block lg:space-y-8">
-        <div className="grid grid-cols-3 justify-items-center gap-8 lg:gap-7">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <ProductCardSkeleton key={index} />
-          ))}
-        </div>
-
-        <div className="grid grid-cols-3 justify-items-center gap-8 lg:gap-7">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <ProductCardSkeleton key={index} />
-          ))}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function ProductCardSkeleton() {
-  return (
-    <div className="mx-auto w-full max-w-[388px] border border-[#e8e2d9] bg-white">
-      <div className="aspect-square animate-pulse bg-neutral-100" />
-      <div className="px-3 pb-4 pt-3 text-center sm:px-6 sm:pb-6 sm:pt-4">
-        <div className="mx-auto h-4 w-28 animate-pulse bg-neutral-100 sm:h-5 sm:w-40" />
-        <div className="mx-auto mt-2 h-2.5 w-20 animate-pulse bg-neutral-100 sm:w-24" />
-        <div className="mx-auto mt-3 h-3 w-32 animate-pulse bg-neutral-100 sm:w-44" />
-        <div className="mx-auto mt-4 h-4 w-24 animate-pulse bg-neutral-100 sm:w-28" />
-        <div className="mt-4 grid grid-cols-2 gap-1.5 sm:gap-2">
-          <div className="h-8 animate-pulse bg-neutral-100 sm:h-9" />
-          <div className="h-8 animate-pulse bg-neutral-100 sm:h-9" />
-        </div>
-        <div className="mt-3 h-9 animate-pulse bg-neutral-100 sm:mx-auto sm:h-11 sm:w-[92%]" />
-      </div>
-    </div>
   );
 }

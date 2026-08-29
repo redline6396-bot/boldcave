@@ -3,7 +3,7 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import { Check, Search, Trash2, X } from 'lucide-react';
 import { NotificationContext } from '@/context/NotificationContext';
-import { api, formatDate, getErrorMessage, getId } from '@/lib/api';
+import { api, formatDate, getId } from '@/lib/api';
 
 export default function ReviewsPage() {
   const [reviews, setReviews] = useState([]);
@@ -13,7 +13,7 @@ export default function ReviewsPage() {
   const [approved, setApproved] = useState('');
   const [productId, setProductId] = useState('');
   const [search, setSearch] = useState('');
-  const [busyId, setBusyId] = useState('');
+  const [busyAction, setBusyAction] = useState('');
   const { success, error: showError } = useContext(NotificationContext);
 
   const loadReviews = useCallback(async () => {
@@ -27,8 +27,8 @@ export default function ReviewsPage() {
       if (search.trim()) params.set('search', search.trim());
       const response = await api.get(`/api/admin/reviews?${params.toString()}`);
       setReviews(response.data.data.reviews || []);
-    } catch (err) {
-      const message = getErrorMessage(err, 'Unable to load reviews');
+    } catch {
+      const message = 'Reviews could not be loaded. Please retry.';
       setError(message);
       showError(message);
     } finally {
@@ -41,32 +41,36 @@ export default function ReviewsPage() {
     return () => clearTimeout(timer);
   }, [loadReviews, search]);
 
-  const patchReview = async (review, updates, message) => {
+  const patchReview = async (review, updates, message, action) => {
     const id = getId(review);
+    if (!id || busyAction) return;
+
     try {
-      setBusyId(id);
+      setBusyAction(`${id}:${action}`);
       const response = await api.patch(`/api/admin/reviews/${id}`, updates);
       setReviews((current) => current.map((entry) => (getId(entry) === id ? { ...entry, ...response.data.data.review } : entry)));
       success(message);
-    } catch (err) {
-      showError(getErrorMessage(err, 'Unable to update review'));
+    } catch {
+      showError('Could not update this review. Please try again.');
     } finally {
-      setBusyId('');
+      setBusyAction('');
     }
   };
 
   const deleteReview = async (review) => {
     const id = getId(review);
+    if (!id || busyAction) return;
     if (!window.confirm('Delete this review permanently?')) return;
+
     try {
-      setBusyId(id);
+      setBusyAction(`${id}:delete`);
       await api.delete(`/api/admin/reviews/${id}`);
       setReviews((current) => current.filter((entry) => getId(entry) !== id));
       success('Review deleted');
-    } catch (err) {
-      showError(getErrorMessage(err, 'Unable to delete review'));
+    } catch {
+      showError('Could not delete this review. Please try again.');
     } finally {
-      setBusyId('');
+      setBusyAction('');
     }
   };
 
@@ -105,11 +109,39 @@ export default function ReviewsPage() {
       ) : (
         <div className='space-y-4'>
           {reviews.map((review) => (
-            <section key={getId(review)} className='rounded border border-gray-200 bg-white p-5'>
+            <ReviewCard
+              key={getId(review)}
+              review={review}
+              busyAction={busyAction}
+              onPatch={patchReview}
+              onDelete={deleteReview}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewCard({ review, busyAction, onPatch, onDelete }) {
+  const reviewId = getId(review);
+  const rowBusy = Boolean(busyAction && busyAction.startsWith(`${reviewId}:`));
+  const approveBusy = busyAction === `${reviewId}:approval`;
+  const verifyBusy = busyAction === `${reviewId}:verification`;
+  const deleteBusy = busyAction === `${reviewId}:delete`;
+  const productName = review.product?.name || 'Deleted product';
+  const customerName =
+    [review.user?.firstName, review.user?.lastName].filter(Boolean).join(' ') ||
+    review.user?.phone ||
+    'Customer';
+  const customerEmail = review.user?.email || '-';
+
+  return (
+    <section className='rounded border border-gray-200 bg-white p-5'>
               <div className='flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between'>
                 <div className='min-w-0 flex-1 space-y-3'>
                   <div className='flex flex-wrap items-center gap-2'>
-                    <p className='font-semibold text-gray-950'>{review.product?.name || 'Product'}</p>
+                    <p className='font-semibold text-gray-950'>{productName}</p>
                     <Badge>{review.rating}/5</Badge>
                     <Badge tone={review.approved ? 'success' : 'muted'}>{review.approved ? 'Approved' : 'Hidden'}</Badge>
                     <Badge tone={review.verifiedPurchase ? 'success' : 'muted'}>{review.verifiedPurchase ? 'Verified purchase' : 'Unverified'}</Badge>
@@ -119,40 +151,52 @@ export default function ReviewsPage() {
                     <p className='mt-1 whitespace-pre-line text-sm text-gray-600'>{review.text}</p>
                   </div>
                   <p className='text-xs text-gray-500'>
-                    {review.user ? `${[review.user.firstName, review.user.lastName].filter(Boolean).join(' ') || review.user.phone || 'Customer'} | ${review.user.email || '-'}` : 'Customer'} | {formatDate(review.createdAt)}
+                    {customerName} | {customerEmail} | {formatDate(review.createdAt)}
                   </p>
                   {review.photos?.length > 0 && (
                     <div className='flex flex-wrap gap-2'>
-                      {review.photos.map((photo) => (
-                        <a key={photo.publicId || photo.url} href={photo.url} target='_blank' rel='noreferrer' className='block h-16 w-16 overflow-hidden rounded border border-gray-200 bg-gray-100'>
-                          <img src={photo.url} alt='Review photo' className='h-full w-full object-cover' />
-                        </a>
+                      {review.photos.map((photo, index) => (
+                        <AdminReviewPhoto key={getPhotoKey(photo, index)} photo={photo} />
                       ))}
                     </div>
                   )}
                 </div>
 
                 <div className='flex flex-wrap gap-2'>
-                  <button disabled={busyId === getId(review)} onClick={() => patchReview(review, { approved: !review.approved }, review.approved ? 'Review hidden' : 'Review approved')} className='inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-50'>
+                  <button disabled={rowBusy} onClick={() => onPatch(review, { approved: !review.approved }, review.approved ? 'Review hidden' : 'Review approved', 'approval')} className='inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60'>
                     {review.approved ? <X size={16} /> : <Check size={16} />}
-                    {review.approved ? 'Hide' : 'Approve'}
+                    {approveBusy ? (review.approved ? 'Hiding...' : 'Approving...') : review.approved ? 'Hide' : 'Approve'}
                   </button>
-                  <button disabled={busyId === getId(review)} onClick={() => patchReview(review, { verifiedPurchase: !review.verifiedPurchase }, 'Review verification updated')} className='inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-50'>
+                  <button disabled={rowBusy} onClick={() => onPatch(review, { verifiedPurchase: !review.verifiedPurchase }, 'Review verification updated', 'verification')} className='inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60'>
                     <Check size={16} />
-                    {review.verifiedPurchase ? 'Unverify' : 'Verify'}
+                    {verifyBusy ? (review.verifiedPurchase ? 'Unverifying...' : 'Verifying...') : review.verifiedPurchase ? 'Unverify' : 'Verify'}
                   </button>
-                  <button disabled={busyId === getId(review)} onClick={() => deleteReview(review)} className='inline-flex items-center gap-2 rounded bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700'>
+                  <button disabled={rowBusy} onClick={() => onDelete(review)} className='inline-flex items-center gap-2 rounded bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60'>
                     <Trash2 size={16} />
-                    Delete
+                    {deleteBusy ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
               </div>
             </section>
-          ))}
-        </div>
-      )}
-    </div>
   );
+}
+
+function AdminReviewPhoto({ photo }) {
+  const [failed, setFailed] = useState(false);
+  const url = typeof photo === 'string' ? photo : photo?.url || photo?.secure_url || '';
+
+  if (!url || failed) return null;
+
+  return (
+    <a href={url} target='_blank' rel='noreferrer' className='block h-16 w-16 overflow-hidden rounded border border-gray-200 bg-gray-100'>
+      <img src={url} alt='Review photo' onError={() => setFailed(true)} className='h-full w-full object-cover' />
+    </a>
+  );
+}
+
+function getPhotoKey(photo, index) {
+  if (typeof photo === 'string') return `${photo}-${index}`;
+  return photo?.publicId || photo?.url || `review-photo-${index}`;
 }
 
 function Badge({ children, tone = 'default' }) {

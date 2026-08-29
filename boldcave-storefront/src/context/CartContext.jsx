@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { fetchProducts } from "@/lib/clientApi";
+import { fetchProductsByIds } from "@/lib/clientApi";
 
 const CART_STORAGE_KEY = "perfume_cart";
 
@@ -93,11 +93,23 @@ const normalizeCartWithProducts = (items, productMap) => {
   }, []);
 };
 
+const areCartItemsEqual = (leftItems, rightItems) => {
+  if (leftItems.length !== rightItems.length) return false;
+
+  return leftItems.every((leftItem, index) => {
+    const rightItem = rightItems[index];
+    return (
+      leftItem.productId === rightItem.productId &&
+      leftItem.size === rightItem.size &&
+      Number(leftItem.quantity) === Number(rightItem.quantity)
+    );
+  });
+};
+
 export function CartProvider({ children }) {
   const [cart, setCart] = useState([]);
   const [productsById, setProductsById] = useState({});
   const [hasLoadedCart, setHasLoadedCart] = useState(false);
-  const [hasLoadedProductCatalog, setHasLoadedProductCatalog] = useState(false);
 
   const productMap = useMemo(() => new Map(Object.entries(productsById)), [productsById]);
 
@@ -152,11 +164,26 @@ export function CartProvider({ children }) {
   useEffect(() => {
     let isMounted = true;
 
-    fetchProducts()
+    if (!hasLoadedCart || cart.length === 0) {
+      return undefined;
+    }
+
+    const missingProductIds = Array.from(
+      new Set(
+        cart
+          .map((item) => item.productId)
+          .filter((productId) => productId && !productMap.has(productId))
+      )
+    );
+
+    if (!missingProductIds.length) {
+      return undefined;
+    }
+
+    fetchProductsByIds(missingProductIds)
       .then((products) => {
         if (isMounted) {
           rememberProducts(products);
-          setHasLoadedProductCatalog(true);
         }
       })
       .catch((error) => {
@@ -166,15 +193,24 @@ export function CartProvider({ children }) {
     return () => {
       isMounted = false;
     };
-  }, [rememberProducts]);
+  }, [cart, hasLoadedCart, productMap, rememberProducts]);
 
   useEffect(() => {
-    if (!hasLoadedCart || !hasLoadedProductCatalog || !productMap.size) {
+    if (
+      !hasLoadedCart ||
+      cart.length === 0 ||
+      !cart.every((item) => productMap.has(item.productId))
+    ) {
       return;
     }
 
-    setCart((currentCart) => normalizeCartWithProducts(currentCart, productMap));
-  }, [hasLoadedCart, hasLoadedProductCatalog, productMap]);
+    setCart((currentCart) => {
+      const normalizedCart = normalizeCartWithProducts(currentCart, productMap);
+      return areCartItemsEqual(currentCart, normalizedCart)
+        ? currentCart
+        : normalizedCart;
+    });
+  }, [cart, hasLoadedCart, productMap]);
 
   useEffect(() => {
     if (!hasLoadedCart) {

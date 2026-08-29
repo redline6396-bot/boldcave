@@ -1,6 +1,7 @@
 import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { handleRouteError, success } from "@/lib/api/response";
+import { serializeAdminReview } from "@/lib/api/reviews";
 import { requireAdmin } from "@/lib/auth/session";
 import { isObjectId, toPositiveInteger } from "@/lib/validation";
 import Review from "@/models/Review";
@@ -42,7 +43,10 @@ export async function GET(request) {
       Review.countDocuments(filter),
     ]);
 
-    return applyAdminCors(request, success({ reviews, total, limit, skip }));
+    return applyAdminCors(
+      request,
+      success({ reviews: reviews.map(serializeAdminReview), total, limit, skip })
+    );
   } catch (error) {
     return applyAdminCors(request, handleRouteError(error));
   }
