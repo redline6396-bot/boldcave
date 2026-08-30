@@ -1,4 +1,5 @@
 import HomepageSettings from "@/models/HomepageSettings";
+import connectDB from "@/lib/db";
 import { cleanString } from "@/lib/validation";
 
 const HOMEPAGE_SETTINGS_KEY = "global";
@@ -72,6 +73,8 @@ export function clearHomepageSettingsCache() {
 }
 
 export async function getHomepageSettings() {
+  await connectDB();
+
   return HomepageSettings.findOneAndUpdate(
     { key: HOMEPAGE_SETTINGS_KEY },
     {

@@ -3,7 +3,6 @@ import CollectionSection from '@/components/home/CollectionSection';
 import ReviewsSection from '@/components/home/ReviewsSection';
 import OurStorySection from '@/components/home/OurStorySection';
 import FAQSection from '@/components/home/FAQSection';
-import connectDB from '@/lib/db';
 import { getSerializedHomepageSettings } from '@/lib/homepageSettings';
 import { getFeaturedCatalogProducts } from '@/lib/products/public';
 
@@ -14,7 +13,6 @@ export default async function Home() {
   let featuredProducts = [];
 
   try {
-    await connectDB();
     const [settings, products] = await Promise.all([
       getSerializedHomepageSettings(),
       getFeaturedCatalogProducts(),
