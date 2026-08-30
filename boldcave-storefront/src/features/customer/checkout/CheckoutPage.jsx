@@ -1189,11 +1189,11 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
 
   return (
     <div
-      className="fixed inset-0 z-[200] overflow-y-auto bg-black/60 sm:p-5"
+      className="fixed inset-0 z-[200] overflow-x-hidden overflow-y-auto bg-black/60 sm:p-5"
       style={{ fontFamily: '"Helvetica Neue", Arial, sans-serif' }}
     >
-      <div className="flex min-h-full items-stretch justify-center sm:items-center">
-        <section className="relative flex min-h-[100dvh] w-full flex-col overflow-hidden bg-[#f7f8f9] text-[#111b28] sm:h-[760px] sm:min-h-0 sm:max-h-[90dvh] sm:max-w-[450px] sm:rounded-[18px] sm:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+      <div className="flex min-h-full w-full max-w-[100dvw] items-stretch justify-center overflow-x-hidden sm:items-center">
+        <section className="relative flex min-h-[100dvh] w-full max-w-[100dvw] flex-col overflow-hidden bg-[#f7f8f9] text-[#111b28] sm:h-[760px] sm:min-h-0 sm:max-h-[90dvh] sm:max-w-[450px] sm:rounded-[18px] sm:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
           <header className="flex h-[62px] shrink-0 items-center justify-between border-b border-[#e0e4e8] bg-white px-4 sm:px-5">
             <button
               type="button"
@@ -1222,7 +1222,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
             </span>
           </header>
 
-          <div className="checkout-scroll min-h-0 flex-1 overflow-y-auto px-3.5 py-4 sm:px-4">
+          <div className="checkout-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3.5 py-4 sm:px-4">
             {(error || notice) && (
               <div
                 className={[
@@ -1292,7 +1292,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
             )}
 
             {!phoneVerified ? (
-              <section className="mt-3 rounded-[14px] border border-[#d8dee5] bg-white p-4">
+              <section className="mt-3 max-w-full overflow-hidden rounded-[14px] border border-[#d8dee5] bg-white p-4">
                 <div className="flex items-center gap-2.5">
                   <UserRound
                     className="h-[22px] w-[22px] text-[#304b67]"
@@ -1310,7 +1310,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                     Enter Mobile Number
                   </span>
 
-                  <div className="flex h-[52px] overflow-hidden rounded-[13px] border border-[#8f98a3] focus-within:border-[#111b28]">
+                  <div className="flex h-[52px] max-w-full overflow-hidden rounded-[13px] border border-[#8f98a3] focus-within:border-[#111b28]">
                     <span className="flex h-full items-center px-3 text-[13px]">
                       +91
                     </span>
@@ -1333,7 +1333,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                         setPhoneVerificationToken("");
                         setError("");
                       }}
-                      className="min-w-0 flex-1 bg-white px-3 text-[14px] outline-none"
+                      className="min-w-0 flex-1 bg-white px-3 text-[16px] outline-none sm:text-[14px]"
                     />
                   </div>
                 </label>
@@ -1429,7 +1429,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
             )}
           </div>
 
-          <footer className="shrink-0 border-t border-[#e0e4e8] bg-white px-4 pb-[max(10px,env(safe-area-inset-bottom))] pt-3">
+          <footer className="w-full max-w-full shrink-0 overflow-hidden border-t border-[#e0e4e8] bg-white px-4 pb-[max(10px,env(safe-area-inset-bottom))] pt-3">
             <label className="mb-3 flex cursor-pointer items-center gap-2.5 text-[11px] text-[#263443] sm:text-[12px]">
               <input
                 type="checkbox"
@@ -1566,6 +1566,8 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
         .checkout-scroll {
           scrollbar-width: none;
           -ms-overflow-style: none;
+          -webkit-overflow-scrolling: touch;
+          max-width: 100dvw;
         }
 
         .checkout-scroll::-webkit-scrollbar {

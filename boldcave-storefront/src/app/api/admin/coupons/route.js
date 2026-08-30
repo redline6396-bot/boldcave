@@ -2,6 +2,7 @@ import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import {
   isObjectId,
   normalizeCouponCode,
@@ -75,6 +76,10 @@ function buildCouponPayload(body) {
 }
 
 export async function GET(request) {
+  return withRuntimeDatabase(() => getAdminCouponsRoute(request));
+}
+
+async function getAdminCouponsRoute(request) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);
@@ -90,6 +95,10 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => createAdminCouponRoute(request));
+}
+
+async function createAdminCouponRoute(request) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);

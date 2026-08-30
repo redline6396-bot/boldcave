@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+import { createRuntimeModel } from "@/lib/runtimeModel";
+
 const shiprocketAuthCacheSchema = new mongoose.Schema(
   {
     provider: { type: String, required: true, unique: true },
@@ -38,8 +40,10 @@ if (
   delete mongoose.models.ShiprocketAuthCache;
 }
 
-const ShiprocketAuthCache =
+export const ShiprocketAuthCacheSchema = shiprocketAuthCacheSchema;
+
+const ShiprocketAuthCacheModel =
   mongoose.models.ShiprocketAuthCache ||
   mongoose.model("ShiprocketAuthCache", shiprocketAuthCacheSchema);
 
-export default ShiprocketAuthCache;
+export default createRuntimeModel("ShiprocketAuthCache", ShiprocketAuthCacheModel);

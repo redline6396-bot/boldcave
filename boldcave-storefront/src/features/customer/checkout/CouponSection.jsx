@@ -411,7 +411,7 @@ export default function CouponSection({
         "Coupon entered";
 
   return (
-    <section className="min-w-0">
+    <section className="min-w-0 max-w-full overflow-hidden">
       {/* =================================================
           AVAILABLE OFFERS
       ================================================= */}
@@ -592,7 +592,7 @@ export default function CouponSection({
 
         <div
           className={[
-            "flex h-11 min-w-0 overflow-hidden rounded-[10px] border bg-white transition-[border-color,box-shadow] sm:h-12",
+            "flex h-11 min-w-0 max-w-full overflow-hidden rounded-[10px] border bg-white transition-[border-color,box-shadow] sm:h-12",
 
             applied
               ? "border-[#cfd5d9]"
@@ -655,7 +655,7 @@ export default function CouponSection({
             placeholder="Enter coupon code"
             disabled={disabled}
             aria-invalid={hasFeedbackError}
-            className="min-w-0 flex-1 bg-white px-3 text-[12px] text-[#182231] outline-none placeholder:text-[#8a939d] disabled:cursor-not-allowed disabled:bg-[#fafafa] sm:px-3.5 sm:text-[13px]"
+            className="min-w-0 flex-1 bg-white px-3 text-[16px] text-[#182231] outline-none placeholder:text-[#8a939d] disabled:cursor-not-allowed disabled:bg-[#fafafa] sm:px-3.5 sm:text-[13px]"
           />
         )}
 

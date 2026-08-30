@@ -1,10 +1,15 @@
 import { failure, handleRouteError, success } from "@/lib/api/response";
 import { publicBrowseCacheHeaders } from "@/lib/api/response";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { getCatalogProducts, normalizeCatalogCategory } from "@/lib/products/public";
 
 export const runtime = "nodejs";
 
 export async function GET(request) {
+  return withRuntimeDatabase(() => getProductsRoute(request));
+}
+
+async function getProductsRoute(request) {
   try {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");

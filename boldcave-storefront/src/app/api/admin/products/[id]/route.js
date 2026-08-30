@@ -3,6 +3,7 @@ import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
 import { serializeProductWithCombos } from "@/lib/api/products";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { clearProductCache } from "@/lib/productCache";
 import { isObjectId } from "@/lib/validation";
 import Product from "@/models/Product";
@@ -15,7 +16,11 @@ export function OPTIONS(request) {
   return adminPreflight(request);
 }
 
-export async function GET(request, { params }) {
+export async function GET(request, context) {
+  return withRuntimeDatabase(() => getAdminProductRoute(request, context));
+}
+
+async function getAdminProductRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);
@@ -33,7 +38,11 @@ export async function GET(request, { params }) {
   }
 }
 
-export async function PUT(request, { params }) {
+export async function PUT(request, context) {
+  return withRuntimeDatabase(() => updateAdminProductRoute(request, context));
+}
+
+async function updateAdminProductRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);
@@ -62,10 +71,14 @@ export async function PUT(request, { params }) {
 }
 
 export async function PATCH(request, context) {
-  return PUT(request, context);
+  return withRuntimeDatabase(() => updateAdminProductRoute(request, context));
 }
 
-export async function DELETE(request, { params }) {
+export async function DELETE(request, context) {
+  return withRuntimeDatabase(() => deleteAdminProductRoute(request, context));
+}
+
+async function deleteAdminProductRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);

@@ -4,6 +4,7 @@ import {
   requireUser,
   verifyCheckoutPhoneToken,
 } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { checkoutProfileFromAddress } from "@/lib/auth/users";
 import { calculateCart, generateOrderNumber, validateAddress } from "@/lib/orders/pricing";
 import { createRazorpayOrder } from "@/lib/payments/razorpay";
@@ -15,6 +16,10 @@ import RazorpayAttempt from "@/models/RazorpayAttempt";
 export const runtime = "nodejs";
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => createRazorpayOrderRoute(request));
+}
+
+async function createRazorpayOrderRoute(request) {
   try {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;

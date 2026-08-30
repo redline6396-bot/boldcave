@@ -1,5 +1,6 @@
 import { failure, handleRouteError, success } from "@/lib/api/response";
 import { publicBrowseCacheHeaders } from "@/lib/api/response";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { getRelatedCatalogProducts } from "@/lib/products/public";
 import { isObjectId } from "@/lib/validation";
 
@@ -7,7 +8,11 @@ export const runtime = "nodejs";
 
 const RELATED_LIMIT = 4;
 
-export async function GET(_request, { params }) {
+export async function GET(_request, context) {
+  return withRuntimeDatabase(() => getRelatedProductsRoute(_request, context));
+}
+
+async function getRelatedProductsRoute(_request, { params }) {
   try {
     const { id } = await params;
 

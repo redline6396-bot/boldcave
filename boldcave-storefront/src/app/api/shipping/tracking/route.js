@@ -1,6 +1,7 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, success } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import {
   applyShiprocketStatusToOrder,
   getStatusFromTracking,
@@ -12,6 +13,10 @@ import Order from "@/models/Order";
 export const runtime = "nodejs";
 
 export async function GET(request) {
+  return withRuntimeDatabase(() => getShipmentTrackingRoute(request));
+}
+
+async function getShipmentTrackingRoute(request) {
   try {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;

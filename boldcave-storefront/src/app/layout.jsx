@@ -5,7 +5,7 @@ import CouponProvider from '@/context/CouponContext';
 import NotificationProvider from '@/context/NotificationContext';
 import { StoreSettingsProvider } from '@/context/StoreSettingsContext';
 import RootLayoutClient from '@/components/RootLayoutClient';
-import connectDB from '@/lib/db';
+import { withRuntimeDatabase } from '@/lib/cloudflareMongoose';
 import { getSerializedStoreSettings } from '@/lib/storeSettings';
 import '@/assets/globals.css';
 
@@ -19,8 +19,7 @@ export default async function RootLayout({ children }) {
   let storeSettings = null;
 
   try {
-    await connectDB();
-    storeSettings = await getSerializedStoreSettings();
+    storeSettings = await withRuntimeDatabase(() => getSerializedStoreSettings());
   } catch {
     storeSettings = null;
   }

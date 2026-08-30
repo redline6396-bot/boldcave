@@ -1,4 +1,5 @@
 import ProductDetailClient from "./ProductDetailClient";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { getProductBySlug } from "@/lib/products/public";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export default async function ProductPage({ params }) {
   let loadErrorType = "";
 
   try {
-    product = await getProductBySlug(slug);
+    product = await withRuntimeDatabase(() => getProductBySlug(slug));
   } catch (error) {
     loadErrorType = getProductLoadErrorType(error);
     loadError =

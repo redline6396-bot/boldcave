@@ -4,11 +4,16 @@ import {
   signCheckoutPhoneToken,
 } from "@/lib/auth/session";
 import { OtpTestPhoneNotAllowedError, verifyOtp } from "@/lib/auth/otpProvider";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => verifyPhoneOtpRoute(request));
+}
+
+async function verifyPhoneOtpRoute(request) {
   try {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;

@@ -5,11 +5,16 @@ import {
   OtpTestPhoneNotAllowedError,
   sendOtp,
 } from "@/lib/auth/otpProvider";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => sendOtpRoute(request));
+}
+
+async function sendOtpRoute(request) {
   try {
     const body = await readJson(request);
     const phone = normalizePhone(body.phone);

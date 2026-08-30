@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 import connectDB from "@/lib/db";
+import { getRuntimeDatabaseContext } from "@/lib/runtimeDatabaseContext";
 import { restoreStock } from "@/lib/orders/pricing";
 import {
   buildFullRefundRequest,
@@ -392,7 +393,10 @@ async function finalizeCancellation({
   reason,
   shiprocketCancelStatus,
 }) {
-  const session = await mongoose.startSession();
+  const runtimeConnection = getRuntimeDatabaseContext()?.connection;
+  const session = runtimeConnection
+    ? await runtimeConnection.startSession()
+    : await mongoose.startSession();
   let finalOrder = null;
 
   try {

@@ -1,12 +1,17 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { cleanString, isObjectId, toPositiveInteger } from "@/lib/validation";
 import Review from "@/models/Review";
 
 export const runtime = "nodejs";
 
-export async function PATCH(request, { params }) {
+export async function PATCH(request, context) {
+  return withRuntimeDatabase(() => updateReviewRoute(request, context));
+}
+
+async function updateReviewRoute(request, { params }) {
   try {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;
@@ -51,7 +56,11 @@ export async function PATCH(request, { params }) {
   }
 }
 
-export async function DELETE(request, { params }) {
+export async function DELETE(request, context) {
+  return withRuntimeDatabase(() => deleteReviewRoute(request, context));
+}
+
+async function deleteReviewRoute(request, { params }) {
   try {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;

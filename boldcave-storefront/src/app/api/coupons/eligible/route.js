@@ -4,6 +4,7 @@ import {
   noStoreHeaders,
   success,
 } from "@/lib/api/response";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { toPositiveNumber } from "@/lib/validation";
 import Coupon from "@/models/Coupon";
 
@@ -40,6 +41,10 @@ function serializeEligibleCoupon(coupon, discount) {
 }
 
 export async function GET(request) {
+  return withRuntimeDatabase(() => getEligibleCouponsRoute(request));
+}
+
+async function getEligibleCouponsRoute(request) {
   try {
     await connectDB();
 

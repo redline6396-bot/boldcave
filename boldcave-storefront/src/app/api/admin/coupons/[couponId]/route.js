@@ -2,6 +2,7 @@ import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { isObjectId } from "@/lib/validation";
 import Coupon from "@/models/Coupon";
 import { buildCouponPayload } from "../route";
@@ -12,7 +13,11 @@ export function OPTIONS(request) {
   return adminPreflight(request);
 }
 
-export async function GET(request, { params }) {
+export async function GET(request, context) {
+  return withRuntimeDatabase(() => getAdminCouponRoute(request, context));
+}
+
+async function getAdminCouponRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);
@@ -32,7 +37,11 @@ export async function GET(request, { params }) {
   }
 }
 
-export async function PATCH(request, { params }) {
+export async function PATCH(request, context) {
+  return withRuntimeDatabase(() => updateAdminCouponRoute(request, context));
+}
+
+async function updateAdminCouponRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);
@@ -82,7 +91,11 @@ export async function PATCH(request, { params }) {
   }
 }
 
-export async function DELETE(request, { params }) {
+export async function DELETE(request, context) {
+  return withRuntimeDatabase(() => deleteAdminCouponRoute(request, context));
+}
+
+async function deleteAdminCouponRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);

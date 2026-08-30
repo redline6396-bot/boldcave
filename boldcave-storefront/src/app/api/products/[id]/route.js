@@ -2,13 +2,18 @@ import connectDB from "@/lib/db";
 import { failure, handleRouteError, success } from "@/lib/api/response";
 import { publicBrowseCacheHeaders } from "@/lib/api/response";
 import { serializeProductWithCombos } from "@/lib/api/products";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { getReviewStats } from "@/lib/orders/pricing";
 import { isObjectId } from "@/lib/validation";
 import Product from "@/models/Product";
 
 export const runtime = "nodejs";
 
-export async function GET(_request, { params }) {
+export async function GET(_request, context) {
+  return withRuntimeDatabase(() => getProductRoute(_request, context));
+}
+
+async function getProductRoute(_request, { params }) {
   try {
     const { id } = await params;
 

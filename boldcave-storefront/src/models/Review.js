@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { createRuntimeModel } from "@/lib/runtimeModel";
 
 const photoSchema = new mongoose.Schema(
   {
@@ -27,6 +28,6 @@ reviewSchema.index({ product: 1, approved: 1, createdAt: -1 });
 
 export const ReviewSchema = reviewSchema;
 
-const Review = mongoose.models.Review || mongoose.model("Review", reviewSchema);
+const ReviewModel = mongoose.models.Review || mongoose.model("Review", reviewSchema);
 
-export default Review;
+export default createRuntimeModel("Review", ReviewModel);

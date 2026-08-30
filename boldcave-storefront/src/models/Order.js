@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+import { createRuntimeModel } from "@/lib/runtimeModel";
+
 const orderItemSchema = new mongoose.Schema(
   {
     productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
@@ -188,6 +190,8 @@ if (
   delete mongoose.models.Order;
 }
 
-const Order = mongoose.models.Order || mongoose.model("Order", orderSchema);
+export const OrderSchema = orderSchema;
 
-export default Order;
+const OrderModel = mongoose.models.Order || mongoose.model("Order", orderSchema);
+
+export default createRuntimeModel("Order", OrderModel);

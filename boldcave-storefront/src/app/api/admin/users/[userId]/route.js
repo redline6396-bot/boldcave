@@ -2,6 +2,7 @@ import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { isObjectId } from "@/lib/validation";
 import Order from "@/models/Order";
 import User from "@/models/User";
@@ -12,7 +13,11 @@ export function OPTIONS(request) {
   return adminPreflight(request);
 }
 
-export async function GET(request, { params }) {
+export async function GET(request, context) {
+  return withRuntimeDatabase(() => getAdminUserRoute(request, context));
+}
+
+async function getAdminUserRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);
@@ -33,7 +38,11 @@ export async function GET(request, { params }) {
   }
 }
 
-export async function PATCH(request, { params }) {
+export async function PATCH(request, context) {
+  return withRuntimeDatabase(() => updateAdminUserRoute(request, context));
+}
+
+async function updateAdminUserRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);

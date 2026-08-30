@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+import { createRuntimeModel } from "@/lib/runtimeModel";
+
 const storeSettingsSchema = new mongoose.Schema(
   {
     key: {
@@ -39,8 +41,10 @@ if (
   delete mongoose.models.StoreSettings;
 }
 
-const StoreSettings =
+export const StoreSettingsSchema = storeSettingsSchema;
+
+const StoreSettingsModel =
   mongoose.models.StoreSettings ||
   mongoose.model("StoreSettings", storeSettingsSchema);
 
-export default StoreSettings;
+export default createRuntimeModel("StoreSettings", StoreSettingsModel);

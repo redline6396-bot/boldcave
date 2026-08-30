@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+import { createRuntimeModel } from "@/lib/runtimeModel";
+
 const heroSlideSchema = new mongoose.Schema(
   {
     desktopImage: { type: String, trim: true, default: "" },
@@ -45,8 +47,10 @@ if (mongoose.models.HomepageSettings && !mongoose.models.HomepageSettings.schema
   delete mongoose.models.HomepageSettings;
 }
 
+export const HomepageSettingsSchema = homepageSettingsSchema;
+
 const ActiveHomepageSettings =
   mongoose.models.HomepageSettings ||
   mongoose.model("HomepageSettings", homepageSettingsSchema);
 
-export default ActiveHomepageSettings;
+export default createRuntimeModel("HomepageSettings", ActiveHomepageSettings);

@@ -1,10 +1,15 @@
 import { failure, handleRouteError, success } from "@/lib/api/response";
 import { publicBrowseCacheHeaders } from "@/lib/api/response";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { getProductBySlug } from "@/lib/products/public";
 
 export const runtime = "nodejs";
 
-export async function GET(_request, { params }) {
+export async function GET(_request, context) {
+  return withRuntimeDatabase(() => getProductBySlugRoute(_request, context));
+}
+
+async function getProductBySlugRoute(_request, { params }) {
   try {
     const { slug } = await params;
     const cleanSlug = String(slug || "").trim().toLowerCase();

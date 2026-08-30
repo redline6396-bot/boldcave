@@ -3,11 +3,16 @@ import { failure, handleRouteError, readJson, success } from "@/lib/api/response
 import { setUserSessionCookie, signUserSession, safeUser } from "@/lib/auth/session";
 import { OtpTestPhoneNotAllowedError, verifyOtp } from "@/lib/auth/otpProvider";
 import { findOrCreateUserForPhone } from "@/lib/auth/users";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => verifyOtpRoute(request));
+}
+
+async function verifyOtpRoute(request) {
   try {
     const body = await readJson(request);
     const phone = normalizePhone(body.phone);

@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 
-import { isObjectId } from "@/lib/validation";
+import connectDB from "@/lib/db";
+import {
+  getRuntimeDatabaseContext,
+  runWithRuntimeDatabaseContext,
+} from "@/lib/runtimeDatabaseContext";
 
 const CLOUDFLARE_MONGOOSE_OPTIONS = {
   bufferCommands: false,
@@ -17,43 +21,80 @@ const CLOUDFLARE_MONGOOSE_OPTIONS = {
   waitQueueTimeoutMS: 5000,
 };
 
+async function getConnectionModels(connection) {
+  const [
+    { CouponSchema },
+    { CouponUsageSchema },
+    { HomepageSettingsSchema },
+    { OrderSchema },
+    { OtpRateLimitSchema },
+    { OtpVerificationSchema },
+    { ProductSchema },
+    { RazorpayAttemptSchema },
+    { ReviewSchema },
+    { ShiprocketAuthCacheSchema },
+    { StoreSettingsSchema },
+    { UserSchema },
+  ] = await Promise.all([
+    import("@/models/Coupon"),
+    import("@/models/CouponUsage"),
+    import("@/models/HomepageSettings"),
+    import("@/models/Order"),
+    import("@/models/OtpRateLimit"),
+    import("@/models/OtpVerification"),
+    import("@/models/Product"),
+    import("@/models/RazorpayAttempt"),
+    import("@/models/Review"),
+    import("@/models/ShiprocketAuthCache"),
+    import("@/models/StoreSettings"),
+    import("@/models/User"),
+  ]);
+
+  const modelDefinitions = {
+    Coupon: CouponSchema,
+    CouponUsage: CouponUsageSchema,
+    HomepageSettings: HomepageSettingsSchema,
+    Order: OrderSchema,
+    OtpRateLimit: OtpRateLimitSchema,
+    OtpVerification: OtpVerificationSchema,
+    Product: ProductSchema,
+    RazorpayAttempt: RazorpayAttemptSchema,
+    Review: ReviewSchema,
+    ShiprocketAuthCache: ShiprocketAuthCacheSchema,
+    StoreSettings: StoreSettingsSchema,
+    User: UserSchema,
+  };
+
+  return Object.fromEntries(
+    Object.entries(modelDefinitions).map(([name, schema]) => [
+      name,
+      connection.models[name] || connection.model(name, schema),
+    ])
+  );
+}
+
 export function isCloudflareDbRuntime() {
   return process.env.DB_RUNTIME === "cloudflare";
 }
 
-async function getConnectionModels(connection) {
-  const [
-    { ProductSchema },
-    { ReviewSchema },
-    { UserSchema },
-  ] = await Promise.all([
-    import("@/models/Product"),
-    import("@/models/Review"),
-    import("@/models/User"),
-  ]);
+export async function withRuntimeDatabase(operation) {
+  const currentContext = getRuntimeDatabaseContext();
+  if (currentContext?.connection && currentContext?.models) {
+    return operation({
+      ...currentContext,
+      ...currentContext.models,
+    });
+  }
 
-  const Product =
-    connection.models.Product ||
-    connection.model("Product", ProductSchema);
+  if (!isCloudflareDbRuntime()) {
+    const connection = await connectDB();
+    return operation({ connection, runtime: "node" });
+  }
 
-  const User =
-    connection.models.User ||
-    connection.model("User", UserSchema);
-
-  const Review =
-    connection.models.Review ||
-    connection.model("Review", ReviewSchema);
-
-  return {
-    Product,
-    Review,
-    User,
-  };
+  return withCloudflareRuntimeDatabase(operation);
 }
 
-export async function withCloudflareMongooseModels(
-  operation,
-) {
+async function withCloudflareRuntimeDatabase(operation) {
   const uri = process.env.MONGODB_URI;
 
   if (!uri) {
@@ -68,67 +109,13 @@ export async function withCloudflareMongooseModels(
   try {
     await connection.asPromise();
 
-    const models =
-      await getConnectionModels(connection);
+    const models = await getConnectionModels(connection);
 
-    return await operation({
-      connection,
-      ...models,
-    });
+    return await runWithRuntimeDatabaseContext(
+      { connection, models, runtime: "cloudflare" },
+      () => operation({ connection, models, runtime: "cloudflare", ...models })
+    );
   } finally {
     await connection.destroy().catch(() => {});
   }
-}
-
-export async function getReviewStatsForModel(
-  ReviewModel,
-  productId,
-) {
-  const productObjectId =
-    typeof productId === "string" &&
-    isObjectId(productId)
-      ? new mongoose.Types.ObjectId(productId)
-      : productId;
-
-  const rows = await ReviewModel.aggregate([
-    {
-      $match: {
-        product: productObjectId,
-        approved: true,
-      },
-    },
-    {
-      $group: {
-        _id: "$rating",
-        count: {
-          $sum: 1,
-        },
-      },
-    },
-  ]);
-
-  const breakdown = {
-    1: 0,
-    2: 0,
-    3: 0,
-    4: 0,
-    5: 0,
-  };
-
-  let total = 0;
-  let weighted = 0;
-
-  rows.forEach((row) => {
-    breakdown[row._id] = row.count;
-    total += row.count;
-    weighted += row._id * row.count;
-  });
-
-  return {
-    average: total
-      ? Number((weighted / total).toFixed(1))
-      : 0,
-    count: total,
-    breakdown,
-  };
 }

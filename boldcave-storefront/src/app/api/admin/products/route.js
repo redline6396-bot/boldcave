@@ -2,6 +2,7 @@ import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { COMBO_VARIANT_SIZE, findVariantByIdentifier, serializeProductWithCombos } from "@/lib/api/products";
 import { clearProductCache } from "@/lib/productCache";
 import {
@@ -328,6 +329,10 @@ async function buildProductPayload(body, currentProductId = "", existingProduct 
 }
 
 export async function GET(request) {
+  return withRuntimeDatabase(() => getAdminProductsRoute(request));
+}
+
+async function getAdminProductsRoute(request) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);
@@ -348,6 +353,10 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => createAdminProductRoute(request));
+}
+
+async function createAdminProductRoute(request) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);

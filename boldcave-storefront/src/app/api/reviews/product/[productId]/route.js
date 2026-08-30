@@ -1,55 +1,22 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, success } from "@/lib/api/response";
-import {
-  getReviewStatsForModel,
-  isCloudflareDbRuntime,
-  withCloudflareMongooseModels,
-} from "@/lib/cloudflareMongoose";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { getReviewStats } from "@/lib/orders/pricing";
 import { isObjectId } from "@/lib/validation";
 import Review from "@/models/Review";
 
 export const runtime = "nodejs";
 
-export async function GET(_request, { params }) {
+export async function GET(_request, context) {
+  return withRuntimeDatabase(() => getProductReviewsRoute(_request, context));
+}
+
+async function getProductReviewsRoute(_request, { params }) {
   try {
     const { productId } = await params;
 
     if (!isObjectId(productId)) {
       return failure("INVALID_PRODUCT_ID", "Invalid product id", 400);
-    }
-
-    if (isCloudflareDbRuntime()) {
-      const data = await withCloudflareMongooseModels(async ({ Review: ReviewModel }) => {
-        const reviews = await ReviewModel.find({ product: productId, approved: true })
-          .populate("user", "firstName lastName")
-          .sort({ createdAt: -1 });
-
-        const stats = await getReviewStatsForModel(
-          ReviewModel,
-          reviews[0]?.product || productId
-        );
-
-        return {
-          reviews: reviews.map((review) => ({
-            id: String(review._id),
-            rating: review.rating,
-            title: review.title || "",
-            text: review.text,
-            photos: review.photos || [],
-            verifiedPurchase: review.verifiedPurchase,
-            user: {
-              firstName: review.user?.firstName || "Customer",
-              lastName: review.user?.lastName || "",
-            },
-            createdAt: review.createdAt,
-            updatedAt: review.updatedAt,
-          })),
-          rating: stats,
-        };
-      });
-
-      return success(data);
     }
 
     await connectDB();

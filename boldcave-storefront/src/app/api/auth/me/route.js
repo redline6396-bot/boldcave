@@ -1,10 +1,15 @@
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireUser, safeUser } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { cleanString, isValidEmail, isValidPincode } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
 export async function GET(request) {
+  return withRuntimeDatabase(() => getMeRoute(request));
+}
+
+async function getMeRoute(request) {
   try {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;
@@ -57,6 +62,10 @@ function normalizeAddresses(addresses) {
 }
 
 export async function PATCH(request) {
+  return withRuntimeDatabase(() => updateMeRoute(request));
+}
+
+async function updateMeRoute(request) {
   try {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;

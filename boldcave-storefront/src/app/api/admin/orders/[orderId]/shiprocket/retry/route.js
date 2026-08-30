@@ -2,6 +2,7 @@ import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { syncShiprocketOrder } from "@/lib/shipping/shiprocket";
 import { isObjectId } from "@/lib/validation";
 import Order from "@/models/Order";
@@ -17,7 +18,11 @@ async function findOrder(orderId) {
   return Order.findOne(query);
 }
 
-export async function POST(request, { params }) {
+export async function POST(request, context) {
+  return withRuntimeDatabase(() => retryAdminShiprocketRoute(request, context));
+}
+
+async function retryAdminShiprocketRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);

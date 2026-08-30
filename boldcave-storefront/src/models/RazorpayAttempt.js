@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+import { createRuntimeModel } from "@/lib/runtimeModel";
+
 const attemptItemSchema = new mongoose.Schema(
   {
     productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
@@ -107,8 +109,10 @@ if (
   delete mongoose.models.RazorpayAttempt;
 }
 
-const RazorpayAttempt =
+export const RazorpayAttemptSchema = razorpayAttemptSchema;
+
+const RazorpayAttemptModel =
   mongoose.models.RazorpayAttempt ||
   mongoose.model("RazorpayAttempt", razorpayAttemptSchema);
 
-export default RazorpayAttempt;
+export default createRuntimeModel("RazorpayAttempt", RazorpayAttemptModel);

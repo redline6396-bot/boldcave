@@ -3,6 +3,7 @@ import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { serializeAdminReview } from "@/lib/api/reviews";
 import { requireAdmin } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { isObjectId } from "@/lib/validation";
 import Review from "@/models/Review";
 
@@ -12,7 +13,11 @@ export function OPTIONS(request) {
   return adminPreflight(request);
 }
 
-export async function PATCH(request, { params }) {
+export async function PATCH(request, context) {
+  return withRuntimeDatabase(() => updateAdminReviewRoute(request, context));
+}
+
+async function updateAdminReviewRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);
@@ -40,7 +45,11 @@ export async function PATCH(request, { params }) {
   }
 }
 
-export async function DELETE(request, { params }) {
+export async function DELETE(request, context) {
+  return withRuntimeDatabase(() => deleteAdminReviewRoute(request, context));
+}
+
+async function deleteAdminReviewRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);

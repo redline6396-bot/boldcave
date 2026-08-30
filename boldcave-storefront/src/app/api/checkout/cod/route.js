@@ -4,6 +4,7 @@ import {
   requireUser,
   verifyCheckoutPhoneToken,
 } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import {
   checkoutProfileFromAddress,
   syncUserProfileFromCheckoutAddress,
@@ -26,6 +27,10 @@ import Order from "@/models/Order";
 export const runtime = "nodejs";
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => createCodOrderRoute(request));
+}
+
+async function createCodOrderRoute(request) {
   try {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;

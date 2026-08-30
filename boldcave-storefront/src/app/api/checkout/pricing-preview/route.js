@@ -7,6 +7,7 @@ import {
   success,
 } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { calculateCart } from "@/lib/orders/pricing";
 
 export const runtime = "nodejs";
@@ -24,6 +25,10 @@ function serializePricing(result) {
 }
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => previewCheckoutPricingRoute(request));
+}
+
+async function previewCheckoutPricingRoute(request) {
   try {
     await connectDB();
 

@@ -1,4 +1,5 @@
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import connectDB from "@/lib/db";
 import { calculateCart } from "@/lib/orders/pricing";
 import { lookupIndianPincode } from "@/lib/shipping/pincodeLookup";
@@ -60,6 +61,10 @@ async function getServiceabilityResult({ pincode, cod, items }) {
 }
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => checkCheckoutServiceabilityRoute(request));
+}
+
+async function checkCheckoutServiceabilityRoute(request) {
   let location = { city: "", state: "" };
 
   try {
@@ -115,6 +120,10 @@ export async function POST(request) {
 }
 
 export async function GET(request) {
+  return withRuntimeDatabase(() => checkPincodeServiceabilityRoute(request));
+}
+
+async function checkPincodeServiceabilityRoute(request) {
   let location = { city: "", state: "" };
 
   try {

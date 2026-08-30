@@ -1,5 +1,6 @@
 import connectDB from "@/lib/db";
 import { failure, readJson, success } from "@/lib/api/response";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import {
   applyShiprocketStatusToOrder,
   mapShiprocketStatusToOrderStatus,
@@ -32,6 +33,10 @@ function extractShiprocketWebhookEvent(payload) {
 }
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => shipmentTrackingWebhookRoute(request));
+}
+
+async function shipmentTrackingWebhookRoute(request) {
   const secret = process.env.SHIPROCKET_WEBHOOK_SECRET;
 
   if (!secret) {

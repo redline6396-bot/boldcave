@@ -19,7 +19,7 @@ export default function CheckoutSheet({
 
   return (
     <div
-      className="fixed inset-0 flex items-end justify-center bg-black/55"
+      className="fixed inset-0 flex items-end justify-center overflow-x-hidden bg-black/55"
       style={{ zIndex }}
     >
       <button
@@ -34,7 +34,7 @@ export default function CheckoutSheet({
           and clicked. The inner frame owns the clipping/rounding. */}
       <section
         className={[
-          "checkout-sheet-panel relative z-10 w-full overflow-visible",
+          "checkout-sheet-panel relative z-10 w-full max-w-[100dvw] overflow-visible",
           mobileFullPage ? "checkout-sheet-mobile-full" : "",
         ].join(" ")}
         style={{
@@ -45,7 +45,7 @@ export default function CheckoutSheet({
       >
         <div
           className={[
-            "checkout-sheet-frame flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-[#111b28]",
+            "checkout-sheet-frame flex h-full min-h-0 w-full max-w-full flex-col overflow-hidden bg-white text-[#111b28]",
             mobileFullPage ? "" : "rounded-t-[18px]",
           ].join(" ")}
         >

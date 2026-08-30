@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { createRuntimeModel } from "@/lib/runtimeModel";
 
 const addressSchema = new mongoose.Schema(
   {
@@ -39,6 +40,6 @@ userSchema.index(
 
 export const UserSchema = userSchema;
 
-const User = mongoose.models.User || mongoose.model("User", userSchema);
+const UserModel = mongoose.models.User || mongoose.model("User", userSchema);
 
-export default User;
+export default createRuntimeModel("User", UserModel);

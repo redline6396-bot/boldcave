@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+import { createRuntimeModel } from "@/lib/runtimeModel";
+
 const couponUsageSchema = new mongoose.Schema(
   {
     couponId: {
@@ -46,8 +48,10 @@ if (
   delete mongoose.models.CouponUsage;
 }
 
-const CouponUsage =
+export const CouponUsageSchema = couponUsageSchema;
+
+const CouponUsageModel =
   mongoose.models.CouponUsage ||
   mongoose.model("CouponUsage", couponUsageSchema);
 
-export default CouponUsage;
+export default createRuntimeModel("CouponUsage", CouponUsageModel);

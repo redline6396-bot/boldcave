@@ -1,10 +1,15 @@
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { CancellationError, cancelOrder } from "@/lib/orders/cancellation";
 
 export const runtime = "nodejs";
 
-export async function POST(request, { params }) {
+export async function POST(request, context) {
+  return withRuntimeDatabase(() => cancelOrderRoute(request, context));
+}
+
+async function cancelOrderRoute(request, { params }) {
   try {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;

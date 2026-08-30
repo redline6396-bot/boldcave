@@ -2,6 +2,7 @@ import connectDB from "@/lib/db";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
 import { syncUserProfileFromCheckoutAddress } from "@/lib/auth/users";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import {
   consumeCouponUsageForOrder,
   deductStock,
@@ -15,6 +16,10 @@ import RazorpayAttempt from "@/models/RazorpayAttempt";
 export const runtime = "nodejs";
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => verifyRazorpayOrderRoute(request));
+}
+
+async function verifyRazorpayOrderRoute(request) {
   try {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;

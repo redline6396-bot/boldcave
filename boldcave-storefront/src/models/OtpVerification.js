@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+import { createRuntimeModel } from "@/lib/runtimeModel";
+
 const otpVerificationSchema = new mongoose.Schema(
   {
     phone: { type: String, required: true, index: true },
@@ -13,8 +15,10 @@ const otpVerificationSchema = new mongoose.Schema(
 
 otpVerificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-const OtpVerification =
+export const OtpVerificationSchema = otpVerificationSchema;
+
+const OtpVerificationModel =
   mongoose.models.OtpVerification ||
   mongoose.model("OtpVerification", otpVerificationSchema);
 
-export default OtpVerification;
+export default createRuntimeModel("OtpVerification", OtpVerificationModel);

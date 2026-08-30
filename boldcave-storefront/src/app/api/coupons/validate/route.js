@@ -1,11 +1,16 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { calculateCart } from "@/lib/orders/pricing";
 
 export const runtime = "nodejs";
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => validateCouponRoute(request));
+}
+
+async function validateCouponRoute(request) {
   try {
     await connectDB();
     const body = await readJson(request);

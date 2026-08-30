@@ -572,7 +572,7 @@ export default function DeliveryAddress({
             </h3>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-5">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4 sm:px-5">
             {localError &&
               ![
                 "Full address is required.",
@@ -838,7 +838,7 @@ function FloatingInput({
           autoFocus={autoFocus}
           onChange={(event) => onChange(event.target.value)}
           className={[
-            "h-[48px] w-full cursor-text caret-black rounded-[11px] border bg-white px-3.5 text-[13px] font-medium text-[#050505] outline-none transition-colors placeholder:text-[#8d98a4] disabled:cursor-not-allowed disabled:bg-[#fafafa] disabled:text-[#050505] disabled:opacity-100",
+            "h-[48px] w-full cursor-text caret-black rounded-[11px] border bg-white px-3.5 text-[16px] font-medium text-[#050505] outline-none transition-colors placeholder:text-[#8d98a4] disabled:cursor-not-allowed disabled:bg-[#fafafa] disabled:text-[#050505] disabled:opacity-100 sm:text-[13px]",
             error
               ? "border-red-400 focus:border-red-500"
               : "border-[#cbd2d9] focus:border-[#111b28]",

@@ -2,6 +2,7 @@ import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { ADMIN_MANUAL_ORDER_STATUSES, isObjectId } from "@/lib/validation";
 import Order from "@/models/Order";
 
@@ -23,7 +24,11 @@ const COURIER_CONTROLLED_STATUSES = [
   "delivered",
 ];
 
-export async function GET(request, { params }) {
+export async function GET(request, context) {
+  return withRuntimeDatabase(() => getAdminOrderRoute(request, context));
+}
+
+async function getAdminOrderRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);
@@ -39,7 +44,11 @@ export async function GET(request, { params }) {
   }
 }
 
-export async function PATCH(request, { params }) {
+export async function PATCH(request, context) {
+  return withRuntimeDatabase(() => updateAdminOrderRoute(request, context));
+}
+
+async function updateAdminOrderRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);

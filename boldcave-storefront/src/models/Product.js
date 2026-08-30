@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { createRuntimeModel } from "@/lib/runtimeModel";
 
 import { PRODUCT_CATEGORIES } from "@/lib/validation";
 
@@ -118,6 +119,6 @@ if (
 
 export const ProductSchema = productSchema;
 
-const Product = mongoose.models.Product || mongoose.model("Product", productSchema);
+const ProductModel = mongoose.models.Product || mongoose.model("Product", productSchema);
 
-export default Product;
+export default createRuntimeModel("Product", ProductModel);

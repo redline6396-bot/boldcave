@@ -1,5 +1,6 @@
 import connectDB from "@/lib/db";
 import { failure, success } from "@/lib/api/response";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { verifyRazorpayWebhookSignature } from "@/lib/payments/razorpay";
 import Order from "@/models/Order";
 
@@ -66,6 +67,10 @@ function buildRefundUpdate(eventName, refund) {
 }
 
 export async function POST(request) {
+  return withRuntimeDatabase(() => razorpayWebhookRoute(request));
+}
+
+async function razorpayWebhookRoute(request) {
   if (!process.env.RAZORPAY_WEBHOOK_SECRET) {
     return failure(
       "RAZORPAY_WEBHOOK_NOT_CONFIGURED",

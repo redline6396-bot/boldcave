@@ -1,10 +1,5 @@
 import connectDB from "@/lib/db";
 import { serializeProductWithCombos } from "@/lib/api/products";
-import {
-  getReviewStatsForModel,
-  isCloudflareDbRuntime,
-  withCloudflareMongooseModels,
-} from "@/lib/cloudflareMongoose";
 import { getProductCache, setProductCache } from "@/lib/productCache";
 import { PRODUCT_CATEGORIES, isObjectId } from "@/lib/validation";
 import Product from "@/models/Product";
@@ -292,24 +287,6 @@ export async function getProductBySlug(slug, { includeRating = false } = {}) {
   const cached = getProductCache(cacheKey);
   if (cached) return cached;
 
-  if (isCloudflareDbRuntime()) {
-    return withCloudflareMongooseModels(async ({ Product: ProductModel, Review }) => {
-      const product = await ProductModel.findOne({
-        slug: cleanSlug,
-        status: "published",
-      });
-      if (!product) return null;
-
-      const data = await serializeProductWithCombos(product, { ProductModel });
-
-      if (includeRating) {
-        data.rating = await getReviewStatsForModel(Review, product._id);
-      }
-
-      return setProductCache(cacheKey, data);
-    });
-  }
-
   await connectDB();
   const product = await Product.findOne({ slug: cleanSlug, status: "published" });
   if (!product) return null;
@@ -335,56 +312,6 @@ export async function getRelatedCatalogProducts(productId, limit = 4) {
   const cacheKey = `related-products:${id}:${limit}`;
   const cached = getProductCache(cacheKey);
   if (cached) return cached.products;
-
-  if (isCloudflareDbRuntime()) {
-    return withCloudflareMongooseModels(async ({ Product: ProductModel }) => {
-      const currentProduct = await ProductModel.findOne({
-        _id: id,
-        status: "published",
-      })
-        .select("_id")
-        .lean();
-      if (!currentProduct) {
-        const error = new Error("Product not found");
-        error.code = "PRODUCT_NOT_FOUND";
-        throw error;
-      }
-
-      const relatedProducts = await ProductModel.aggregate([
-        {
-          $match: {
-            _id: { $ne: currentProduct._id },
-            status: "published",
-          },
-        },
-        { $sample: { size: limit } },
-        {
-          $project: {
-            productType: 1,
-            name: 1,
-            slug: 1,
-            audienceTags: 1,
-            shortDescription: 1,
-            images: 1,
-            fragranceProfile: 1,
-            fragranceNotes: 1,
-            variants: 1,
-            comboItems: 1,
-            featured: 1,
-            featuredOrder: 1,
-            status: 1,
-            createdAt: 1,
-          },
-        },
-      ]);
-      const productsById = await getComboReferenceMap(relatedProducts, ProductModel);
-      const products = relatedProducts.map((product) =>
-        serializeCatalogProduct(product, productsById)
-      );
-
-      return setProductCache(cacheKey, { products }).products;
-    });
-  }
 
   await connectDB();
 

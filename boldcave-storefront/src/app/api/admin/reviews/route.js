@@ -3,6 +3,7 @@ import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { handleRouteError, success } from "@/lib/api/response";
 import { serializeAdminReview } from "@/lib/api/reviews";
 import { requireAdmin } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { isObjectId, toPositiveInteger } from "@/lib/validation";
 import Review from "@/models/Review";
 
@@ -13,6 +14,10 @@ export function OPTIONS(request) {
 }
 
 export async function GET(request) {
+  return withRuntimeDatabase(() => getAdminReviewsRoute(request));
+}
+
+async function getAdminReviewsRoute(request) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);

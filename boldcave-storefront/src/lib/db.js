@@ -1,13 +1,28 @@
 import mongoose from "mongoose";
+import { getRuntimeDatabaseContext } from "@/lib/runtimeDatabaseContext";
 
-const globalCache = globalThis.__mongooseConnection || {
-  conn: null,
-  promise: null,
-};
+function getGlobalCache() {
+  if (!globalThis.__mongooseConnection) {
+    globalThis.__mongooseConnection = {
+      conn: null,
+      promise: null,
+    };
+  }
 
-globalThis.__mongooseConnection = globalCache;
+  return globalThis.__mongooseConnection;
+}
 
 export async function connectDB() {
+  const runtimeContext = getRuntimeDatabaseContext();
+  if (runtimeContext?.connection) {
+    return runtimeContext.connection;
+  }
+
+  if (process.env.DB_RUNTIME === "cloudflare") {
+    throw new Error("Runtime database context is required");
+  }
+
+  const globalCache = getGlobalCache();
   if (globalCache.conn) {
     return globalCache.conn;
   }

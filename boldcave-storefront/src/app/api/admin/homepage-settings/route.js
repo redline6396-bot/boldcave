@@ -2,6 +2,7 @@ import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { handleRouteError, noStoreHeaders, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import {
   getSerializedHomepageSettings,
   serializeHomepageSettings,
@@ -15,6 +16,10 @@ export function OPTIONS(request) {
 }
 
 export async function GET(request) {
+  return withRuntimeDatabase(() => getAdminHomepageSettingsRoute(request));
+}
+
+async function getAdminHomepageSettingsRoute(request) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);
@@ -32,6 +37,10 @@ export async function GET(request) {
 }
 
 export async function PATCH(request) {
+  return withRuntimeDatabase(() => updateAdminHomepageSettingsRoute(request));
+}
+
+async function updateAdminHomepageSettingsRoute(request) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);

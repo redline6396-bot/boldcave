@@ -1,6 +1,7 @@
 import connectDB from "@/lib/db";
 import { handleRouteError, success } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import Order from "@/models/Order";
 
 export const runtime = "nodejs";
@@ -13,6 +14,10 @@ const placedOrderFilter = {
 };
 
 export async function GET(request) {
+  return withRuntimeDatabase(() => getMyOrdersRoute(request));
+}
+
+async function getMyOrdersRoute(request) {
   try {
     const auth = await requireUser(request);
     if (auth.response) return auth.response;

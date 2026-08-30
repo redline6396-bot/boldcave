@@ -3,6 +3,7 @@ import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, success } from "@/lib/api/response";
 import { serializeProductWithCombos } from "@/lib/api/products";
 import { requireAdmin } from "@/lib/auth/session";
+import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { clearProductCache } from "@/lib/productCache";
 import { cleanString, isObjectId, slugify } from "@/lib/validation";
 import Product from "@/models/Product";
@@ -86,7 +87,11 @@ const copyProductFields = (source, copyNumber) => {
   };
 };
 
-export async function POST(request, { params }) {
+export async function POST(request, context) {
+  return withRuntimeDatabase(() => createTestCopiesRoute(request, context));
+}
+
+async function createTestCopiesRoute(request, { params }) {
   try {
     const auth = await requireAdmin(request);
     if (auth.response) return applyAdminCors(request, auth.response);

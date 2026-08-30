@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+import { createRuntimeModel } from "@/lib/runtimeModel";
+
 const otpRateLimitSchema = new mongoose.Schema(
   {
     key: { type: String, required: true, unique: true },
@@ -15,8 +17,10 @@ const otpRateLimitSchema = new mongoose.Schema(
 
 otpRateLimitSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-const OtpRateLimit =
+export const OtpRateLimitSchema = otpRateLimitSchema;
+
+const OtpRateLimitModel =
   mongoose.models.OtpRateLimit ||
   mongoose.model("OtpRateLimit", otpRateLimitSchema);
 
-export default OtpRateLimit;
+export default createRuntimeModel("OtpRateLimit", OtpRateLimitModel);
