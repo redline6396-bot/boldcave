@@ -2,7 +2,7 @@ import ProductDetailClient from "./ProductDetailClient";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { getProductBySlug } from "@/lib/products/public";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 function getProductLoadErrorType(error) {
   if (error?.code === "PRODUCT_NOT_FOUND") {

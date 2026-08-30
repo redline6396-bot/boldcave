@@ -47,6 +47,15 @@ const eslintConfig = defineConfig([
       "no-unused-vars": "off",
     },
   },
+  {
+    files: ["server.js"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: {
+        require: "readonly",
+      },
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -1,5 +1,10 @@
 import connectDB from "@/lib/db";
-import { failure, handleRouteError, success } from "@/lib/api/response";
+import {
+  failure,
+  handleRouteError,
+  publicBrowseCacheHeaders,
+  success,
+} from "@/lib/api/response";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { getReviewStats } from "@/lib/orders/pricing";
 import { isObjectId } from "@/lib/validation";
@@ -26,23 +31,27 @@ async function getProductReviewsRoute(_request, { params }) {
 
     const stats = await getReviewStats(reviews[0]?.product || productId);
 
-    return success({
-      reviews: reviews.map((review) => ({
-        id: String(review._id),
-        rating: review.rating,
-        title: review.title || "",
-        text: review.text,
-        photos: review.photos || [],
-        verifiedPurchase: review.verifiedPurchase,
-        user: {
-          firstName: review.user?.firstName || "Customer",
-          lastName: review.user?.lastName || "",
-        },
-        createdAt: review.createdAt,
-        updatedAt: review.updatedAt,
-      })),
-      rating: stats,
-    });
+    return success(
+      {
+        reviews: reviews.map((review) => ({
+          id: String(review._id),
+          rating: review.rating,
+          title: review.title || "",
+          text: review.text,
+          photos: review.photos || [],
+          verifiedPurchase: review.verifiedPurchase,
+          user: {
+            firstName: review.user?.firstName || "Customer",
+            lastName: review.user?.lastName || "",
+          },
+          createdAt: review.createdAt,
+          updatedAt: review.updatedAt,
+        })),
+        rating: stats,
+      },
+      200,
+      { headers: publicBrowseCacheHeaders }
+    );
   } catch (error) {
     return handleRouteError(error);
   }
