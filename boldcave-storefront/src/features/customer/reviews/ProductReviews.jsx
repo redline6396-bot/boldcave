@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
-  Loader2,
   Upload,
   X,
 } from "lucide-react";
@@ -445,10 +444,7 @@ export default function ProductReviews({ productId }) {
         </h2>
 
         {loading ? (
-          <div className="mt-12 flex items-center justify-center gap-3 text-[12px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
-            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.7} />
-            Loading reviews
-          </div>
+          <ReviewLoadingSkeleton />
         ) : loadError ? (
           <div className="mt-8 border-y border-neutral-200 py-6 text-center">
             <p className="text-[13px] leading-5 text-neutral-500">
@@ -653,6 +649,53 @@ export default function ProductReviews({ productId }) {
         </div>
       )}
     </>
+  );
+}
+
+function ReviewLoadingSkeleton() {
+  return (
+    <div className="mt-5 sm:mt-7" aria-hidden="true">
+      <div className="grid gap-5 sm:gap-7 lg:grid-cols-[0.95fr_1.08fr_0.78fr] lg:items-center lg:gap-8">
+        <div className="flex flex-col items-center text-center lg:items-start lg:border-r lg:border-neutral-200 lg:py-4 lg:pr-8">
+          <div className="h-6 w-48 bg-neutral-100 sm:h-7" />
+          <div className="mt-4 h-4 w-36 bg-neutral-100" />
+        </div>
+
+        <div className="space-y-2.5 sm:space-y-3.5 lg:border-r lg:border-neutral-200 lg:py-3 lg:pr-8">
+          {[5, 4, 3, 2, 1].map((star) => (
+            <div
+              key={star}
+              className="grid grid-cols-[82px_minmax(0,1fr)_30px] items-center gap-3 sm:grid-cols-[96px_minmax(0,1fr)_38px] sm:gap-4"
+            >
+              <div className="h-4 w-20 bg-neutral-100" />
+              <div className="h-1.5 bg-neutral-100 sm:h-2" />
+              <div className="h-3 w-5 justify-self-end bg-neutral-100" />
+            </div>
+          ))}
+        </div>
+
+        <div className="flex justify-center lg:justify-end">
+          <div className="h-10 w-[176px] border border-neutral-200 bg-neutral-100 sm:h-12 sm:w-[210px]" />
+        </div>
+      </div>
+
+      <div className="mt-9 border-t border-neutral-200 sm:mt-11">
+        <div className="h-[50px] border-b border-neutral-200 sm:h-[60px]">
+          <div className="h-full w-32 bg-neutral-100" />
+        </div>
+        {[0, 1].map((item) => (
+          <div key={item} className="border-b border-neutral-200 py-4 sm:py-6 sm:pb-8">
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="h-4 w-28 bg-neutral-100" />
+              <div className="h-4 w-24 bg-neutral-100" />
+            </div>
+            <div className="mt-3 h-4 w-40 bg-neutral-100" />
+            <div className="mt-3 h-4 max-w-[720px] bg-neutral-100" />
+            <div className="mt-2 h-4 max-w-[520px] bg-neutral-100" />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

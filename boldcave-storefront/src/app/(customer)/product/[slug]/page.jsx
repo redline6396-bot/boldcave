@@ -18,7 +18,7 @@ export default async function ProductPage({ params }) {
   let loadErrorType = "";
 
   try {
-    product = await getProductBySlug(slug, { includeRating: true });
+    product = await getProductBySlug(slug);
   } catch (error) {
     loadErrorType = getProductLoadErrorType(error);
     loadError =
@@ -30,7 +30,7 @@ export default async function ProductPage({ params }) {
   return (
     <ProductDetailClient
       initialProduct={product}
-      initialReviewSummary={product?.rating || null}
+      initialReviewSummary={null}
       initialLoadError={loadError}
       initialLoadErrorType={loadErrorType}
     />
