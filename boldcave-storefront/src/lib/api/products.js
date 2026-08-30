@@ -117,7 +117,7 @@ export async function serializeProductWithCombos(product, options = {}) {
     return serializeProduct(object, options);
   }
 
-  const Product = (await import("@/models/Product")).default;
+  const Product = options.ProductModel || (await import("@/models/Product")).default;
   const rawComboItems = object.comboItems || [];
   const referencedIds = Array.from(
     new Set(

@@ -25,6 +25,8 @@ const reviewSchema = new mongoose.Schema(
 reviewSchema.index({ product: 1, user: 1 }, { unique: true });
 reviewSchema.index({ product: 1, approved: 1, createdAt: -1 });
 
+export const ReviewSchema = reviewSchema;
+
 const Review = mongoose.models.Review || mongoose.model("Review", reviewSchema);
 
 export default Review;

@@ -116,6 +116,8 @@ if (
   delete mongoose.models.Product;
 }
 
+export const ProductSchema = productSchema;
+
 const Product = mongoose.models.Product || mongoose.model("Product", productSchema);
 
 export default Product;
