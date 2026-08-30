@@ -66,13 +66,13 @@ export default function CheckoutSheet({
 
       <style jsx>{`
         .checkout-sheet-panel {
-          max-height: 90dvh;
+          max-height: 90svh;
           animation: sheetUpMobile 220ms ease-out;
         }
 
         .checkout-sheet-mobile-full {
-          height: 100dvh;
-          max-height: 100dvh;
+          height: 100svh;
+          max-height: 100svh;
         }
 
         .checkout-sheet-mobile-full .checkout-sheet-frame {
@@ -108,7 +108,7 @@ export default function CheckoutSheet({
           .checkout-sheet-panel {
             position: fixed;
             left: 50%;
-            bottom: calc(50% - min(380px, 45dvh));
+            bottom: calc(50% - min(380px, 45svh));
             width: 450px;
             height: var(--sheet-desktop-height);
             max-height: var(--sheet-desktop-max-height);

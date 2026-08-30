@@ -148,20 +148,42 @@ function getCheckoutViewportHeight() {
   if (typeof window === "undefined") return null;
 
   const height =
-    window.visualViewport?.height ||
-    window.innerHeight ||
-    document.documentElement.clientHeight;
+    document.documentElement.clientHeight ||
+    window.innerHeight;
 
   return height ? Math.floor(height) : null;
 }
 
 function useCheckoutViewportHeight() {
   const [height, setHeight] = useState(null);
+  const stableHeightRef = useRef(null);
 
   useEffect(() => {
     const updateHeight = () => {
       const nextHeight = getCheckoutViewportHeight();
-      if (nextHeight) setHeight(nextHeight);
+      if (!nextHeight) return;
+
+      const activeElement = document.activeElement;
+      const inputFocused =
+        activeElement &&
+        (["INPUT", "TEXTAREA", "SELECT"].includes(
+          activeElement.tagName
+        ) ||
+          activeElement.isContentEditable);
+
+      const stableHeight = stableHeightRef.current;
+
+      if (
+        inputFocused &&
+        stableHeight &&
+        nextHeight < stableHeight - 120
+      ) {
+        setHeight(stableHeight);
+        return;
+      }
+
+      stableHeightRef.current = nextHeight;
+      setHeight(nextHeight);
     };
 
     updateHeight();
@@ -251,7 +273,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   const checkoutViewportStyle = {
     "--checkout-viewport-height": checkoutViewportHeight
       ? `${checkoutViewportHeight}px`
-      : "100dvh",
+      : "100svh",
     fontFamily: '"Helvetica Neue", Arial, sans-serif',
   };
 
@@ -1239,7 +1261,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
       style={checkoutViewportStyle}
     >
       <div className="flex h-full min-h-0 w-full max-w-[100dvw] items-stretch justify-center overflow-x-hidden sm:items-center">
-        <section className="relative flex h-full min-h-0 w-full max-w-[100dvw] flex-col overflow-hidden bg-[#f7f8f9] text-[#111b28] sm:h-[760px] sm:max-h-[90dvh] sm:max-w-[450px] sm:rounded-[18px] sm:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+        <section className="relative flex h-full min-h-0 w-full max-w-[100dvw] flex-col overflow-hidden bg-[#f7f8f9] text-[#111b28] sm:h-[760px] sm:max-h-[90svh] sm:max-w-[450px] sm:rounded-[18px] sm:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
           <header className="flex h-[62px] shrink-0 items-center justify-between border-b border-[#e0e4e8] bg-white px-4 sm:px-5">
             <button
               type="button"

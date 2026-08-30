@@ -78,7 +78,7 @@ export default function OrderSummary({
           </div>
         </div>
 
-        <div className="summary-scroll max-h-[36dvh] min-h-0 overflow-y-auto px-4 sm:max-h-none sm:flex-1 sm:px-5">
+        <div className="summary-scroll max-h-[36svh] min-h-0 overflow-y-auto px-4 sm:max-h-none sm:flex-1 sm:px-5">
           {items.map(
             ({ productId, size, quantity, product, variant }) => {
               const image =

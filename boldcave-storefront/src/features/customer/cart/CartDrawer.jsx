@@ -202,7 +202,7 @@ export default function CartDrawer({ isOpen, onClose }) {
       <aside
         aria-hidden={!isOpen}
         className={[
-          "fixed bottom-0 right-0 top-0 z-[121] flex h-dvh w-full max-w-[420px] flex-col bg-white text-neutral-950 shadow-xl transition-transform duration-300 ease-out sm:max-w-[430px]",
+          "fixed bottom-0 right-0 top-0 z-[121] flex h-[100svh] w-full max-w-[420px] flex-col bg-white text-neutral-950 shadow-xl transition-transform duration-300 ease-out sm:max-w-[430px]",
           isOpen
             ? "translate-x-0"
             : "translate-x-[calc(100%+2px)]",
@@ -496,7 +496,7 @@ export default function CartDrawer({ isOpen, onClose }) {
               </div>
             </div>
           ) : (
-            <div className="flex h-full min-h-[260px] items-center justify-center px-6 pb-[10dvh] text-center">
+            <div className="flex h-full min-h-[260px] items-center justify-center px-6 pb-[10svh] text-center">
               <div>
                 <p className="text-[17px] font-semibold uppercase tracking-[0.08em] text-neutral-950">
                   YOUR CART IS EMPTY
