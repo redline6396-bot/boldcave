@@ -9,6 +9,11 @@ import {
 const CLOUDFLARE_MONGOOSE_OPTIONS = {
   bufferCommands: false,
 
+  // Request-scoped Cloudflare connections should not
+  // perform automatic index/collection setup.
+  autoIndex: false,
+  autoCreate: false,
+
   serverMonitoringMode: "poll",
 
   serverSelectionTimeoutMS: 10000,
@@ -66,10 +71,13 @@ async function getConnectionModels(connection) {
   };
 
   return Object.fromEntries(
-    Object.entries(modelDefinitions).map(([name, schema]) => [
-      name,
-      connection.models[name] || connection.model(name, schema),
-    ])
+    Object.entries(modelDefinitions).map(
+      ([name, schema]) => [
+        name,
+        connection.models[name] ||
+          connection.model(name, schema),
+      ],
+    ),
   );
 }
 
@@ -78,44 +86,85 @@ export function isCloudflareDbRuntime() {
 }
 
 export async function withRuntimeDatabase(operation) {
-  const currentContext = getRuntimeDatabaseContext();
-  if (currentContext?.connection && currentContext?.models) {
+  const currentContext =
+    getRuntimeDatabaseContext();
+
+  // Nested DB work inside the same request should reuse
+  // the existing request-scoped connection.
+  if (
+    currentContext?.connection &&
+    currentContext?.models
+  ) {
     return operation({
       ...currentContext,
       ...currentContext.models,
     });
   }
 
+  // Preserve existing fast Vercel / Node behavior.
   if (!isCloudflareDbRuntime()) {
     const connection = await connectDB();
-    return operation({ connection, runtime: "node" });
+
+    return operation({
+      connection,
+      runtime: "node",
+    });
   }
 
   return withCloudflareRuntimeDatabase(operation);
 }
 
-async function withCloudflareRuntimeDatabase(operation) {
+async function withCloudflareRuntimeDatabase(
+  operation,
+) {
   const uri = process.env.MONGODB_URI;
 
   if (!uri) {
-    throw new Error("MONGODB_URI is not configured");
+    throw new Error(
+      "MONGODB_URI is not configured",
+    );
   }
 
-  const connection = mongoose.createConnection(
-    uri,
-    CLOUDFLARE_MONGOOSE_OPTIONS,
-  );
+  const connection =
+    mongoose.createConnection(
+      uri,
+      CLOUDFLARE_MONGOOSE_OPTIONS,
+    );
 
   try {
     await connection.asPromise();
 
-    const models = await getConnectionModels(connection);
+    const models =
+      await getConnectionModels(connection);
 
     return await runWithRuntimeDatabaseContext(
-      { connection, models, runtime: "cloudflare" },
-      () => operation({ connection, models, runtime: "cloudflare", ...models })
+      {
+        connection,
+        models,
+        runtime: "cloudflare",
+      },
+      () =>
+        operation({
+          connection,
+          models,
+          runtime: "cloudflare",
+          ...models,
+        }),
     );
   } finally {
-    await connection.destroy().catch(() => {});
+    // destroy() also removes this request-scoped
+    // connection from Mongoose's connection list.
+    // Fallback is only for older Mongoose versions.
+    if (
+      typeof connection.destroy === "function"
+    ) {
+      await connection
+        .destroy()
+        .catch(() => {});
+    } else {
+      await connection
+        .close()
+        .catch(() => {});
+    }
   }
 }

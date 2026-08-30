@@ -124,6 +124,7 @@ export default function CouponSection({
   maxVisibleOffers = 3,
   activeDiscount = null,
   inactiveAppliedText = "",
+  collapsible = false,
 }) {
   const {
     couponCode,
@@ -152,6 +153,9 @@ export default function CouponSection({
   const [expandedOffers, setExpandedOffers] =
     useState([]);
 
+  const [couponPanelOpen, setCouponPanelOpen] =
+    useState(false);
+
   const displayDiscount =
     activeDiscount === null
       ? Number(discount) || 0
@@ -161,6 +165,9 @@ export default function CouponSection({
 
   const couponContributes =
     applied && displayDiscount > 0;
+
+  const availableOffersExpanded =
+    !collapsible || couponPanelOpen;
 
   const visibleOfferLimit = Math.max(
     1,
@@ -203,7 +210,11 @@ export default function CouponSection({
   useEffect(() => {
     let activeRequest = true;
 
-    if (!showEligibleOffers || disabled) {
+    if (
+      !showEligibleOffers ||
+      !availableOffersExpanded ||
+      disabled
+    ) {
       setEligibleCoupons([]);
 
       return () => {
@@ -230,6 +241,7 @@ export default function CouponSection({
     };
   }, [
     disabled,
+    availableOffersExpanded,
     showEligibleOffers,
     subtotal,
   ]);
@@ -416,11 +428,52 @@ export default function CouponSection({
           AVAILABLE OFFERS
       ================================================= */}
 
-      {showEligibleOffers &&
-        eligibleCoupons.length > 0 &&
-        !applied && (
-          <div className="mb-3">
-            <div className="divide-y divide-[#eceff2]">
+      {collapsible && showEligibleOffers && !applied && (
+        <button
+          type="button"
+          onClick={() =>
+            setCouponPanelOpen((current) => !current)
+          }
+          className="mb-2.5 flex h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-[10px] border border-[#d8dee5] bg-white px-3.5 text-left transition-[border-color,background-color] hover:border-[#c5ccd4] hover:bg-[#fcfcfd] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-neutral-500"
+          aria-expanded={availableOffersExpanded}
+        >
+          <span className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#d8dee5] bg-[#f7f8f9]">
+              <BadgePercent
+                className="h-[15px] w-[15px] text-[#263443]"
+                strokeWidth={1.8}
+              />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[12px] font-semibold uppercase tracking-[0.05em] text-[#111b28]">
+                Show coupons
+              </span>
+              <span className="mt-0.5 block truncate text-[10.5px] text-[#697481]">
+                View available offers
+              </span>
+            </span>
+          </span>
+
+          {availableOffersExpanded ? (
+            <ChevronUp
+              className="h-4 w-4 shrink-0 text-[#526173]"
+              strokeWidth={1.7}
+            />
+          ) : (
+            <ChevronDown
+              className="h-4 w-4 shrink-0 text-[#526173]"
+              strokeWidth={1.7}
+            />
+          )}
+        </button>
+      )}
+
+      {availableOffersExpanded &&
+        showEligibleOffers &&
+            eligibleCoupons.length > 0 &&
+            !applied && (
+              <div className="mb-3 rounded-none border border-[#e2e6ea] bg-[#f1faf3] px-3">
+                <div className="divide-y divide-[#eceff2]">
               {visibleEligibleCoupons.map(
                 (coupon) => {
                   const conditions =
@@ -467,7 +520,7 @@ export default function CouponSection({
                             disabled ||
                             validating
                           }
-                          className="shrink-0 rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-[#111b28] transition-colors hover:bg-black/[0.045] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-neutral-500 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="shrink-0 cursor-pointer rounded-md border border-[#d8dee5] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#111b28] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-neutral-500 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Apply
                         </button>
@@ -488,7 +541,7 @@ export default function CouponSection({
                                 coupon.code,
                               )
                             }
-                            className="inline-flex items-center gap-1 rounded px-0.5 py-1 text-[10px] font-medium text-[#697481] transition-colors hover:text-[#111b28] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-neutral-500"
+                            className="inline-flex cursor-pointer items-center gap-1 rounded px-0.5 py-1 text-[10px] font-medium text-[#697481] transition-colors hover:text-[#111b28] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-neutral-500"
                           >
                             {expanded
                               ? "Hide details"
@@ -558,13 +611,13 @@ export default function CouponSection({
                       true,
                     )
                   }
-                  className="mt-1 rounded px-1.5 py-1 text-[10px] font-medium text-[#65707d] transition-colors hover:bg-black/[0.04] hover:text-[#111b28]"
+                  className="mt-1 cursor-pointer rounded px-1.5 py-1 text-[10px] font-medium text-[#65707d] transition-colors hover:bg-black/[0.04] hover:text-[#111b28]"
                 >
                   View more offers
                 </button>
               )}
-          </div>
-        )}
+              </div>
+            )}
 
       {/* =================================================
           SAME COUPON BOX
@@ -669,7 +722,7 @@ export default function CouponSection({
             type="button"
             onClick={removeCoupon}
             disabled={disabled}
-            className="min-w-[82px] shrink-0 border-l border-[#ead8d5] bg-[#fffafa] px-3 text-[10.5px] font-semibold text-[#a53329] transition-colors hover:bg-[#fff2f0] hover:text-[#8f2118] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-[-2px] focus-visible:outline-[#b42318] disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[96px] sm:px-4 sm:text-[11px]"
+            className="min-w-[82px] shrink-0 cursor-pointer border-l border-[#ead8d5] bg-[#fffafa] px-3 text-[10.5px] font-semibold text-[#a53329] transition-colors hover:bg-[#fff2f0] hover:text-[#8f2118] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-[-2px] focus-visible:outline-[#b42318] disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[96px] sm:px-4 sm:text-[11px]"
           >
             Remove
           </button>
@@ -683,7 +736,7 @@ export default function CouponSection({
               disabled ||
               validating
             }
-            className="min-w-[82px] shrink-0 border-l border-black bg-black px-3 text-[10.5px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-[-2px] focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:min-w-[96px] sm:px-4 sm:text-[11px]"
+            className="min-w-[82px] shrink-0 cursor-pointer border-l border-black bg-black px-3 text-[10.5px] font-semibold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-[-2px] focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:min-w-[96px] sm:px-4 sm:text-[11px]"
           >
             {validating
               ? "Checking"

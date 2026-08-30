@@ -162,21 +162,21 @@ export default function CartPage() {
               </h2>
 
               <div className="mt-5 border-b border-neutral-200 pb-5">
-                <label className="text-[12px] font-semibold uppercase tracking-[0.09em] text-neutral-700">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.09em] text-neutral-700">
                   Coupon
-                </label>
+                </p>
                 <div className="mt-3 flex h-11 border border-neutral-300">
                   <input
                     value={couponCode}
                     onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
                     placeholder="Enter code"
-                    className="min-w-0 flex-1 px-3 text-[13px] uppercase outline-none"
+                    className="min-w-0 flex-1 px-3 text-[16px] uppercase outline-none sm:text-[13px]"
                   />
                   {appliedCoupon?.code ? (
                     <button
                       type="button"
                       onClick={removeCoupon}
-                      className="border-l border-neutral-300 px-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-700 hover:bg-neutral-100"
+                      className="cursor-pointer border-l border-neutral-300 px-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-700 hover:bg-neutral-100"
                     >
                       Remove
                     </button>
@@ -185,7 +185,7 @@ export default function CartPage() {
                       type="button"
                       onClick={() => applyCoupon()}
                       disabled={validating}
-                      className="border-l border-neutral-300 px-4 text-[11px] font-semibold uppercase tracking-[0.08em] disabled:cursor-not-allowed disabled:text-neutral-300"
+                      className="cursor-pointer border-l border-neutral-300 px-4 text-[11px] font-semibold uppercase tracking-[0.08em] disabled:cursor-not-allowed disabled:text-neutral-300"
                     >
                       {validating ? "Checking" : "Apply"}
                     </button>

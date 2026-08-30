@@ -144,8 +144,48 @@ function extractLocation(result = {}) {
   };
 }
 
+function getCheckoutViewportHeight() {
+  if (typeof window === "undefined") return null;
+
+  const height =
+    window.visualViewport?.height ||
+    window.innerHeight ||
+    document.documentElement.clientHeight;
+
+  return height ? Math.floor(height) : null;
+}
+
+function useCheckoutViewportHeight() {
+  const [height, setHeight] = useState(null);
+
+  useEffect(() => {
+    const updateHeight = () => {
+      const nextHeight = getCheckoutViewportHeight();
+      if (nextHeight) setHeight(nextHeight);
+    };
+
+    updateHeight();
+
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", updateHeight);
+    viewport?.addEventListener("scroll", updateHeight);
+    window.addEventListener("resize", updateHeight);
+    window.addEventListener("orientationchange", updateHeight);
+
+    return () => {
+      viewport?.removeEventListener("resize", updateHeight);
+      viewport?.removeEventListener("scroll", updateHeight);
+      window.removeEventListener("resize", updateHeight);
+      window.removeEventListener("orientationchange", updateHeight);
+    };
+  }, []);
+
+  return height;
+}
+
 export default function CheckoutPage({ onClose, onSuccess } = {}) {
   const router = useRouter();
+  const checkoutViewportHeight = useCheckoutViewportHeight();
   const {
     user,
     loading: authLoading,
@@ -208,6 +248,12 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   const otpRefs = useRef([]);
   const checkoutPhoneRef = useRef(null);
   const checkoutPhoneInitializedRef = useRef(false);
+  const checkoutViewportStyle = {
+    "--checkout-viewport-height": checkoutViewportHeight
+      ? `${checkoutViewportHeight}px`
+      : "100dvh",
+    fontFamily: '"Helvetica Neue", Arial, sans-serif',
+  };
 
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
@@ -1189,11 +1235,11 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
 
   return (
     <div
-      className="fixed inset-0 z-[200] overflow-x-hidden overflow-y-auto bg-black/60 sm:p-5"
-      style={{ fontFamily: '"Helvetica Neue", Arial, sans-serif' }}
+      className="fixed inset-0 z-[200] h-[var(--checkout-viewport-height)] max-h-[var(--checkout-viewport-height)] overflow-x-hidden overflow-y-auto bg-black/60 sm:p-5"
+      style={checkoutViewportStyle}
     >
-      <div className="flex min-h-full w-full max-w-[100dvw] items-stretch justify-center overflow-x-hidden sm:items-center">
-        <section className="relative flex min-h-[100dvh] w-full max-w-[100dvw] flex-col overflow-hidden bg-[#f7f8f9] text-[#111b28] sm:h-[760px] sm:min-h-0 sm:max-h-[90dvh] sm:max-w-[450px] sm:rounded-[18px] sm:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+      <div className="flex h-full min-h-0 w-full max-w-[100dvw] items-stretch justify-center overflow-x-hidden sm:items-center">
+        <section className="relative flex h-full min-h-0 w-full max-w-[100dvw] flex-col overflow-hidden bg-[#f7f8f9] text-[#111b28] sm:h-[760px] sm:max-h-[90dvh] sm:max-w-[450px] sm:rounded-[18px] sm:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
           <header className="flex h-[62px] shrink-0 items-center justify-between border-b border-[#e0e4e8] bg-white px-4 sm:px-5">
             <button
               type="button"
@@ -1285,7 +1331,9 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                   disabled={hasUnresolvedCart || submitting}
                   paymentMethod={paymentMethod}
                   subtotal={subtotal}
-                  
+                  showEligibleOffers
+                  maxVisibleOffers={2}
+                  collapsible
                   identityHint="Verify your mobile to view eligible offers"
                 />
               </div>
@@ -1377,7 +1425,9 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                     disabled={hasUnresolvedCart || submitting}
                     paymentMethod={paymentMethod}
                     subtotal={subtotal}
-                  
+                    showEligibleOffers
+                    maxVisibleOffers={2}
+                    collapsible
                     activeDiscount={couponDiscount}
                     inactiveAppliedText={
                       paymentMethod === "razorpay" &&
@@ -1429,7 +1479,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
             )}
           </div>
 
-          <footer className="w-full max-w-full shrink-0 overflow-hidden border-t border-[#e0e4e8] bg-white px-4 pb-[max(10px,env(safe-area-inset-bottom))] pt-3">
+          <footer className="w-full max-w-full shrink-0 overflow-hidden border-t border-[#e0e4e8] bg-white px-4 pb-[max(22px,calc(env(safe-area-inset-bottom)+14px))] pt-3 sm:pb-3">
             <label className="mb-3 flex cursor-pointer items-center gap-2.5 text-[11px] text-[#263443] sm:text-[12px]">
               <input
                 type="checkbox"
