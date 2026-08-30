@@ -156,6 +156,7 @@ export default function ProductDetailClient({
   initialProduct = null,
   initialReviewSummary = null,
   initialLoadError = "",
+  initialLoadErrorType = "",
 }) {
   const { cart, addToCart, rememberProducts } = useCart();
   const { acceptingOrders } = useStoreSettings();
@@ -344,20 +345,33 @@ export default function ProductDetailClient({
   }, [galleryImages, preloadMainGalleryImage, selectedImage]);
 
   if (!product) {
+    const isTemporaryLoadError = initialLoadErrorType === "temporary";
+
     return (
       <main className="min-h-screen bg-white px-5 py-20 text-center text-neutral-950">
         <h1 className="text-[30px] font-semibold uppercase leading-tight tracking-[0.04em] sm:text-[42px]">
-          Product not found
+          {isTemporaryLoadError ? "Unable to load product" : "Product not found"}
         </h1>
         <p className="mx-auto mt-4 max-w-[420px] text-[14px] leading-6 text-neutral-500">
           {initialLoadError || "The product you are looking for is not available."}
         </p>
-        <Link
-          href="/collection"
-          className="mt-8 inline-flex h-11 items-center justify-center border border-neutral-950 px-7 text-[12px] font-semibold uppercase tracking-[0.09em] transition-colors duration-200 hover:bg-neutral-950 hover:text-white"
-        >
-          Back to Shop
-        </Link>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          {isTemporaryLoadError && (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="inline-flex h-11 cursor-pointer items-center justify-center border border-neutral-950 bg-neutral-950 px-7 text-[12px] font-semibold uppercase tracking-[0.09em] text-white transition-colors duration-200 hover:bg-white hover:text-neutral-950"
+            >
+              Retry
+            </button>
+          )}
+          <Link
+            href="/collection"
+            className="inline-flex h-11 items-center justify-center border border-neutral-950 px-7 text-[12px] font-semibold uppercase tracking-[0.09em] transition-colors duration-200 hover:bg-neutral-950 hover:text-white"
+          >
+            Back to Shop
+          </Link>
+        </div>
       </main>
     );
   }

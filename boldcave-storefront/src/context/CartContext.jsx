@@ -58,8 +58,14 @@ const normalizeStoredCart = (items) => {
   }, []);
 };
 
-const normalizeCartWithProducts = (items, productMap) => {
-  if (!productMap.size) {
+const normalizeCartWithProducts = (
+  items,
+  productMap,
+  { removeMissingProductIds = [] } = {}
+) => {
+  const missingProductIdsToRemove = new Set(removeMissingProductIds);
+
+  if (!productMap.size && !missingProductIdsToRemove.size) {
     return normalizeStoredCart(items);
   }
 
@@ -67,7 +73,13 @@ const normalizeCartWithProducts = (items, productMap) => {
     const product = productMap.get(item.productId);
     const variant = findVariant(product, item.size);
 
-    if (!product || !variant || Number(variant.stock) <= 0) {
+    if (!product) {
+      return missingProductIdsToRemove.has(item.productId)
+        ? cart
+        : [...cart, item];
+    }
+
+    if (!variant || Number(variant.stock) <= 0) {
       return cart;
     }
 
@@ -181,9 +193,31 @@ export function CartProvider({ children }) {
 
     fetchProductsByIds(missingProductIds)
       .then((products) => {
-        if (isMounted) {
-          rememberProducts(products);
+        if (!isMounted) {
+          return;
         }
+
+        const resolvedProducts = Array.isArray(products) ? products : [];
+        const resolvedProductMap = new Map(productMap);
+
+        resolvedProducts.forEach((product) => {
+          getProductKeys(product).forEach((productKey) => {
+            resolvedProductMap.set(productKey, product);
+          });
+        });
+
+        rememberProducts(resolvedProducts);
+        setCart((currentCart) => {
+          const normalizedCart = normalizeCartWithProducts(
+            currentCart,
+            resolvedProductMap,
+            { removeMissingProductIds: missingProductIds }
+          );
+
+          return areCartItemsEqual(currentCart, normalizedCart)
+            ? currentCart
+            : normalizedCart;
+        });
       })
       .catch(() => {});
 
