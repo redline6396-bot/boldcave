@@ -254,9 +254,17 @@ export default function DeliveryAddress({
     setLocalError("");
 
     try {
-      // Always verify the CURRENT edited pincode before validating/saving.
-      // This also fills city/state if the user changed the pincode in Edit Address.
-      const result = await onCheckServiceability(editorDraft);
+      const alreadyServiceable =
+        serviceability.status === "serviceable" &&
+        serviceability.pincode === pin;
+
+      const result = alreadyServiceable
+        ? {
+            serviceable: true,
+            city: editorDraft.city,
+            state: editorDraft.state,
+          }
+        : await onCheckServiceability(editorDraft);
 
       if (!result?.serviceable) {
         setLocalError(

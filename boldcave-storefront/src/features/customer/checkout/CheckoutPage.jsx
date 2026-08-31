@@ -734,7 +734,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
       }
 
       await updateCurrentUser({ addresses: nextAddresses });
-      await refreshUser();
+      refreshUser().catch(() => {});
 
       return nextIndex;
     },
@@ -1522,7 +1522,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                           onChange={setPaymentMethod}
                           codAvailable={codAvailable}
                           serviceable
-                          disabled={submitting || pricingPreviewLoading}
+                          disabled={submitting}
                           prepaidDiscountSettings={prepaidDiscountSettings}
                           onlineAmount={onlinePricing.finalAmount}
                           codAmount={codPricing.finalAmount}

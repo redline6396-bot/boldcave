@@ -27,6 +27,9 @@ const CheckoutPage = dynamic(
   { ssr: false }
 );
 
+const CHECKOUT_HISTORY_KEY = "__boldcaveCheckout";
+const MOBILE_CHECKOUT_HISTORY_QUERY = "(max-width: 639px)";
+
 const ROUTES = {
   shopAll: "/collection",
   men: "/collection?category=Men",
@@ -151,6 +154,32 @@ function ProfileLink({ isAuthenticated, onClick, className = "" }) {
       />
     </button>
   );
+}
+
+function shouldUseMobileCheckoutHistory() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return (
+    window.matchMedia?.(MOBILE_CHECKOUT_HISTORY_QUERY).matches ?? false
+  );
+}
+
+function clearCheckoutHistoryMarker() {
+  if (
+    typeof window === "undefined" ||
+    !window.history.state?.[CHECKOUT_HISTORY_KEY]
+  ) {
+    return;
+  }
+
+  const {
+    [CHECKOUT_HISTORY_KEY]: _checkoutHistory,
+    ...rest
+  } = window.history.state;
+
+  window.history.replaceState(rest, "", window.location.href);
 }
 
 function BrandLogo({ onClick, className = "" }) {
@@ -362,6 +391,9 @@ export default function MainNavbar() {
   const pathname = usePathname();
   const router = useRouter();
   const navRef = useRef(null);
+  const checkoutOpenRef = useRef(false);
+  const checkoutHistoryActiveRef = useRef(false);
+  const ignoreCheckoutPopRef = useRef(false);
 
   const { getCartCount } = useCart();
   const { isAuthenticated, openAuth } = useAuth();
@@ -421,16 +453,52 @@ export default function MainNavbar() {
 
   const openCheckout = useCallback(() => {
     setIsDrawerOpen(false);
+    setIsCartDrawerOpen(false);
+
+    if (
+      shouldUseMobileCheckoutHistory() &&
+      !checkoutHistoryActiveRef.current
+    ) {
+      if (!window.history.state?.[CHECKOUT_HISTORY_KEY]) {
+        window.history.pushState(
+          {
+            ...(window.history.state || {}),
+            [CHECKOUT_HISTORY_KEY]: true,
+          },
+          "",
+          window.location.href
+        );
+      }
+
+      checkoutHistoryActiveRef.current = true;
+    }
+
     setIsCheckoutOpen(true);
   }, []);
 
   const closeCheckout = useCallback(() => {
     setIsCheckoutOpen(false);
+
+    if (
+      checkoutHistoryActiveRef.current &&
+      shouldUseMobileCheckoutHistory() &&
+      window.history.state?.[CHECKOUT_HISTORY_KEY]
+    ) {
+      ignoreCheckoutPopRef.current = true;
+      checkoutHistoryActiveRef.current = false;
+      window.history.back();
+      return;
+    }
+
+    checkoutHistoryActiveRef.current = false;
   }, []);
 
   const handleCheckoutSuccess = useCallback(() => {
     setIsCheckoutOpen(false);
     setIsCartDrawerOpen(false);
+    checkoutHistoryActiveRef.current = false;
+    ignoreCheckoutPopRef.current = false;
+    clearCheckoutHistoryMarker();
     router.push("/orders");
   }, [router]);
 
@@ -446,12 +514,37 @@ export default function MainNavbar() {
 
   useEffect(() => {
     syncActiveCategory();
-    window.addEventListener("popstate", syncActiveCategory);
+
+    const handlePopState = (event) => {
+      syncActiveCategory();
+
+      if (ignoreCheckoutPopRef.current) {
+        ignoreCheckoutPopRef.current = false;
+        return;
+      }
+
+      if (
+        !checkoutOpenRef.current ||
+        !checkoutHistoryActiveRef.current ||
+        event.state?.[CHECKOUT_HISTORY_KEY]
+      ) {
+        return;
+      }
+
+      checkoutHistoryActiveRef.current = false;
+      setIsCheckoutOpen(false);
+    };
+
+    window.addEventListener("popstate", handlePopState);
 
     return () => {
-      window.removeEventListener("popstate", syncActiveCategory);
+      window.removeEventListener("popstate", handlePopState);
     };
   }, [pathname, syncActiveCategory]);
+
+  useEffect(() => {
+    checkoutOpenRef.current = isCheckoutOpen;
+  }, [isCheckoutOpen]);
 
   useEffect(() => {
     if (!isDrawerOpen) {
