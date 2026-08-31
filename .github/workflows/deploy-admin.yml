@@ -34,13 +34,20 @@ jobs:
             source ~/.nvm/nvm.sh
             nvm use 22.23.2
 
+            echo "Using Node:"
+            node -v
+
             cd ~/boldcave
 
             BEFORE="$(git rev-parse HEAD)"
+
+            echo "Pulling latest code..."
             git pull --ff-only origin main
+
             AFTER="$(git rev-parse HEAD)"
 
             DEPS_CHANGED=false
+
             if [ "$BEFORE" != "$AFTER" ] && git diff --name-only "$BEFORE" "$AFTER" | grep -Eq '^boldcave-admin/(package.json|package-lock.json)$'; then
               DEPS_CHANGED=true
             fi
@@ -54,7 +61,20 @@ jobs:
               echo "Dependencies unchanged; skipping npm ci."
             fi
 
+            echo "Building admin..."
             npm run build
 
-            echo "Admin build completed successfully."
+            echo "Verifying production build..."
+
+            if [ ! -f .next/BUILD_ID ]; then
+              echo "ERROR: Production build verification failed."
+              echo ".next/BUILD_ID was not found."
+              exit 1
+            fi
+
+            echo "Production build verified successfully."
+            echo "BUILD_ID:"
+            cat .next/BUILD_ID
+
+            echo "Admin deployment build completed successfully."
             echo "MilesWeb Node app still needs Restart in mPanel."
