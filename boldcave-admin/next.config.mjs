@@ -11,9 +11,15 @@ const storefrontApiOrigin = (
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    workerThreads: false,
+    cpus: 1,
+  },
+
   turbopack: {
     root: appRoot,
   },
+
   async rewrites() {
     return [
       {
@@ -26,4 +32,8 @@ const nextConfig = {
 
 export default nextConfig;
 
-import('@opennextjs/cloudflare').then(m => m.initOpenNextCloudflareForDev());
+if (process.env.NODE_ENV !== "production") {
+  import("@opennextjs/cloudflare")
+    .then((m) => m.initOpenNextCloudflareForDev())
+    .catch(() => {});
+}
