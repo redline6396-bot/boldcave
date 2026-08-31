@@ -1,6 +1,119 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
+
+const CHECKOUT_SHEET_HISTORY_KEY = "__boldcaveCheckoutSheet";
+const MOBILE_SHEET_QUERY = "(max-width: 639px)";
+
+let sheetId = 0;
+let checkoutSheetStack = [];
+let checkoutSheetHistoryActive = false;
+let ignoreNextCheckoutPop = false;
+let checkoutPopListenerAttached = false;
+let checkoutHistoryCleanupTimer = null;
+
+function isMobileSheetViewport() {
+  if (typeof window === "undefined") return false;
+
+  return window.matchMedia?.(MOBILE_SHEET_QUERY).matches ?? false;
+}
+
+function getTopCheckoutSheet() {
+  return checkoutSheetStack
+    .slice()
+    .sort(
+      (first, second) =>
+        first.zIndex - second.zIndex || first.order - second.order
+    )
+    .at(-1);
+}
+
+function ensureCheckoutPopListener() {
+  if (
+    checkoutPopListenerAttached ||
+    typeof window === "undefined"
+  ) {
+    return;
+  }
+
+  window.addEventListener("popstate", handleCheckoutPopState);
+  checkoutPopListenerAttached = true;
+}
+
+function pushCheckoutSheetHistory() {
+  if (
+    checkoutSheetHistoryActive ||
+    !isMobileSheetViewport() ||
+    typeof window === "undefined"
+  ) {
+    return;
+  }
+
+  window.history.pushState(
+    {
+      ...(window.history.state || {}),
+      [CHECKOUT_SHEET_HISTORY_KEY]: true,
+    },
+    "",
+    window.location.href
+  );
+  checkoutSheetHistoryActive = true;
+}
+
+function handleCheckoutPopState() {
+  if (ignoreNextCheckoutPop) {
+    ignoreNextCheckoutPop = false;
+    return;
+  }
+
+  if (!isMobileSheetViewport() || checkoutSheetStack.length === 0) {
+    checkoutSheetHistoryActive = false;
+    return;
+  }
+
+  checkoutSheetHistoryActive = false;
+  getTopCheckoutSheet()?.onClose?.();
+
+  window.setTimeout(() => {
+    if (checkoutSheetStack.length > 0) {
+      pushCheckoutSheetHistory();
+    }
+  }, 0);
+}
+
+function registerCheckoutSheet(entry) {
+  if (checkoutHistoryCleanupTimer) {
+    window.clearTimeout(checkoutHistoryCleanupTimer);
+    checkoutHistoryCleanupTimer = null;
+  }
+
+  checkoutSheetStack = [...checkoutSheetStack, entry];
+  ensureCheckoutPopListener();
+  pushCheckoutSheetHistory();
+
+  return () => {
+    checkoutSheetStack = checkoutSheetStack.filter(
+      (current) => current.id !== entry.id
+    );
+
+    checkoutHistoryCleanupTimer = window.setTimeout(() => {
+      checkoutHistoryCleanupTimer = null;
+
+      if (
+        checkoutSheetStack.length === 0 &&
+        checkoutSheetHistoryActive &&
+        isMobileSheetViewport() &&
+        typeof window !== "undefined" &&
+        window.history.state?.[CHECKOUT_SHEET_HISTORY_KEY]
+      ) {
+        ignoreNextCheckoutPop = true;
+        checkoutSheetHistoryActive = false;
+        window.history.back();
+      }
+    }, 0);
+  };
+}
 
 export default function CheckoutSheet({
   children,
@@ -9,13 +122,30 @@ export default function CheckoutSheet({
   desktopHeight = "auto",
   desktopMaxHeight = "78vh",
   mobileFullPage = false,
+  mobileBottomOffset = 0,
   ariaLabel = "Close sheet",
   showClose = true,
 }) {
+  const stackEntryRef = useRef(null);
   const resolvedHeight =
     typeof desktopHeight === "number"
       ? `${desktopHeight}px`
       : desktopHeight;
+
+  if (!stackEntryRef.current) {
+    sheetId += 1;
+    stackEntryRef.current = {
+      id: sheetId,
+      order: sheetId,
+      zIndex,
+      onClose,
+    };
+  }
+
+  stackEntryRef.current.zIndex = zIndex;
+  stackEntryRef.current.onClose = onClose;
+
+  useEffect(() => registerCheckoutSheet(stackEntryRef.current), []);
 
   return (
     <div
@@ -40,6 +170,10 @@ export default function CheckoutSheet({
         style={{
           "--sheet-desktop-height": resolvedHeight,
           "--sheet-desktop-max-height": desktopMaxHeight,
+          "--sheet-mobile-bottom-offset": `${Math.max(
+            0,
+            Number(mobileBottomOffset) || 0
+          )}px`,
           fontFamily: '"Helvetica Neue", Arial, sans-serif',
         }}
       >
@@ -66,13 +200,14 @@ export default function CheckoutSheet({
 
       <style jsx>{`
         .checkout-sheet-panel {
-          max-height: 90svh;
+          margin-bottom: var(--sheet-mobile-bottom-offset);
+          max-height: 90dvh;
           animation: sheetUpMobile 220ms ease-out;
         }
 
         .checkout-sheet-mobile-full {
-          height: 100svh;
-          max-height: 100svh;
+          height: 100dvh;
+          max-height: 100dvh;
         }
 
         .checkout-sheet-mobile-full .checkout-sheet-frame {
@@ -109,6 +244,7 @@ export default function CheckoutSheet({
             position: fixed;
             left: 50%;
             bottom: calc(50% - min(380px, 45svh));
+            margin-bottom: 0;
             width: 450px;
             height: var(--sheet-desktop-height);
             max-height: var(--sheet-desktop-max-height);

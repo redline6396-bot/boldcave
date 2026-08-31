@@ -838,7 +838,7 @@ function FloatingInput({
           autoFocus={autoFocus}
           onChange={(event) => onChange(event.target.value)}
           className={[
-            "h-[48px] w-full cursor-text caret-black rounded-[11px] border bg-white px-3.5 text-[16px] font-medium text-[#050505] outline-none transition-colors placeholder:text-[#8d98a4] disabled:cursor-not-allowed disabled:bg-[#fafafa] disabled:text-[#050505] disabled:opacity-100 sm:text-[13px]",
+            "h-[48px] w-full cursor-text caret-black rounded-[11px] border bg-white px-3.5 text-[16px] font-normal text-[#050505] outline-none transition-colors placeholder:text-[#8d98a4] disabled:cursor-not-allowed disabled:bg-[#fafafa] disabled:text-[#050505] disabled:opacity-100 sm:text-[13px] sm:font-medium",
             error
               ? "border-red-400 focus:border-red-500"
               : "border-[#cbd2d9] focus:border-[#111b28]",

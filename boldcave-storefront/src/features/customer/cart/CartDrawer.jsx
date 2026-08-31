@@ -195,14 +195,14 @@ export default function CartDrawer({ isOpen, onClose }) {
           type="button"
           aria-label="Close cart overlay"
           onClick={onClose}
-          className="fixed inset-0 z-[120] cursor-pointer bg-black/45"
+          className="fixed bottom-0 left-0 right-0 top-auto z-[120] h-[100dvh] cursor-pointer bg-black/45 sm:inset-0 sm:h-auto"
         />
       )}
 
       <aside
         aria-hidden={!isOpen}
         className={[
-          "fixed bottom-0 right-0 top-0 z-[121] flex h-[100svh] w-full max-w-[420px] flex-col bg-white text-neutral-950 shadow-xl transition-transform duration-300 ease-out sm:max-w-[430px]",
+          "fixed bottom-0 right-0 z-[121] flex h-[100dvh] w-full max-w-[420px] flex-col bg-white text-neutral-950 shadow-xl transition-transform duration-300 ease-out sm:top-0 sm:h-[100vh] sm:max-w-[430px]",
           isOpen
             ? "translate-x-0"
             : "translate-x-[calc(100%+2px)]",

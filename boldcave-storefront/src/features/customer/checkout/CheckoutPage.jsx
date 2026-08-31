@@ -280,9 +280,12 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [paymentVerifying, setPaymentVerifying] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [updatesOptIn, setUpdatesOptIn] = useState(true);
+  const submittingRef = useRef(false);
+  const paymentVerifyingRef = useRef(false);
 
   const items = getCartItems();
   const subtotal = getCartTotal();
@@ -1058,8 +1061,14 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   ]);
 
   const handleCodSubmit = useCallback(async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     const ready = await ensureReady();
-    if (!ready) return;
+    if (!ready) {
+      submittingRef.current = false;
+      return;
+    }
 
     setSubmitting(true);
 
@@ -1076,6 +1085,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     } catch (codError) {
       handleError(codError);
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }, [
@@ -1090,10 +1100,18 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   ]);
 
   const handleRazorpaySubmit = useCallback(async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     const ready = await ensureReady();
-    if (!ready) return;
+    if (!ready) {
+      submittingRef.current = false;
+      return;
+    }
 
     setSubmitting(true);
+    setPaymentVerifying(false);
+    paymentVerifyingRef.current = false;
 
     try {
       await loadRazorpayScript();
@@ -1132,13 +1150,21 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
         },
         modal: {
           ondismiss: () => {
+            if (paymentVerifyingRef.current) return;
+            submittingRef.current = false;
             setSubmitting(false);
+            setPaymentVerifying(false);
             setNotice(
               "Payment was closed. Your cart is still here."
             );
           },
         },
         handler: async (response) => {
+          if (paymentVerifyingRef.current) return;
+
+          paymentVerifyingRef.current = true;
+          setPaymentVerifying(true);
+
           try {
             await verifyRazorpayCheckout({
               orderId: checkout.orderId,
@@ -1151,7 +1177,10 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
             completeSuccess();
           } catch (verifyError) {
             handleError(verifyError);
+            submittingRef.current = false;
+            paymentVerifyingRef.current = false;
             setSubmitting(false);
+            setPaymentVerifying(false);
           }
         },
       });
@@ -1161,13 +1190,19 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
           response?.error?.description ||
             "Payment failed. Please retry."
         );
+        submittingRef.current = false;
+        paymentVerifyingRef.current = false;
         setSubmitting(false);
+        setPaymentVerifying(false);
       });
 
       instance.open();
     } catch (razorpayError) {
       handleError(razorpayError);
+      submittingRef.current = false;
+      paymentVerifyingRef.current = false;
       setSubmitting(false);
+      setPaymentVerifying(false);
     }
   }, [
     cart,
@@ -1182,7 +1217,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   ]);
 
   const handleFinalSubmit = () => {
-    if (submitting) return;
+    if (submitting || submittingRef.current) return;
 
     if (paymentMethod === "cod") {
       handleCodSubmit();
@@ -1554,7 +1589,11 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                       className="mr-2 h-4 w-4 animate-spin"
                       strokeWidth={1.8}
                     />
-                    Processing...
+                    {paymentVerifying
+                      ? "Verifying Payment..."
+                      : paymentMethod === "cod"
+                        ? "Placing Order..."
+                        : "Processing..."}
                   </>
                 ) : paymentMethod === "cod" ? (
                   "Place Order"
@@ -1668,15 +1707,43 @@ function OtpSheet({
   demoOtp,
   onVerify,
 }) {
+  const actionRef = useRef(null);
+  const mobileBottomOffset = useMobileKeyboardOffset();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const keepActionVisible = () => {
+      window.requestAnimationFrame(() => {
+        actionRef.current?.scrollIntoView({
+          block: "nearest",
+          inline: "nearest",
+        });
+      });
+    };
+
+    keepActionVisible();
+
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", keepActionVisible);
+    viewport?.addEventListener("scroll", keepActionVisible);
+
+    return () => {
+      viewport?.removeEventListener("resize", keepActionVisible);
+      viewport?.removeEventListener("scroll", keepActionVisible);
+    };
+  }, [digits, error, loading, mobileBottomOffset]);
+
   return (
     <CheckoutSheet
       onClose={onClose}
       zIndex={270}
       desktopHeight={352}
       desktopMaxHeight="62vh"
+      mobileBottomOffset={mobileBottomOffset}
       ariaLabel="Close OTP"
     >
-      <div className="flex h-full flex-col px-5 pb-5 pt-6 text-center sm:px-8 sm:pb-5 sm:pt-6">
+      <div className="flex h-full min-h-0 flex-col overflow-y-auto px-5 pb-5 pt-6 text-center sm:overflow-visible sm:px-8 sm:pb-5 sm:pt-6">
         <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-[#f2f3f4] text-[#273342]">
           <LockKeyhole className="h-[17px] w-[17px]" strokeWidth={1.7} />
         </div>
@@ -1753,7 +1820,7 @@ function OtpSheet({
           </p>
         )}
 
-        <div className="mt-5">
+        <div ref={actionRef} className="mt-5">
           <button
             type="button"
             onClick={onVerify}
@@ -1768,6 +1835,44 @@ function OtpSheet({
       </div>
     </CheckoutSheet>
   );
+}
+
+function useMobileKeyboardOffset() {
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const updateOffset = () => {
+      const mobile =
+        window.matchMedia?.("(max-width: 639px)").matches ?? false;
+      const viewport = window.visualViewport;
+
+      if (!mobile || !viewport) {
+        setOffset(0);
+        return;
+      }
+
+      const layoutHeight = window.innerHeight || viewport.height;
+      const viewportBottom = viewport.offsetTop + viewport.height;
+      setOffset(Math.max(0, Math.ceil(layoutHeight - viewportBottom)));
+    };
+
+    updateOffset();
+
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", updateOffset);
+    viewport?.addEventListener("scroll", updateOffset);
+    window.addEventListener("orientationchange", updateOffset);
+
+    return () => {
+      viewport?.removeEventListener("resize", updateOffset);
+      viewport?.removeEventListener("scroll", updateOffset);
+      window.removeEventListener("orientationchange", updateOffset);
+    };
+  }, []);
+
+  return offset;
 }
 
 function ExitConfirm({ onStay, onLeave }) {
