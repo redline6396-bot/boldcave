@@ -7,7 +7,7 @@ import { withRuntimeDatabase } from '@/lib/cloudflareMongoose';
 import { getSerializedHomepageSettings } from '@/lib/homepageSettings';
 import { getFeaturedCatalogProducts } from '@/lib/products/public';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 export default async function Home() {
   let homepageSettings = null;

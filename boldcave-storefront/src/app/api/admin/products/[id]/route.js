@@ -4,6 +4,7 @@ import { failure, handleRouteError, readJson, success } from "@/lib/api/response
 import { requireAdmin } from "@/lib/auth/session";
 import { serializeProductWithCombos } from "@/lib/api/products";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
+import { revalidateProductPaths } from "@/lib/cache/revalidate";
 import { clearProductCache } from "@/lib/productCache";
 import { isObjectId } from "@/lib/validation";
 import Product from "@/models/Product";
@@ -64,6 +65,7 @@ async function updateAdminProductRoute(request, { params }) {
     });
 
     clearProductCache();
+    revalidateProductPaths([existingProduct.slug, product.slug]);
     return applyAdminCors(request, success({ product: await serializeProductWithCombos(product, { includeCostPrice: true }) }));
   } catch (error) {
     return applyAdminCors(request, handleRouteError(error, "PRODUCT_UPDATE_FAILED"));
@@ -93,6 +95,7 @@ async function deleteAdminProductRoute(request, { params }) {
     await Review.deleteMany({ product: product._id });
 
     clearProductCache();
+    revalidateProductPaths([product.slug]);
     return applyAdminCors(request, success({ deleted: true }));
   } catch (error) {
     return applyAdminCors(request, handleRouteError(error, "PRODUCT_DELETE_FAILED"));

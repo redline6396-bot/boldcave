@@ -38,6 +38,16 @@ const formatCollectionSubtitle = (fragranceCount, personalityCount) => {
   return `${fragranceCount} ${fragranceWord}. ${personalityCount} ${personalityWord}.`;
 };
 
+function scheduleIdleWork(callback) {
+  if ("requestIdleCallback" in window) {
+    const idleId = window.requestIdleCallback(callback, { timeout: 1800 });
+    return () => window.cancelIdleCallback(idleId);
+  }
+
+  const timerId = window.setTimeout(callback, 1400);
+  return () => window.clearTimeout(timerId);
+}
+
 export default function CollectionSection({
   initialProducts = [],
   initialSettings = null,
@@ -49,6 +59,29 @@ export default function CollectionSection({
   useEffect(() => {
     rememberProducts(products);
   }, [products, rememberProducts]);
+
+  useEffect(() => {
+    const firstProductSlug = products.find((product) => product?.slug)?.slug;
+    if (!firstProductSlug) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const productUrl = `/product/${encodeURIComponent(firstProductSlug)}`;
+
+    const cancelIdleWork = scheduleIdleWork(() => {
+      fetch(productUrl, {
+        cache: "force-cache",
+        credentials: "same-origin",
+        signal: controller.signal,
+      }).catch(() => {});
+    });
+
+    return () => {
+      controller.abort();
+      cancelIdleWork();
+    };
+  }, [products]);
 
   const desktopRows = useMemo(() => buildDesktopRows(products), [products]);
   const hasOddMobileProduct = products.length % 2 === 1;

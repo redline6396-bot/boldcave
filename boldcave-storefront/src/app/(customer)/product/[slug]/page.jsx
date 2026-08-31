@@ -3,6 +3,11 @@ import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { getProductBySlug } from "@/lib/products/public";
 
 export const revalidate = 300;
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  return [];
+}
 
 function getProductLoadErrorType(error) {
   if (error?.code === "PRODUCT_NOT_FOUND") {

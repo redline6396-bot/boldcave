@@ -1,4 +1,5 @@
 import connectDB from "@/lib/db";
+import { revalidatePath } from "next/cache";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { handleRouteError, noStoreHeaders, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
@@ -53,6 +54,7 @@ async function updateAdminHomepageSettingsRoute(request) {
       collectionFragranceCount: body.collectionFragranceCount,
       collectionPersonalityCount: body.collectionPersonalityCount,
     });
+    revalidatePath("/");
 
     return applyAdminCors(
       request,

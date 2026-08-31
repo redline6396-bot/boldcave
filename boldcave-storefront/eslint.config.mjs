@@ -40,6 +40,7 @@ const eslintConfig = defineConfig([
         URLSearchParams: "readonly",
         Image: "readonly",
         Buffer: "readonly",
+        AbortController: "readonly",
       },
     },
     rules: {

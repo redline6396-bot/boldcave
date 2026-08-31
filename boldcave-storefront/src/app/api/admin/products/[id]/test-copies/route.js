@@ -4,6 +4,7 @@ import { failure, handleRouteError, success } from "@/lib/api/response";
 import { serializeProductWithCombos } from "@/lib/api/products";
 import { requireAdmin } from "@/lib/auth/session";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
+import { revalidateProductPaths } from "@/lib/cache/revalidate";
 import { clearProductCache } from "@/lib/productCache";
 import { cleanString, isObjectId, slugify } from "@/lib/validation";
 import Product from "@/models/Product";
@@ -147,6 +148,7 @@ async function createTestCopiesRoute(request, { params }) {
       { ordered: true }
     );
     clearProductCache();
+    revalidateProductPaths(copies.map((product) => product.slug));
 
     return applyAdminCors(
       request,

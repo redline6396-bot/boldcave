@@ -3,6 +3,7 @@ import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
+import { revalidatePublicProductListPaths } from "@/lib/cache/revalidate";
 import { clearProductCache } from "@/lib/productCache";
 import { isObjectId, toPositiveNumber } from "@/lib/validation";
 import Product from "@/models/Product";
@@ -56,6 +57,7 @@ async function updateFeaturedOrderRoute(request) {
     );
 
     clearProductCache();
+    revalidatePublicProductListPaths();
 
     return applyAdminCors(request, success({ updated: true }));
   } catch (error) {

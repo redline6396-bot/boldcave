@@ -3,6 +3,7 @@ import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
+import { revalidateProductPaths } from "@/lib/cache/revalidate";
 import { COMBO_VARIANT_SIZE, findVariantByIdentifier, serializeProductWithCombos } from "@/lib/api/products";
 import { clearProductCache } from "@/lib/productCache";
 import {
@@ -371,6 +372,7 @@ async function createAdminProductRoute(request) {
 
     const product = await Product.create(result.payload);
     clearProductCache();
+    revalidateProductPaths([product.slug]);
     return applyAdminCors(
       request,
       success({ product: await serializeProductWithCombos(product, { includeCostPrice: true }) }, 201)
