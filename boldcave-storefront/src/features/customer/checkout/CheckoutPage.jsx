@@ -49,6 +49,8 @@ const RAZORPAY_SCRIPT_URL =
   "https://checkout.razorpay.com/v1/checkout.js";
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
+const CHECKOUT_HISTORY_KEY = "__boldcaveCheckout";
+const MOBILE_CHECKOUT_HISTORY_QUERY = "(max-width: 639px)";
 
 const money = (value) =>
   `₹${new Intl.NumberFormat("en-IN", {
@@ -152,6 +154,14 @@ function getCheckoutViewportHeight() {
     window.innerHeight;
 
   return height ? Math.floor(height) : null;
+}
+
+function shouldUseMobileCheckoutHistory() {
+  if (typeof window === "undefined") return false;
+
+  return (
+    window.matchMedia?.(MOBILE_CHECKOUT_HISTORY_QUERY).matches ?? false
+  );
 }
 
 function useCheckoutViewportHeight() {
@@ -270,6 +280,8 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   const otpRefs = useRef([]);
   const checkoutPhoneRef = useRef(null);
   const checkoutPhoneInitializedRef = useRef(false);
+  const directCheckoutHistoryActiveRef = useRef(false);
+  const ignoreDirectCheckoutPopRef = useRef(false);
   const checkoutViewportStyle = {
     "--checkout-viewport-height": checkoutViewportHeight
       ? `${checkoutViewportHeight}px`
@@ -281,11 +293,13 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [paymentVerifying, setPaymentVerifying] = useState(false);
+  const [addressSaveError, setAddressSaveError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [updatesOptIn, setUpdatesOptIn] = useState(true);
   const submittingRef = useRef(false);
   const paymentVerifyingRef = useRef(false);
+  const pendingAddressSaveRef = useRef(null);
 
   const items = getCartItems();
   const subtotal = getCartTotal();
@@ -436,6 +450,58 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
       document.body.style.overflow = originalOverflow;
     };
   }, []);
+
+  useEffect(() => {
+    if (onClose || !shouldUseMobileCheckoutHistory()) {
+      return undefined;
+    }
+
+    if (!window.history.state?.[CHECKOUT_HISTORY_KEY]) {
+      window.history.pushState(
+        {
+          ...(window.history.state || {}),
+          [CHECKOUT_HISTORY_KEY]: true,
+        },
+        "",
+        window.location.href
+      );
+    }
+
+    directCheckoutHistoryActiveRef.current = true;
+
+    const handlePopState = (event) => {
+      if (ignoreDirectCheckoutPopRef.current) {
+        ignoreDirectCheckoutPopRef.current = false;
+        return;
+      }
+
+      if (event.state?.[CHECKOUT_HISTORY_KEY]) {
+        return;
+      }
+
+      if (!directCheckoutHistoryActiveRef.current) {
+        return;
+      }
+
+      directCheckoutHistoryActiveRef.current = false;
+      router.back();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+
+      if (
+        directCheckoutHistoryActiveRef.current &&
+        window.history.state?.[CHECKOUT_HISTORY_KEY]
+      ) {
+        ignoreDirectCheckoutPopRef.current = true;
+        directCheckoutHistoryActiveRef.current = false;
+        window.history.back();
+      }
+    };
+  }, [onClose, router]);
 
   useEffect(() => {
     if (!user) return;
@@ -686,9 +752,14 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   ]);
 
   const handlePersistAddress = useCallback(
-    async (nextAddress, editingIndex) => {
+    (nextAddress, editingIndex) => {
       if (!user) {
-        throw new Error("Please verify your phone number first.");
+        const missingUserError = new Error(
+          "Please verify your phone number first."
+        );
+        setAddressSaveError(missingUserError.message);
+        setError(missingUserError.message);
+        return Promise.reject(missingUserError);
       }
 
       const currentAddresses = user.addresses || [];
@@ -733,10 +804,28 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
         };
       }
 
-      await updateCurrentUser({ addresses: nextAddresses });
-      refreshUser().catch(() => {});
+      setAddressSaveError("");
 
-      return nextIndex;
+      const saveAddress = updateCurrentUser({ addresses: nextAddresses })
+        .then(() => {
+          refreshUser().catch(() => {});
+          return nextIndex;
+        })
+        .catch((saveError) => {
+          const message =
+            saveError.message || "Unable to save this address right now.";
+          setAddressSaveError(message);
+          setError(message);
+          throw saveError;
+        })
+        .finally(() => {
+          if (pendingAddressSaveRef.current === saveAddress) {
+            pendingAddressSaveRef.current = null;
+          }
+        });
+
+      pendingAddressSaveRef.current = saveAddress;
+      return saveAddress;
     },
     [refreshUser, user]
   );
@@ -1008,6 +1097,11 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
       return false;
     }
 
+    if (addressSaveError) {
+      setError(addressSaveError);
+      return false;
+    }
+
     if (
       serviceability.status !== "serviceable" ||
       serviceability.pincode !== normalizedAddress.pincode
@@ -1045,6 +1139,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     return true;
   }, [
     addressError,
+    addressSaveError,
     codAvailable,
     handleCheckServiceability,
     hasUnresolvedCart,
@@ -1060,19 +1155,34 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     serviceability.status,
   ]);
 
+  const waitForPendingAddressSave = useCallback(async () => {
+    const pendingAddressSave = pendingAddressSaveRef.current;
+
+    if (!pendingAddressSave) {
+      return true;
+    }
+
+    try {
+      await pendingAddressSave;
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const handleCodSubmit = useCallback(async () => {
     if (submittingRef.current) return;
     submittingRef.current = true;
 
-    const ready = await ensureReady();
-    if (!ready) {
-      submittingRef.current = false;
-      return;
-    }
-
     setSubmitting(true);
 
     try {
+      const addressSaved = await waitForPendingAddressSave();
+      if (!addressSaved) return;
+
+      const ready = await ensureReady();
+      if (!ready) return;
+
       await placeCodOrder({
         items: cartPayload(cart),
         address: normalizedAddress,
@@ -1097,23 +1207,24 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     handleError,
     normalizedAddress,
     phoneVerificationToken,
+    waitForPendingAddressSave,
   ]);
 
   const handleRazorpaySubmit = useCallback(async () => {
     if (submittingRef.current) return;
     submittingRef.current = true;
 
-    const ready = await ensureReady();
-    if (!ready) {
-      submittingRef.current = false;
-      return;
-    }
-
     setSubmitting(true);
     setPaymentVerifying(false);
     paymentVerifyingRef.current = false;
 
     try {
+      const addressSaved = await waitForPendingAddressSave();
+      if (!addressSaved) return;
+
+      const ready = await ensureReady();
+      if (!ready) return;
+
       await loadRazorpayScript();
 
       const checkout = await createRazorpayCheckout({
@@ -1214,6 +1325,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     normalizedAddress,
     phoneVerificationToken,
     user?.email,
+    waitForPendingAddressSave,
   ]);
 
   const handleFinalSubmit = () => {

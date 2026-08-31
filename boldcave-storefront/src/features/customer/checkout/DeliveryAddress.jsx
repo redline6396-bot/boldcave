@@ -288,16 +288,24 @@ export default function DeliveryAddress({
         return;
       }
 
-      const persistedIndex = await onPersistAddress(
+      const persistAddress = onPersistAddress(
         verifiedDraft,
         editingIndex
       );
 
       setAddress(verifiedDraft);
       setSelectedAddressIndex(
-        persistedIndex ?? editingIndex ?? "new"
+        editingIndex ?? "new"
       );
       setSheet(null);
+
+      persistAddress
+        .then((persistedIndex) => {
+          setSelectedAddressIndex(
+            persistedIndex ?? editingIndex ?? "new"
+          );
+        })
+        .catch(() => {});
     } catch (saveError) {
       setLocalError(
         saveError.message || "Unable to save this address right now."
