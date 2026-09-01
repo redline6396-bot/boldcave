@@ -5,13 +5,20 @@ let instance = null;
 const RAZORPAY_API_BASE_URL = "https://api.razorpay.com/v1";
 const REFUND_TIMEOUT_MS = 15000;
 
-export class RazorpayRefundError extends Error {
-  constructor(message = "Razorpay refund failed", details = {}) {
+export class RazorpayApiError extends Error {
+  constructor(message = "Razorpay request failed", details = {}) {
     super(message);
-    this.name = "RazorpayRefundError";
-    this.code = "RAZORPAY_REFUND_FAILED";
+    this.name = "RazorpayApiError";
+    this.code = details.code || "RAZORPAY_API_FAILED";
     this.status = details.status || 502;
     this.details = details;
+  }
+}
+
+export class RazorpayRefundError extends RazorpayApiError {
+  constructor(message = "Razorpay refund failed", details = {}) {
+    super(message, { ...details, code: "RAZORPAY_REFUND_FAILED" });
+    this.name = "RazorpayRefundError";
   }
 }
 
@@ -70,7 +77,10 @@ function sanitizeRazorpayError(body, fallback) {
   ).slice(0, 300);
 }
 
-async function razorpayRest(path, { method = "GET", headers = {}, body } = {}) {
+async function razorpayRest(
+  path,
+  { method = "GET", headers = {}, body, errorClass = RazorpayApiError } = {}
+) {
   const controller = new globalThis.AbortController();
   const timeout = setTimeout(() => controller.abort(), REFUND_TIMEOUT_MS);
 
@@ -89,7 +99,7 @@ async function razorpayRest(path, { method = "GET", headers = {}, body } = {}) {
     const data = parseRazorpayJson(text);
 
     if (!response.ok) {
-      throw new RazorpayRefundError(sanitizeRazorpayError(data, response.statusText), {
+      throw new errorClass(sanitizeRazorpayError(data, response.statusText), {
         status: response.status,
         razorpayStatus: response.status,
         razorpayCode: data?.error?.code || "",
@@ -98,11 +108,11 @@ async function razorpayRest(path, { method = "GET", headers = {}, body } = {}) {
 
     return data;
   } catch (error) {
-    if (error instanceof RazorpayRefundError) {
+    if (error instanceof RazorpayApiError) {
       throw error;
     }
 
-    throw new RazorpayRefundError("Razorpay refund request could not be completed.", {
+    throw new errorClass("Razorpay request could not be completed.", {
       status: 502,
       networkError: true,
       name: error?.name,
@@ -135,7 +145,7 @@ export function buildFullRefundRequest({ order, amountPaise, idempotencyKey }) {
   };
 }
 
-export async function createRazorpayFullRefund({
+export async function createRazorpayRefund({
   razorpayPaymentId,
   amountPaise,
   idempotencyKey,
@@ -161,8 +171,13 @@ export async function createRazorpayFullRefund({
         "X-Refund-Idempotency": idempotencyKey,
       },
       body,
+      errorClass: RazorpayRefundError,
     }
   );
+}
+
+export async function createRazorpayFullRefund(options) {
+  return createRazorpayRefund(options);
 }
 
 export async function fetchRazorpayPaymentRefunds(razorpayPaymentId) {
@@ -171,7 +186,8 @@ export async function fetchRazorpayPaymentRefunds(razorpayPaymentId) {
   }
 
   return razorpayRest(
-    `/payments/${encodeURIComponent(razorpayPaymentId)}/refunds?count=100`
+    `/payments/${encodeURIComponent(razorpayPaymentId)}/refunds?count=100`,
+    { errorClass: RazorpayRefundError }
   );
 }
 
@@ -181,8 +197,17 @@ export async function fetchRazorpayRefund({ razorpayPaymentId, refundId }) {
   }
 
   return razorpayRest(
-    `/payments/${encodeURIComponent(razorpayPaymentId)}/refunds/${encodeURIComponent(refundId)}`
+    `/payments/${encodeURIComponent(razorpayPaymentId)}/refunds/${encodeURIComponent(refundId)}`,
+    { errorClass: RazorpayRefundError }
   );
+}
+
+export async function fetchRazorpayPayment(razorpayPaymentId) {
+  if (!razorpayPaymentId) {
+    throw new RazorpayApiError("Razorpay payment ID is missing", { status: 400 });
+  }
+
+  return razorpayRest(`/payments/${encodeURIComponent(razorpayPaymentId)}`);
 }
 
 export async function createRazorpayOrder({ amount, receipt, notes = {} }) {

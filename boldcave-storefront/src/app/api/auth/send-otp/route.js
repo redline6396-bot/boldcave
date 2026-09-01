@@ -1,6 +1,7 @@
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import {
   OtpDeliveryError,
+  OTP_PUBLIC_DELIVERY_ERROR_MESSAGE,
   OtpRateLimitError,
   OtpTestPhoneNotAllowedError,
   sendOtp,
@@ -42,6 +43,14 @@ async function sendOtpRoute(request) {
 
     if (error instanceof OtpDeliveryError) {
       return failure(error.code, error.message, 503);
+    }
+
+    if (error?.message?.includes("not configured")) {
+      return failure(
+        "OTP_DELIVERY_FAILED",
+        OTP_PUBLIC_DELIVERY_ERROR_MESSAGE,
+        503
+      );
     }
 
     if (error instanceof OtpTestPhoneNotAllowedError) {

@@ -6,7 +6,7 @@ import { lookupIndianPincode } from "@/lib/shipping/pincodeLookup";
 import {
   checkServiceability,
   validateCheckoutServiceability,
-} from "@/lib/shipping/shiprocket";
+} from "@/lib/shipping";
 import { isValidPincode } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -106,6 +106,22 @@ async function checkCheckoutServiceabilityRoute(request) {
       },
     });
   } catch (error) {
+    if (error.code === "SHIPPING_PROVIDER_UNSUPPORTED") {
+      return failure(
+        "SHIPPING_PROVIDER_UNSUPPORTED",
+        "Shipping service is not configured.",
+        503
+      );
+    }
+
+    if (error.code === "SHADOWFAX_NOT_IMPLEMENTED") {
+      return failure(
+        "SHADOWFAX_NOT_IMPLEMENTED",
+        "Shipping service is not configured.",
+        503
+      );
+    }
+
     if (error.message?.includes("not configured")) {
       return failure("SHIPROCKET_NOT_CONFIGURED", "Shipping service is not configured.", 503);
     }
@@ -151,6 +167,22 @@ async function checkPincodeServiceabilityRoute(request) {
       },
     });
   } catch (error) {
+    if (error.code === "SHIPPING_PROVIDER_UNSUPPORTED") {
+      return failure(
+        "SHIPPING_PROVIDER_UNSUPPORTED",
+        "Shipping service is not configured.",
+        503
+      );
+    }
+
+    if (error.code === "SHADOWFAX_NOT_IMPLEMENTED") {
+      return failure(
+        "SHADOWFAX_NOT_IMPLEMENTED",
+        "Shipping service is not configured.",
+        503
+      );
+    }
+
     if (error.message?.includes("not configured")) {
       return failure("SHIPROCKET_NOT_CONFIGURED", "Shipping service is not configured.", 503);
     }

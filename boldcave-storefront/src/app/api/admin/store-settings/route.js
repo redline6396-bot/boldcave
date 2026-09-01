@@ -66,7 +66,7 @@ async function updateAdminStoreSettingsRoute(request) {
     console.error("Store settings update failed", {
       name: error?.name,
       code: error?.code,
-      message: error?.message,
+      message: String(error?.message || "").slice(0, 180),
     });
 
     if (error?.name === "ValidationError") {

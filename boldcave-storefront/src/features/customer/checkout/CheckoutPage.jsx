@@ -35,6 +35,7 @@ import {
   verifyPhoneOtp,
   verifyRazorpayCheckout,
 } from "@/lib/clientApi";
+import { calculateDiscountBreakdown } from "@/lib/orders/paymentDiscounts";
 import CouponSection from "@/features/customer/checkout/CouponSection";
 import DeliveryAddress, {
   emptyAddress,
@@ -122,6 +123,14 @@ function loadRazorpayScript() {
 function getCheckoutErrorMessage(error) {
   if (error?.code === "STOCK_CHANGED") {
     return "Some cart items changed. Review the updated cart and try again.";
+  }
+
+  if (error?.code === "SHIPPING_TEMPORARILY_UNAVAILABLE") {
+    return "We're unable to process your order right now. Please try again shortly.";
+  }
+
+  if (error?.code === "ORDER_SHIPMENT_PENDING") {
+    return "We're verifying your order. Please don't place it again right now.";
   }
 
   return (
@@ -311,17 +320,21 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   );
   const fallbackBasePricing = useMemo(() => {
     const couponDiscount = Math.max(0, Number(discount) || 0);
-    const finalAmount = Math.max(0, subtotal - couponDiscount);
+    const discountBreakdown = calculateDiscountBreakdown({
+      subtotal,
+      couponDiscount,
+      paymentMethod: "cod",
+    });
 
     return {
       subtotal,
-      couponDiscount,
+      couponDiscount: discountBreakdown.couponDiscount,
       prepaidDiscount: 0,
       shipping: 0,
-      finalAmount,
-      discountWinner: couponDiscount > 0 ? "coupon" : "none",
-      coupon: couponDiscount > 0 && previewCouponCode
-        ? { code: previewCouponCode, discount: couponDiscount }
+      finalAmount: discountBreakdown.finalAmount,
+      discountWinner: discountBreakdown.discountWinner,
+      coupon: discountBreakdown.couponDiscount > 0 && previewCouponCode
+        ? { code: previewCouponCode, discount: discountBreakdown.couponDiscount }
         : { code: null, discount: 0 },
     };
   }, [discount, previewCouponCode, subtotal]);
@@ -1609,41 +1622,45 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                   />
                 </div>
 
-                {serviceability.status === "serviceable" &&
-                  !addressError && (
-                    <div className="mt-4">
-                      {pricingPreviewError ? (
-                        <section>
-                          <p className="mb-2.5 text-[12px] font-medium uppercase tracking-[0.025em] text-[#384555]">
-                            Payment options
-                          </p>
-                          <div className="rounded-[12px] border border-[#d8dee5] bg-white px-4 py-3 text-[12px] leading-5 text-[#66717e]">
-                            <p>{pricingPreviewError}</p>
-                            <button
-                              type="button"
-                              onClick={refreshPricingPreview}
-                              className="mt-2 cursor-pointer text-[10px] font-semibold uppercase tracking-[0.08em] text-[#111b28] underline underline-offset-4"
-                            >
-                              Retry
-                            </button>
-                          </div>
-                        </section>
-                      ) : (
-                        <PaymentMethod
-                          value={paymentMethod}
-                          onChange={setPaymentMethod}
-                          codAvailable={codAvailable}
-                          serviceable
-                          disabled={submitting}
-                          prepaidDiscountSettings={prepaidDiscountSettings}
-                          onlineAmount={onlinePricing.finalAmount}
-                          codAmount={codPricing.finalAmount}
-                          onlineSavings={onlinePaymentSavings}
-                          loading={pricingPreviewLoading && !pricingPreview}
-                        />
-                      )}
-                    </div>
-                  )}
+                {!addressError && (
+                  <div className="mt-4">
+                    {pricingPreviewError ? (
+                      <section>
+                        <p className="mb-2.5 text-[12px] font-medium uppercase tracking-[0.025em] text-[#384555]">
+                          Payment options
+                        </p>
+                        <div className="rounded-[12px] border border-[#d8dee5] bg-white px-4 py-3 text-[12px] leading-5 text-[#66717e]">
+                          <p>{pricingPreviewError}</p>
+                          <button
+                            type="button"
+                            onClick={refreshPricingPreview}
+                            className="mt-2 cursor-pointer text-[10px] font-semibold uppercase tracking-[0.08em] text-[#111b28] underline underline-offset-4"
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      </section>
+                    ) : (
+                      <PaymentMethod
+                        value={paymentMethod}
+                        onChange={setPaymentMethod}
+                        codAvailable={codAvailable}
+                        serviceable={
+                          serviceability.status === "unserviceable" ||
+                          serviceability.status === "invalid"
+                            ? false
+                            : undefined
+                        }
+                        disabled={submitting}
+                        prepaidDiscountSettings={prepaidDiscountSettings}
+                        onlineAmount={onlinePricing.finalAmount}
+                        codAmount={codPricing.finalAmount}
+                        onlineSavings={onlinePaymentSavings}
+                        loading={pricingPreviewLoading && !pricingPreview}
+                      />
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

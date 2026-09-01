@@ -10,6 +10,51 @@ const ADMIN_MANUAL_ORDER_STATUSES = ['confirmed', 'processing'];
 const PAYMENT_STATUSES = ['pending', 'paid', 'failed', 'cod'];
 const CANCELLABLE_ORDER_STATUSES = ['confirmed', 'processing'];
 
+function hasShadowfaxSummary(order) {
+  const shadowfax = order?.shadowfax;
+  return Boolean(
+    shadowfax?.orderId ||
+      shadowfax?.awbNumber ||
+      shadowfax?.clientOrderId ||
+      shadowfax?.trackingUrl ||
+      shadowfax?.shipmentStatus ||
+      shadowfax?.statusDisplay ||
+      shadowfax?.syncStatus
+  );
+}
+
+function getShippingSummary(order) {
+  const provider = String(order?.shippingProvider || '').toLowerCase();
+  const useShadowfax = provider === 'shadowfax' || (!provider && hasShadowfaxSummary(order));
+
+  if (useShadowfax) {
+    const shadowfax = order?.shadowfax || {};
+    return {
+      provider: 'shadowfax',
+      providerLabel: 'Shadowfax',
+      providerOrderId: shadowfax.orderId || '',
+      awbCode: shadowfax.awbNumber || '',
+      courierName: 'Shadowfax',
+      shipmentStatus: shadowfax.statusDisplay || shadowfax.shipmentStatus || '',
+      syncStatus: shadowfax.syncStatus || '',
+      trackingUrl: shadowfax.trackingUrl || '',
+    };
+  }
+
+  const shiprocket = order?.shiprocket || {};
+  return {
+    provider: 'shiprocket',
+    providerLabel: 'Shiprocket',
+    providerOrderId: shiprocket.shiprocketOrderId || '',
+    shipmentId: shiprocket.shipmentId || '',
+    awbCode: shiprocket.awbCode || '',
+    courierName: shiprocket.courierName || '',
+    shipmentStatus: shiprocket.shipmentStatus || '',
+    syncStatus: shiprocket.syncStatus || '',
+    trackingUrl: shiprocket.trackingUrl || '',
+  };
+}
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -194,6 +239,7 @@ export default function OrdersPage() {
             const id = getId(order);
             const isOpen = Boolean(expanded[id]);
             const displayOrderId = order.orderNumber || id;
+            const shipping = getShippingSummary(order);
             return (
               <section key={id} className='rounded border border-gray-200 bg-white'>
                 <div className='flex w-full items-center justify-between gap-4 px-5 py-4 text-left'>
@@ -257,13 +303,13 @@ export default function OrdersPage() {
                         >
                           {!ADMIN_MANUAL_ORDER_STATUSES.includes(order.orderStatus) && (
                             <option value={order.orderStatus}>
-                              {displayValue(order.orderStatus)} (Shiprocket)
+                              {displayValue(order.orderStatus)} ({shipping.providerLabel})
                             </option>
                           )}
                           {ADMIN_MANUAL_ORDER_STATUSES.map((entry) => <option key={entry} value={entry}>{displayValue(entry)}</option>)}
                         </select>
                         <p className='mt-2 text-xs text-gray-500'>
-                          Shipped and delivery statuses update from Shiprocket.
+                          Shipped and delivery statuses update from {shipping.providerLabel}.
                         </p>
                       </div>
                     </div>
@@ -299,12 +345,13 @@ export default function OrdersPage() {
                     </div>
 
                     <Info title='Shipping' lines={[
-                      order.shiprocket?.shiprocketOrderId ? `Shiprocket Order: ${order.shiprocket.shiprocketOrderId}` : '',
-                      order.shiprocket?.shipmentId ? `Shipment ID: ${order.shiprocket.shipmentId}` : '',
-                      order.shiprocket?.awbCode ? `AWB: ${order.shiprocket.awbCode}` : '',
-                      order.shiprocket?.courierName ? `Courier: ${order.shiprocket.courierName}` : '',
-                      order.shiprocket?.shipmentStatus ? `Shipment Status: ${order.shiprocket.shipmentStatus}` : '',
-                      order.shiprocket?.syncStatus ? `Sync: ${order.shiprocket.syncStatus}` : '',
+                      `Provider: ${shipping.providerLabel}`,
+                      shipping.providerOrderId ? `${shipping.providerLabel} Order: ${shipping.providerOrderId}` : '',
+                      shipping.shipmentId ? `Shipment ID: ${shipping.shipmentId}` : '',
+                      shipping.awbCode ? `AWB: ${shipping.awbCode}` : '',
+                      shipping.courierName ? `Courier: ${shipping.courierName}` : '',
+                      shipping.shipmentStatus ? `Shipment Status: ${shipping.shipmentStatus}` : '',
+                      shipping.syncStatus ? `Sync: ${shipping.syncStatus}` : '',
                     ]} />
                     {order.payment?.method === 'razorpay' && order.payment?.refundStatus && order.payment.refundStatus !== 'not_required' && (
                       <div className='rounded border border-gray-200 p-4 text-sm'>
@@ -377,8 +424,8 @@ export default function OrdersPage() {
                         {busyId === `shiprocket:${id}` ? 'Retrying...' : 'Retry Shiprocket Sync'}
                       </button>
                     )}
-                    {order.shiprocket?.trackingUrl && (
-                      <a href={order.shiprocket.trackingUrl} target='_blank' rel='noreferrer' className='inline-flex items-center gap-2 text-sm font-semibold text-black underline'>
+                    {shipping.trackingUrl && (
+                      <a href={shipping.trackingUrl} target='_blank' rel='noreferrer' className='inline-flex items-center gap-2 text-sm font-semibold text-black underline'>
                         Open tracking <ExternalLink size={15} />
                       </a>
                     )}

@@ -15,6 +15,14 @@ export function fromPaise(value) {
   return Math.round(Number(value) || 0) / 100;
 }
 
+export function roundPayablePaiseToWholeRupee(value) {
+  return Math.max(0, Math.round((Number(value) || 0) / 100) * 100);
+}
+
+function getEffectiveDiscountPaise({ subtotal = 0, shipping = 0, finalAmount = 0 }) {
+  return Math.max(0, toPaise(subtotal) + toPaise(shipping) - toPaise(finalAmount));
+}
+
 export function isPrepaidPaymentMethod(paymentMethod) {
   return String(paymentMethod || "").toLowerCase() === "razorpay";
 }
@@ -54,15 +62,15 @@ export function calculatePayableAmount({
   prepaidDiscount = 0,
   shipping = 0,
 } = {}) {
-  return fromPaise(
-    Math.max(
-      0,
-      toPaise(subtotal) -
-        toPaise(couponDiscount) -
-        toPaise(prepaidDiscount) +
-        toPaise(shipping)
-    )
+  const payablePaise = Math.max(
+    0,
+    toPaise(subtotal) -
+      toPaise(couponDiscount) -
+      toPaise(prepaidDiscount) +
+      toPaise(shipping)
   );
+
+  return fromPaise(roundPayablePaiseToWholeRupee(payablePaise));
 }
 
 export function calculateDiscountBreakdown({
@@ -77,15 +85,20 @@ export function calculateDiscountBreakdown({
     prepaidDiscountSettings?.allowCouponStacking !== false;
 
   if (!isPrepaidPaymentMethod(paymentMethod)) {
-    return {
+    const finalAmount = calculatePayableAmount({
+      subtotal,
       couponDiscount: normalizedCouponDiscount,
+      shipping,
+    });
+    const effectiveCouponDiscount = fromPaise(
+      getEffectiveDiscountPaise({ subtotal, shipping, finalAmount })
+    );
+
+    return {
+      couponDiscount: effectiveCouponDiscount,
       prepaidDiscount: 0,
-      finalAmount: calculatePayableAmount({
-        subtotal,
-        couponDiscount: normalizedCouponDiscount,
-        shipping,
-      }),
-      discountWinner: normalizedCouponDiscount > 0 ? "coupon" : "none",
+      finalAmount,
+      discountWinner: effectiveCouponDiscount > 0 ? "coupon" : "none",
     };
   }
 
@@ -98,19 +111,35 @@ export function calculateDiscountBreakdown({
       prepaidDiscountSettings,
     });
 
-    return {
+    const finalAmount = calculatePayableAmount({
+      subtotal,
       couponDiscount: normalizedCouponDiscount,
       prepaidDiscount,
-      finalAmount: calculatePayableAmount({
-        subtotal,
-        couponDiscount: normalizedCouponDiscount,
-        prepaidDiscount,
-        shipping,
-      }),
+      shipping,
+    });
+    const effectiveDiscountPaise = getEffectiveDiscountPaise({
+      subtotal,
+      shipping,
+      finalAmount,
+    });
+    const rawPrepaidDiscountPaise = toPaise(prepaidDiscount);
+    const couponDiscountPaise =
+      rawPrepaidDiscountPaise > 0
+        ? Math.min(toPaise(normalizedCouponDiscount), effectiveDiscountPaise)
+        : effectiveDiscountPaise;
+    const prepaidDiscountPaise = Math.max(
+      0,
+      effectiveDiscountPaise - couponDiscountPaise
+    );
+
+    return {
+      couponDiscount: normalizedCouponDiscount,
+      prepaidDiscount: fromPaise(prepaidDiscountPaise),
+      finalAmount,
       discountWinner:
-        normalizedCouponDiscount > 0 && prepaidDiscount > 0
+        normalizedCouponDiscount > 0 && prepaidDiscountPaise > 0
           ? "stacked"
-          : prepaidDiscount > 0
+          : prepaidDiscountPaise > 0
             ? "prepaid"
             : normalizedCouponDiscount > 0
               ? "coupon"
@@ -127,26 +156,35 @@ export function calculateDiscountBreakdown({
   });
 
   if (prepaidDiscount > normalizedCouponDiscount) {
+    const finalAmount = calculatePayableAmount({
+      subtotal,
+      prepaidDiscount,
+      shipping,
+    });
+
     return {
       couponDiscount: 0,
-      prepaidDiscount,
-      finalAmount: calculatePayableAmount({
-        subtotal,
-        prepaidDiscount,
-        shipping,
-      }),
+      prepaidDiscount: fromPaise(
+        getEffectiveDiscountPaise({ subtotal, shipping, finalAmount })
+      ),
+      finalAmount,
       discountWinner: "prepaid",
     };
   }
 
-  return {
+  const finalAmount = calculatePayableAmount({
+    subtotal,
     couponDiscount: normalizedCouponDiscount,
+    shipping,
+  });
+  const effectiveCouponDiscount = fromPaise(
+    getEffectiveDiscountPaise({ subtotal, shipping, finalAmount })
+  );
+
+  return {
+    couponDiscount: effectiveCouponDiscount,
     prepaidDiscount: 0,
-    finalAmount: calculatePayableAmount({
-      subtotal,
-      couponDiscount: normalizedCouponDiscount,
-      shipping,
-    }),
-    discountWinner: normalizedCouponDiscount > 0 ? "coupon" : "none",
+    finalAmount,
+    discountWinner: effectiveCouponDiscount > 0 ? "coupon" : "none",
   };
 }

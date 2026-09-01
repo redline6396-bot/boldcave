@@ -4,19 +4,17 @@ import connectDB from "@/lib/db";
 import { getRuntimeDatabaseContext } from "@/lib/runtimeDatabaseContext";
 import { restoreStock } from "@/lib/orders/pricing";
 import {
-  buildFullRefundRequest,
-  createRazorpayFullRefund,
-  fetchRazorpayPaymentRefunds,
-  fetchRazorpayRefund,
-  getRefundAmountPaise,
-  getRefundIdempotencyKey,
-  RazorpayRefundError,
-} from "@/lib/payments/razorpay";
+  RefundServiceError,
+  refundRemainingForCancellation,
+} from "@/lib/payments/refunds";
 import {
-  cancelShiprocketShipmentByAwb,
-  cancelShiprocketOrder,
-  mapShiprocketStatusToOrderStatus,
-} from "@/lib/shipping/shiprocket";
+  cancelShipment,
+  getOrderShippingProvider,
+  hasShipmentCancellationTarget,
+  mapShippingStatusToOrderStatus,
+  SHIPPING_PROVIDERS,
+} from "@/lib/shipping";
+import { getOrderShippingSummary } from "@/lib/shipping/summary";
 import { cleanString, isObjectId } from "@/lib/validation";
 import Order from "@/models/Order";
 
@@ -57,220 +55,21 @@ function isPrepaidRazorpay(order) {
   );
 }
 
-function mapRefundStatus(status) {
-  const normalized = String(status || "").toLowerCase();
-  if (normalized === "processed") return "refunded";
-  if (normalized === "failed") return "failed";
-  return "pending";
-}
-
-function dateFromUnixSeconds(value) {
-  const timestamp = Number(value);
-  return Number.isFinite(timestamp) && timestamp > 0
-    ? new Date(timestamp * 1000)
-    : new Date();
-}
-
-function getRefundAmountRupees(refund, amountPaise) {
-  const paise = Number(refund?.amount) || Number(amountPaise) || 0;
-  return Math.round(paise) / 100;
-}
-
-function getStoredRefundId(order) {
-  return String(order?.payment?.razorpayRefundId || "").trim();
-}
-
-function getStoredRefundKey(order) {
-  return String(order?.payment?.refundIdempotencyKey || "").trim();
-}
-
-function refundMatchesOrder(refund, order, idempotencyKey) {
-  if (!refund) return false;
-  const notes = refund.notes || {};
-  return (
-    refund.receipt === idempotencyKey ||
-    notes.refundIdempotencyKey === idempotencyKey ||
-    notes.orderNumber === order.orderNumber ||
-    notes.orderId === String(order._id)
-  );
-}
-
-function getRefundFields(refund, { amountPaise, idempotencyKey }) {
-  const refundStatus = mapRefundStatus(refund?.status);
-  const now = new Date();
-  const fields = {
-    "payment.refundStatus": refundStatus,
-    "payment.razorpayRefundId": refund?.id || "",
-    "payment.refundAmount": getRefundAmountRupees(refund, amountPaise),
-    "payment.refundIdempotencyKey": idempotencyKey,
-    "payment.refundInitiatedAt": refund?.created_at
-      ? dateFromUnixSeconds(refund.created_at)
-      : now,
-    "payment.refundLastCheckedAt": now,
-    "payment.refundError":
-      refundStatus === "failed" ? customerSafeRefundError() : "",
-  };
-
-  if (refundStatus === "refunded") {
-    fields["payment.refundedAt"] = now;
-  }
-
-  return fields;
-}
-
-async function persistRefundState(orderId, refund, options) {
-  const fields = getRefundFields(refund, options);
-  const unset = {};
-
-  if (fields["payment.refundStatus"] !== "refunded") {
-    unset["payment.refundedAt"] = "";
-  }
-
-  const update = { $set: fields };
-  if (Object.keys(unset).length) update.$unset = unset;
-
-  return Order.findByIdAndUpdate(orderId, update, { returnDocument: "after" });
-}
-
-async function markRefundIntent(order, { amountPaise, idempotencyKey }) {
-  return Order.findOneAndUpdate(
-    {
-      _id: order._id,
-      "payment.method": "razorpay",
-      "payment.paymentStatus": "paid",
-      "payment.refundStatus": { $ne: "refunded" },
-    },
-    {
-      $set: {
-        "payment.refundStatus": "pending",
-        "payment.refundAmount": Math.round(amountPaise) / 100,
-        "payment.refundIdempotencyKey": idempotencyKey,
-        "payment.refundError": "",
-      },
-      $unset: {
-        "payment.refundedAt": "",
-      },
-    },
-    { returnDocument: "after" }
-  );
-}
-
-async function reconcileExistingRefund(order, { amountPaise, idempotencyKey }) {
-  const paymentId = order.payment?.razorpayPaymentId;
-  const storedRefundId = getStoredRefundId(order);
-
-  if (storedRefundId) {
-    const refund = await fetchRazorpayRefund({
-      razorpayPaymentId: paymentId,
-      refundId: storedRefundId,
-    });
-    return persistRefundState(order._id, refund, { amountPaise, idempotencyKey });
-  }
-
-  const refunds = await fetchRazorpayPaymentRefunds(paymentId);
-  const match = (refunds?.items || []).find((refund) =>
-    refundMatchesOrder(refund, order, idempotencyKey)
-  );
-
-  return match
-    ? persistRefundState(order._id, match, { amountPaise, idempotencyKey })
-    : null;
-}
-
-async function processPrepaidRefund(order) {
-  const razorpayPaymentId = String(order.payment?.razorpayPaymentId || "").trim();
-  const amountPaise = getRefundAmountPaise(order);
-  const idempotencyKey = getStoredRefundKey(order) || getRefundIdempotencyKey(order);
-
-  if (!razorpayPaymentId) {
-    throw new CancellationError(
-      "RAZORPAY_PAYMENT_ID_MISSING",
-      "Refund cannot be started for this payment.",
-      409
-    );
-  }
-
-  if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
-    throw new CancellationError(
-      "REFUND_AMOUNT_INVALID",
-      "Refund amount is invalid for this order.",
-      409
-    );
-  }
-
-  await markRefundIntent(order, { amountPaise, idempotencyKey });
-
-  let refreshedOrder = await Order.findById(order._id);
-  if (refreshedOrder?.payment?.refundStatus === "refunded") {
-    return refreshedOrder;
-  }
-
+async function processPrepaidRefund(order, { reason, actor }) {
   try {
-    if (
-      getStoredRefundId(refreshedOrder) ||
-      ["pending", "failed"].includes(refreshedOrder?.payment?.refundStatus)
-    ) {
-      const reconciledOrder = await reconcileExistingRefund(refreshedOrder, {
-        amountPaise,
-        idempotencyKey,
-      });
-
-      if (reconciledOrder) {
-        if (reconciledOrder.payment?.refundStatus === "failed") {
-          throw new RazorpayRefundError(customerSafeRefundError(), {
-            status: 502,
-            refundStatus: "failed",
-          });
-        }
-        return reconciledOrder;
-      }
-    }
-
-    const refundBody = buildFullRefundRequest({
-      order: refreshedOrder || order,
-      amountPaise,
-      idempotencyKey,
-    });
-    refundBody.notes.refundIdempotencyKey = idempotencyKey;
-
-    const refund = await createRazorpayFullRefund({
-      razorpayPaymentId,
-      amountPaise,
-      idempotencyKey,
-      body: refundBody,
-    });
-
-    refreshedOrder = await persistRefundState(order._id, refund, {
-      amountPaise,
-      idempotencyKey,
-    });
-
-    if (refreshedOrder?.payment?.refundStatus === "failed") {
-      throw new RazorpayRefundError(customerSafeRefundError(), {
-        status: 502,
-        refundStatus: "failed",
-      });
-    }
-
-    return refreshedOrder;
+    const result = await refundRemainingForCancellation({ order, reason, actor });
+    return result.order;
   } catch (error) {
-    if (error instanceof CancellationError) throw error;
+    if (error instanceof RefundServiceError) {
+      throw new CancellationError(
+        error.code,
+        error.message || customerSafeRefundError(),
+        error.status,
+        error.details
+      );
+    }
 
-    await Order.findByIdAndUpdate(order._id, {
-      $set: {
-        "payment.refundStatus": "failed",
-        "payment.refundAmount": Math.round(amountPaise) / 100,
-        "payment.refundIdempotencyKey": idempotencyKey,
-        "payment.refundLastCheckedAt": new Date(),
-        "payment.refundError": customerSafeRefundError(),
-      },
-    });
-
-    throw new CancellationError(
-      "RAZORPAY_REFUND_FAILED",
-      customerSafeRefundError(),
-      error?.status || 502
-    );
+    throw error;
   }
 }
 
@@ -323,8 +122,10 @@ function assertCancellable(order) {
     );
   }
 
-  const mappedShipmentStatus = mapShiprocketStatusToOrderStatus(
-    order.shiprocket?.shipmentStatus
+  const shipping = getOrderShippingSummary(order);
+  const mappedShipmentStatus = mapShippingStatusToOrderStatus(
+    order,
+    shipping.shipmentStatus
   );
 
   if (
@@ -338,7 +139,7 @@ function assertCancellable(order) {
     );
   }
 
-  if (shipmentStatusIndicatesMovement(order.shiprocket?.shipmentStatus)) {
+  if (shipmentStatusIndicatesMovement(shipping.shipmentStatus)) {
     throw new CancellationError(
       "SHIPMENT_ALREADY_STARTED",
       "This order can no longer be cancelled after shipment has started.",
@@ -469,9 +270,7 @@ export async function cancelOrder({
   assertCancellable(order);
   const prepaidRazorpay = isPrepaidRazorpay(order);
 
-  const hasShiprocketCancellationTarget = Boolean(
-    order.shiprocket?.awbCode || order.shiprocket?.shiprocketOrderId
-  );
+  const hasShiprocketCancellationTarget = hasShipmentCancellationTarget(order);
   const shiprocketAlreadyCancelled =
     order.cancellation?.shiprocketCancelStatus === "cancelled";
 
@@ -547,11 +346,8 @@ export async function cancelOrder({
     throw error;
   }
 
-  const claimedAwbCode = String(claimedOrder.shiprocket?.awbCode || "").trim();
-  const claimedShiprocketOrderId = claimedOrder.shiprocket?.shiprocketOrderId;
-  const claimedHasShiprocketTarget = Boolean(
-    claimedAwbCode || claimedShiprocketOrderId
-  );
+  const claimedShippingProvider = getOrderShippingProvider(claimedOrder);
+  const claimedHasShiprocketTarget = hasShipmentCancellationTarget(claimedOrder);
   const claimedShiprocketAlreadyCancelled =
     claimedOrder.cancellation?.shiprocketCancelStatus === "cancelled";
   let shiprocketCancelStatus =
@@ -559,11 +355,7 @@ export async function cancelOrder({
 
   if (claimedHasShiprocketTarget && !claimedShiprocketAlreadyCancelled) {
     try {
-      if (claimedAwbCode) {
-        await cancelShiprocketShipmentByAwb(claimedAwbCode);
-      } else {
-        await cancelShiprocketOrder(claimedShiprocketOrderId);
-      }
+      await cancelShipment(claimedOrder);
       shiprocketCancelStatus = "cancelled";
       await Order.findByIdAndUpdate(claimedOrder._id, {
         $set: {
@@ -572,16 +364,30 @@ export async function cancelOrder({
         },
       });
     } catch (error) {
-      const failedOrder = await failClaimedCancellation(claimedOrder._id, {
+      const isShiprocketProvider =
+        claimedShippingProvider === SHIPPING_PROVIDERS.SHIPROCKET;
+      const failureUpdates = {
         "cancellation.shiprocketCancelStatus": "failed",
         "cancellation.shiprocketCancelError": sanitizeError(error),
         "stockRestoration.status": "not_required",
         "stockRestoration.error": "",
-      });
+      };
+
+      if (!isShiprocketProvider) {
+        failureUpdates["shadowfax.cancelStatus"] = "failed";
+        failureUpdates["shadowfax.cancelError"] = sanitizeError(error);
+      }
+
+      const failedOrder = await failClaimedCancellation(
+        claimedOrder._id,
+        failureUpdates
+      );
 
       throw new CancellationError(
-        "SHIPROCKET_CANCEL_FAILED",
-        "Shiprocket cancellation failed. The order was not cancelled.",
+        isShiprocketProvider ? "SHIPROCKET_CANCEL_FAILED" : "SHIPMENT_CANCEL_FAILED",
+        isShiprocketProvider
+          ? "Shiprocket cancellation failed. The order was not cancelled."
+          : "Shipment cancellation failed. The order was not cancelled.",
         502,
         { order: failedOrder }
       );
@@ -590,7 +396,10 @@ export async function cancelOrder({
 
   if (prepaidRazorpay) {
     try {
-      await processPrepaidRefund(claimedOrder);
+      await processPrepaidRefund(claimedOrder, {
+        reason: normalizedReason,
+        actor,
+      });
     } catch (error) {
       const failedOrder = await failClaimedCancellation(claimedOrder._id, {
         "cancellation.shiprocketCancelStatus": shiprocketCancelStatus,
@@ -665,10 +474,10 @@ export async function retryOrderRefund({ orderId }) {
     );
   }
 
-  if (order.payment?.refundStatus === "refunded") {
+  if (["refunded", "full"].includes(order.payment?.refundStatus)) {
     return {
       order,
-      refundStatus: "refunded",
+      refundStatus: order.payment?.refundStatus,
       refundAmount: order.payment?.refundAmount,
       refundedAt: order.payment?.refundedAt,
       idempotent: true,
@@ -701,7 +510,10 @@ export async function retryOrderRefund({ orderId }) {
 
   let refundedOrder;
   try {
-    refundedOrder = await processPrepaidRefund(order);
+    refundedOrder = await processPrepaidRefund(order, {
+      reason: order.cancellation?.reason || "Refund retry",
+      actor: order.cancellation?.cancelledBy || "admin",
+    });
   } catch (error) {
     const failedOrder =
       order.orderStatus === "cancelled"

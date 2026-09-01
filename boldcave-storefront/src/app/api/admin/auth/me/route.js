@@ -25,7 +25,10 @@ export async function GET(request) {
       })
     );
   } catch (error) {
-    console.error("Admin auth/me error:", error);
+    console.error("Admin auth/me error", {
+      name: error?.name,
+      code: error?.code,
+    });
 
     return applyAdminCors(
       request,

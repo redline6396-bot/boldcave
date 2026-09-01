@@ -4,13 +4,18 @@ import { requireUser } from "@/lib/auth/session";
 import { syncUserProfileFromCheckoutAddress } from "@/lib/auth/users";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import {
-  consumeCouponUsageForOrder,
-  deductStock,
-} from "@/lib/orders/pricing";
-import { verifyRazorpaySignature } from "@/lib/payments/razorpay";
-import { syncShiprocketOrder } from "@/lib/shipping/shiprocket";
+  finalizeCapturedRazorpayAttempt,
+  PAYMENT_VERIFICATION_FAILED_MESSAGE,
+  persistAttemptPaymentState,
+  RazorpayPaymentVerificationError,
+  validateCapturedPaymentForAttempt,
+} from "@/lib/orders/razorpayFinalization";
+import {
+  fetchRazorpayPayment,
+  verifyRazorpaySignature,
+} from "@/lib/payments/razorpay";
+import { SHIPPING_PROVIDERS } from "@/lib/shipping";
 import { isAcceptingOrders } from "@/lib/storeSettings";
-import Order from "@/models/Order";
 import RazorpayAttempt from "@/models/RazorpayAttempt";
 
 export const runtime = "nodejs";
@@ -37,10 +42,7 @@ async function verifyRazorpayOrderRoute(request) {
     }
 
     if (attempt.status === "paid" && attempt.finalOrder) {
-      const existingOrder = await Order.findOne({
-        _id: attempt.finalOrder,
-        user: auth.user._id,
-      });
+      const existingOrder = await attempt.populate("finalOrder").then((doc) => doc.finalOrder);
       if (existingOrder) {
         return success({ order: existingOrder, idempotent: true });
       }
@@ -65,17 +67,44 @@ async function verifyRazorpayOrderRoute(request) {
       return failure("PAYMENT_VERIFICATION_FAILED", "Payment verification failed", 400);
     }
 
-    const existingOrder = await Order.findOne({
-      orderNumber: attempt.orderNumber,
-      user: auth.user._id,
-    });
-    if (existingOrder) {
-      attempt.status = "paid";
-      attempt.finalOrder = existingOrder._id;
-      attempt.razorpayPaymentId = body.razorpay_payment_id;
-      attempt.razorpaySignature = body.razorpay_signature;
-      await attempt.save();
-      return success({ order: existingOrder, idempotent: true });
+    let payment;
+    try {
+      payment = await fetchRazorpayPayment(body.razorpay_payment_id);
+    } catch {
+      await persistAttemptPaymentState(attempt, {
+        status: "needs_reconciliation",
+        reconciliationReason: "payment_fetch_failed",
+        payment: { id: body.razorpay_payment_id },
+      });
+      return failure(
+        "PAYMENT_CONFIRMATION_PENDING",
+        "We're confirming your payment. Please don't make another payment right now.",
+        202
+      );
+    }
+
+    try {
+      validateCapturedPaymentForAttempt({
+        attempt,
+        payment,
+        razorpayOrderId: body.razorpay_order_id,
+        razorpayPaymentId: body.razorpay_payment_id,
+      });
+    } catch (error) {
+      if (!(error instanceof RazorpayPaymentVerificationError)) throw error;
+
+      const isPending = error.code === "PAYMENT_CONFIRMATION_PENDING";
+      await persistAttemptPaymentState(attempt, {
+        status: isPending ? "pending_capture" : "needs_reconciliation",
+        reconciliationReason: error.details?.reason || error.code,
+        payment,
+      });
+
+      return failure(
+        error.code,
+        error.message || PAYMENT_VERIFICATION_FAILED_MESSAGE,
+        error.status
+      );
     }
 
     if (!(await isAcceptingOrders())) {
@@ -86,103 +115,34 @@ async function verifyRazorpayOrderRoute(request) {
       );
     }
 
-    const claimedAttempt = await RazorpayAttempt.findOneAndUpdate(
-      {
-        _id: attempt._id,
-        user: auth.user._id,
-        status: { $in: ["created", "failed"] },
-        finalOrder: null,
-      },
-      {
-        $set: {
-          status: "verifying",
-          razorpayPaymentId: body.razorpay_payment_id,
-          razorpaySignature: body.razorpay_signature,
-          failureReason: "",
-        },
-      },
-      { returnDocument: "after" }
-    );
-
-    if (!claimedAttempt) {
-      const latestAttempt = await RazorpayAttempt.findById(attempt._id);
-      if (latestAttempt?.finalOrder) {
-        const finalizedOrder = await Order.findOne({
-          _id: latestAttempt.finalOrder,
-          user: auth.user._id,
-        });
-        if (finalizedOrder) {
-          return success({ order: finalizedOrder, idempotent: true });
-        }
-      }
-
-      return failure(
-        "PAYMENT_VERIFICATION_IN_PROGRESS",
-        "Payment verification is already in progress",
-        409
-      );
-    }
-
-    try {
-      await deductStock(claimedAttempt.items);
-    } catch (error) {
-      if (error.code === "STOCK_CHANGED") {
-        claimedAttempt.status = "failed";
-        claimedAttempt.failureReason = "stock_changed_after_payment_verification";
-        await claimedAttempt.save();
-        return failure("STOCK_CHANGED", "Stock changed before payment confirmation", 409, {
-          items: error.items,
-        });
-      }
-      throw error;
-    }
-
-    const order = await Order.create({
-      orderNumber: claimedAttempt.orderNumber,
-      user: claimedAttempt.user,
-      customer: claimedAttempt.customer,
-      deliveryAddress: claimedAttempt.deliveryAddress,
-      items: claimedAttempt.items,
-      amounts: claimedAttempt.amounts,
-      coupon: claimedAttempt.coupon,
-      payment: {
-        method: "razorpay",
-        paymentStatus: "paid",
-        razorpayOrderId: claimedAttempt.razorpayOrderId,
-        razorpayPaymentId: body.razorpay_payment_id,
-        razorpaySignature: body.razorpay_signature,
-      },
-      orderStatus: "confirmed",
-    });
-
-    await consumeCouponUsageForOrder({
-      coupon: claimedAttempt.coupon,
-      userId: claimedAttempt.user,
-      order,
+    const result = await finalizeCapturedRazorpayAttempt({
+      attempt,
+      payment,
+      razorpaySignature: body.razorpay_signature,
+      shippingProvider:
+        attempt.shippingProvider || SHIPPING_PROVIDERS.SHIPROCKET,
     });
 
     try {
-      await syncUserProfileFromCheckoutAddress(auth.user, claimedAttempt.deliveryAddress);
+      await syncUserProfileFromCheckoutAddress(auth.user, attempt.deliveryAddress);
     } catch (error) {
       console.error("Checkout profile sync failed", {
         userId: String(auth.user._id),
-        orderId: String(order._id),
+        orderId: String(result.order._id),
         code: error?.code,
       });
     }
 
-    const shiprocketSync = await syncShiprocketOrder(order);
-    const finalOrder = shiprocketSync.order || order;
-
-    claimedAttempt.status = "paid";
-    claimedAttempt.finalOrder = finalOrder._id;
-    claimedAttempt.razorpayPaymentId = body.razorpay_payment_id;
-    claimedAttempt.razorpaySignature = body.razorpay_signature;
-    claimedAttempt.failureReason = "";
-    await claimedAttempt.save();
-
-    return success({ order: finalOrder });
+    return success({
+      order: result.order,
+      shippingPending: Boolean(result.shippingError),
+      idempotent: Boolean(result.idempotent),
+    });
   } catch (error) {
+    if (error instanceof RazorpayPaymentVerificationError) {
+      return failure(error.code, error.message, error.status, error.details);
+    }
+
     return handleRouteError(error, "RAZORPAY_VERIFY_FAILED");
   }
 }

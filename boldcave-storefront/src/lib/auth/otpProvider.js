@@ -15,6 +15,8 @@ const SEND_WINDOW_MINUTES = 60;
 const MAX_SENDS_PER_WINDOW = 8;
 const SEND_BLOCK_MINUTES = 15;
 const PROVIDER_TIMEOUT_MS = 10000;
+export const OTP_PUBLIC_DELIVERY_ERROR_MESSAGE =
+  "We couldn't send the OTP right now. Please try again shortly.";
 
 export class OtpRateLimitError extends Error {
   constructor(message, retryAfterSeconds) {
@@ -26,7 +28,7 @@ export class OtpRateLimitError extends Error {
 }
 
 export class OtpDeliveryError extends Error {
-  constructor(message = "Unable to send OTP right now. Please try again.") {
+  constructor(message = OTP_PUBLIC_DELIVERY_ERROR_MESSAGE) {
     super(message);
     this.name = "OtpDeliveryError";
     this.code = "OTP_DELIVERY_FAILED";
@@ -211,19 +213,11 @@ async function sendStartMessagingOtp(phone, otp) {
 }
 
 function providerFailureMessage(status) {
-  if (status === 401) {
-    return "OTP service is not configured correctly.";
-  }
-
-  if (status === 402) {
-    return "OTP service is temporarily unavailable.";
-  }
-
   if (status === 429) {
     return "OTP service is busy. Please try again shortly.";
   }
 
-  return "Unable to send OTP right now. Please try again.";
+  return OTP_PUBLIC_DELIVERY_ERROR_MESSAGE;
 }
 
 export async function sendOtp(phone) {

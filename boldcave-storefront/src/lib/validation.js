@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 export const PRODUCT_CATEGORIES = ["Men", "Women", "Unisex"];
 export const ORDER_STATUSES = [
+  "shipping_pending",
   "confirmed",
   "processing",
   "shipped",

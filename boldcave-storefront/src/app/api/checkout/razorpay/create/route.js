@@ -8,7 +8,10 @@ import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { checkoutProfileFromAddress } from "@/lib/auth/users";
 import { calculateCart, generateOrderNumber, validateAddress } from "@/lib/orders/pricing";
 import { createRazorpayOrder } from "@/lib/payments/razorpay";
-import { validateCheckoutServiceability } from "@/lib/shipping/shiprocket";
+import {
+  getConfiguredShippingProvider,
+  validateCheckoutServiceability,
+} from "@/lib/shipping";
 import { isAcceptingOrders } from "@/lib/storeSettings";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
 import RazorpayAttempt from "@/models/RazorpayAttempt";
@@ -80,6 +83,7 @@ async function createRazorpayOrderRoute(request) {
       return failure(cart.error.code, cart.error.message, cart.error.status, cart.error.details);
     }
 
+    const shippingProvider = getConfiguredShippingProvider();
     const serviceability = await validateCheckoutServiceability({
       deliveryPincode: deliveryAddress.pincode,
       cod: false,
@@ -128,6 +132,7 @@ async function createRazorpayOrderRoute(request) {
         finalAmount: cart.finalAmount,
       },
       coupon: cart.coupon,
+      shippingProvider,
       razorpayOrderId: razorpayOrder.id,
       status: "created",
       expiresAt,

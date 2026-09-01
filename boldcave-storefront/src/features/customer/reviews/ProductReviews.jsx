@@ -895,23 +895,39 @@ function InteractiveStars({ value, onChange }) {
 
   return (
     <div className="mt-4 flex justify-center gap-1.5">
-      {[1, 2, 3, 4, 5].map((rating) => (
-        <button
-          key={rating}
-          type="button"
-          onClick={() => onChange(rating)}
-          onMouseEnter={() => setHoverValue(rating)}
-          onMouseLeave={() => setHoverValue(0)}
-          className="cursor-pointer text-neutral-300 transition-colors hover:text-neutral-950"
-          aria-label={`${rating} star${rating === 1 ? "" : "s"}`}
-        >
-          <SharpStar
-            className={rating <= displayValue ? "text-neutral-950" : "text-neutral-300"}
-            fill={rating <= displayValue ? "currentColor" : "transparent"}
-            size={25}
-          />
-        </button>
-      ))}
+      {[1, 2, 3, 4, 5].map((rating) => {
+        const fillPercent = rating <= displayValue ? 100 : 0;
+
+        return (
+          <button
+            key={rating}
+            type="button"
+            onClick={() => onChange(rating)}
+            onMouseEnter={() => setHoverValue(rating)}
+            onMouseLeave={() => setHoverValue(0)}
+            className="group flex h-8 w-8 cursor-pointer items-center justify-center"
+            aria-label={`${rating} star${rating === 1 ? "" : "s"}`}
+          >
+            <span className="relative block h-[25px] w-[25px]">
+              <SharpStar
+                className="absolute inset-0 text-neutral-300 transition-colors duration-200 group-hover:text-neutral-400"
+                fill="transparent"
+                size={25}
+              />
+              <span
+                className="absolute inset-0 overflow-hidden transition-[width] duration-200 ease-out"
+                style={{ width: `${fillPercent}%` }}
+              >
+                <SharpStar
+                  className="text-neutral-950"
+                  fill="currentColor"
+                  size={25}
+                />
+              </span>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -167,7 +167,9 @@ export default function ProductDetailClient({
         average: Number(initialReviewSummary.average) || 0,
         count: Number(initialReviewSummary.count) || 0,
       }
-    : null;
+    : product
+      ? { average: 0, count: 0 }
+      : null;
 
   const variants = product?.variants || [];
   const defaultVariant = getDefaultVariant(variants);
@@ -899,6 +901,15 @@ export default function ProductDetailClient({
             </p>
           )}
 
+          <div className="mt-2.5 flex max-w-[460px] flex-nowrap items-center gap-1 overflow-visible min-[600px]:mt-2.5 min-[600px]:max-w-[560px] min-[820px]:mt-2 min-[820px]:max-w-[340px] lg:mt-2.5 lg:max-w-[460px]">
+            {audienceTags.map((tag) => (
+              <InfoPill key={`audience-${tag}`}>{tag}</InfoPill>
+            ))}
+            {profileTags.map((tag) => (
+              <InfoPill key={`profile-${tag}`}>{tag}</InfoPill>
+            ))}
+          </div>
+
           <div className="min-h-[22px]">
             {reviewSummary && (
               <button
@@ -921,15 +932,6 @@ export default function ProductDetailClient({
                 </span>
               </button>
             )}
-          </div>
-
-          <div className="mt-2.5 flex max-w-[460px] flex-nowrap items-center gap-1 overflow-visible min-[600px]:mt-2.5 min-[600px]:max-w-[560px] min-[820px]:mt-2 min-[820px]:max-w-[340px] lg:mt-2.5 lg:max-w-[460px]">
-            {audienceTags.map((tag) => (
-              <InfoPill key={`audience-${tag}`}>{tag}</InfoPill>
-            ))}
-            {profileTags.map((tag) => (
-              <InfoPill key={`profile-${tag}`}>{tag}</InfoPill>
-            ))}
           </div>
 
           {product.shortDescription && (

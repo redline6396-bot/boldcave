@@ -57,7 +57,10 @@ export async function POST(request) {
 
     return applyAdminCors(request, response);
   } catch (error) {
-    console.error("Admin login error:", error);
+    console.error("Admin login error", {
+      name: error?.name,
+      code: error?.code,
+    });
 
     return applyAdminCors(
       request,

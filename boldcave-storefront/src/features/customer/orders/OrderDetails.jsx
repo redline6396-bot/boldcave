@@ -17,6 +17,7 @@ import {
   fetchOrder,
   fetchOrderTracking,
 } from "@/lib/clientApi";
+import { getOrderShippingSummary } from "@/lib/shipping/summary";
 
 const ordersHref = "/profile?section=orders";
 const CANCELLABLE_ORDER_STATUSES = ["confirmed", "processing"];
@@ -265,7 +266,8 @@ export default function OrderDetails() {
 
         setOrder(result);
 
-        if (!result?.shiprocket?.awbCode) {
+        const shipping = getOrderShippingSummary(result);
+        if (!shipping.awbCode) {
           return;
         }
 
@@ -275,6 +277,30 @@ export default function OrderDetails() {
 
             setOrder((current) => {
               if (!current) return current;
+
+              const currentShipping = getOrderShippingSummary(current);
+
+              if (currentShipping.provider === "shadowfax") {
+                return {
+                  ...current,
+                  orderStatus: tracking?.orderStatus || current.orderStatus,
+                  shadowfax: {
+                    ...(current.shadowfax || {}),
+                    shipmentStatus:
+                      tracking?.status ||
+                      current.shadowfax?.shipmentStatus ||
+                      "",
+                    statusDisplay:
+                      tracking?.statusDisplay ||
+                      current.shadowfax?.statusDisplay ||
+                      "",
+                    trackingUrl:
+                      tracking?.trackingUrl ||
+                      current.shadowfax?.trackingUrl ||
+                      "",
+                  },
+                };
+              }
 
               return {
                 ...current,
@@ -386,10 +412,11 @@ export default function OrderDetails() {
   const prepaidDiscount = Number(order.amounts?.prepaidDiscount) || 0;
   const finalAmount = Number(order.amounts?.finalAmount) || 0;
 
-  const trackingUrl = order.shiprocket?.trackingUrl;
-  const awbCode = order.shiprocket?.awbCode;
-  const courierName = order.shiprocket?.courierName;
-  const shipmentStatus = order.shiprocket?.shipmentStatus;
+  const shipping = getOrderShippingSummary(order);
+  const trackingUrl = shipping.trackingUrl;
+  const awbCode = shipping.awbCode;
+  const courierName = shipping.courierName;
+  const shipmentStatus = shipping.statusDisplay || shipping.shipmentStatus;
   const cancellation = order.cancellation || {};
   const isCancelledOrder = status === "cancelled";
   const canCancelOrder = CANCELLABLE_ORDER_STATUSES.includes(status);

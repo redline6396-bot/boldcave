@@ -343,6 +343,27 @@ export async function consumeCouponUsageForOrder({
   return { consumed: true };
 }
 
+export async function releaseCouponUsageForOrder({ coupon, order } = {}) {
+  const couponId = coupon?.couponId || coupon?._id;
+  const orderId = order?._id;
+
+  if (!couponId || !orderId) {
+    return { released: false, skipped: true };
+  }
+
+  const deleteResult = await CouponUsage.deleteOne({ couponId, orderId });
+  if (deleteResult.deletedCount !== 1) {
+    return { released: false, skipped: true };
+  }
+
+  await Coupon.updateOne(
+    { _id: couponId, usedCount: { $gt: 0 } },
+    { $inc: { usedCount: -1 } }
+  );
+
+  return { released: true };
+}
+
 export function validateAddress(address = {}) {
   const required = ["fullName", "addressLine", "city", "state", "pincode"];
   const missing = required.filter((field) => !String(address[field] || "").trim());

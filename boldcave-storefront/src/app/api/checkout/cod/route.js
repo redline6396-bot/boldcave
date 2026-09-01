@@ -14,17 +14,120 @@ import {
   consumeCouponUsageForOrder,
   deductStock,
   generateOrderNumber,
+  releaseCouponUsageForOrder,
+  restoreStock,
   validateAddress,
 } from "@/lib/orders/pricing";
 import {
-  syncShiprocketOrder,
+  getConfiguredShippingProvider,
+  syncShipment,
   validateCheckoutServiceability,
-} from "@/lib/shipping/shiprocket";
+} from "@/lib/shipping";
 import { isAcceptingOrders } from "@/lib/storeSettings";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
 import Order from "@/models/Order";
 
 export const runtime = "nodejs";
+
+const SHIPPING_TEMPORARILY_UNAVAILABLE_MESSAGE =
+  "We're unable to process your order right now. Please try again shortly.";
+const ORDER_SHIPMENT_PENDING_MESSAGE =
+  "We're verifying your order. Please don't place it again right now.";
+
+function hasProviderShipmentIdentity(order) {
+  const shadowfax = order?.shadowfax || {};
+  const shiprocket = order?.shiprocket || {};
+
+  return Boolean(
+    shadowfax.orderId ||
+      shadowfax.awbNumber ||
+      shiprocket.shiprocketOrderId ||
+      shiprocket.shipmentId ||
+      shiprocket.awbCode
+  );
+}
+
+function getShippingSyncStatus(order, shipmentSync) {
+  return (
+    shipmentSync?.syncStatus ||
+    order?.shadowfax?.syncStatus ||
+    order?.shiprocket?.syncStatus ||
+    ""
+  );
+}
+
+async function markCodOrderConfirmed(order) {
+  const confirmedOrder = await Order.findByIdAndUpdate(
+    order._id,
+    {
+      $set: {
+        orderStatus: "confirmed",
+      },
+    },
+    { returnDocument: "after" }
+  );
+
+  return confirmedOrder || order;
+}
+
+async function voidCodOrderAfterShippingFailure(order, { userId }) {
+  await restoreStock(order.items);
+
+  try {
+    await releaseCouponUsageForOrder({ coupon: order.coupon, order });
+  } catch (error) {
+    console.error("COD coupon usage release failed after shipping failure", {
+      orderId: String(order._id),
+      orderNumber: order.orderNumber,
+      code: error?.code,
+    });
+  }
+
+  const now = new Date();
+  const voidedOrder = await Order.findByIdAndUpdate(
+    order._id,
+    {
+      $set: {
+        orderStatus: "cancelled",
+        "cancellation.status": "cancelled",
+        "cancellation.reason": "Shipping creation failed",
+        "cancellation.cancelledBy": "system",
+        "cancellation.cancelledAt": now,
+        "stockRestoration.status": "restored",
+        "stockRestoration.restoredAt": now,
+        "stockRestoration.error": "",
+      },
+    },
+    { returnDocument: "after" }
+  );
+
+  console.error("COD shipping failed; provisional order voided", {
+    orderId: String(order._id),
+    orderNumber: order.orderNumber,
+    userId: String(userId),
+    shippingProvider: order.shippingProvider,
+    shadowfaxSyncStatus: voidedOrder?.shadowfax?.syncStatus,
+    shiprocketSyncStatus: voidedOrder?.shiprocket?.syncStatus,
+    shadowfaxLastError: voidedOrder?.shadowfax?.lastError,
+    shiprocketLastError: voidedOrder?.shiprocket?.lastError,
+  });
+
+  return voidedOrder || order;
+}
+
+async function markCodOrderShipmentPending(order) {
+  const pendingOrder = await Order.findByIdAndUpdate(
+    order._id,
+    {
+      $set: {
+        orderStatus: "shipping_pending",
+      },
+    },
+    { returnDocument: "after" }
+  );
+
+  return pendingOrder || order;
+}
 
 export async function POST(request) {
   return withRuntimeDatabase(() => createCodOrderRoute(request));
@@ -91,6 +194,7 @@ async function createCodOrderRoute(request) {
       return failure(cart.error.code, cart.error.message, cart.error.status, cart.error.details);
     }
 
+    const shippingProvider = getConfiguredShippingProvider();
     const serviceability = await validateCheckoutServiceability({
       deliveryPincode: deliveryAddress.pincode,
       cod: true,
@@ -142,7 +246,8 @@ async function createCodOrderRoute(request) {
         method: "cod",
         paymentStatus: "cod",
       },
-      orderStatus: "confirmed",
+      orderStatus: "shipping_pending",
+      shippingProvider,
     });
 
     await consumeCouponUsageForOrder({
@@ -161,9 +266,51 @@ async function createCodOrderRoute(request) {
       });
     }
 
-    const shiprocketSync = await syncShiprocketOrder(order);
+    const shipmentSync = await syncShipment(order);
+    const syncedOrder = shipmentSync.order || order;
+    const shippingSyncStatus = getShippingSyncStatus(syncedOrder, shipmentSync);
 
-    return success({ order: shiprocketSync.order || order }, 201);
+    if (
+      shipmentSync.ok &&
+      shippingSyncStatus === "created" &&
+      hasProviderShipmentIdentity(syncedOrder)
+    ) {
+      return success({ order: await markCodOrderConfirmed(syncedOrder) }, 201);
+    }
+
+    if (shippingSyncStatus === "failed" || shippingSyncStatus === "not_configured") {
+      await voidCodOrderAfterShippingFailure(syncedOrder, {
+        userId: auth.user._id,
+      });
+
+      return failure(
+        "SHIPPING_TEMPORARILY_UNAVAILABLE",
+        SHIPPING_TEMPORARILY_UNAVAILABLE_MESSAGE,
+        503
+      );
+    }
+
+    if (
+      shippingSyncStatus === "needs_reconciliation" ||
+      shipmentSync.needsReconciliation ||
+      shipmentSync.inProgress
+    ) {
+      await markCodOrderShipmentPending(syncedOrder);
+
+      return failure(
+        "ORDER_SHIPMENT_PENDING",
+        ORDER_SHIPMENT_PENDING_MESSAGE,
+        409
+      );
+    }
+
+    await markCodOrderShipmentPending(syncedOrder);
+
+    return failure(
+      "ORDER_SHIPMENT_PENDING",
+      ORDER_SHIPMENT_PENDING_MESSAGE,
+      409
+    );
   } catch (error) {
     return handleRouteError(error, "COD_CHECKOUT_FAILED");
   }

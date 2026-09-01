@@ -20,6 +20,14 @@ export function failure(code, message, status = 500, details = undefined, init =
   return NextResponse.json(body, { status, ...init });
 }
 
+function getSafeErrorLog(error) {
+  return {
+    name: error?.name,
+    code: error?.code,
+    message: String(error?.message || "").slice(0, 180),
+  };
+}
+
 export function handleRouteError(error, fallbackCode = "INTERNAL_ERROR") {
   if (error?.name === "ValidationError") {
     return failure("VALIDATION_ERROR", error.message, 400);
@@ -33,7 +41,7 @@ export function handleRouteError(error, fallbackCode = "INTERNAL_ERROR") {
     return failure("CONFIGURATION_ERROR", "Service is not configured", 503);
   }
 
-  console.error("API route error:", error);
+  console.error("API route error", getSafeErrorLog(error));
   return failure(fallbackCode, "Something went wrong", 500);
 }
 

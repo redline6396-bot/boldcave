@@ -11,6 +11,13 @@ const placedOrderFilter = {
     { "payment.method": "cod" },
     { "payment.method": "razorpay", "payment.paymentStatus": "paid" },
   ],
+  $nor: [
+    {
+      orderStatus: "cancelled",
+      "cancellation.cancelledBy": "system",
+      "cancellation.reason": "Shipping creation failed",
+    },
+  ],
 };
 
 export async function GET(request) {

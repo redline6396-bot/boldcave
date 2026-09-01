@@ -37,13 +37,6 @@ function sanitizeAuthMessage(message) {
   return String(message || "").slice(0, 180);
 }
 
-function logShiprocketAuth(event, details = {}) {
-  console.info("Shiprocket auth", {
-    event,
-    ...details,
-  });
-}
-
 function getCredentialFingerprint() {
   return crypto
     .createHash("sha256")
@@ -286,20 +279,10 @@ async function waitForSharedToken(credentialFingerprint) {
         cacheDoc.tokenExpiresAt,
         credentialFingerprint
       );
-      logShiprocketAuth("shared_cache_hit_after_wait", {
-        cachedTokenUsed: true,
-        sharedCacheHit: true,
-        freshLoginRequestMade: false,
-      });
       return cacheDoc.accessToken;
     }
 
     if (isAuthCooldownActive(cacheDoc, credentialFingerprint)) {
-      logShiprocketAuth("cooldown_active_after_wait", {
-        cachedTokenUsed: false,
-        sharedCacheHit: false,
-        freshLoginRequestMade: false,
-      });
       throw createAuthCooldownError(cacheDoc);
     }
   }
@@ -321,13 +304,6 @@ async function loginToShiprocket(credentialFingerprint) {
       }),
     });
   } catch (error) {
-    logShiprocketAuth("fresh_login_network_error", {
-      cachedTokenUsed: false,
-      sharedCacheHit: false,
-      freshLoginRequestMade: true,
-      errorName: error?.name || "Error",
-      message: sanitizeAuthMessage(error?.message),
-    });
     await saveFailedAuth({
       status: null,
       message: error?.message || "Network error",
@@ -337,14 +313,6 @@ async function loginToShiprocket(credentialFingerprint) {
   }
 
   data = await response.json().catch(() => ({}));
-  logShiprocketAuth("fresh_login_response", {
-    cachedTokenUsed: false,
-    sharedCacheHit: false,
-    freshLoginRequestMade: true,
-    httpStatus: response.status,
-    authSucceeded: Boolean(response.ok && data.token),
-    message: sanitizeAuthMessage(data?.message || data?.error),
-  });
 
   if (!response.ok || !data.token) {
     const message = data?.message || data?.error || "Shiprocket authentication failed";
@@ -374,20 +342,10 @@ async function resolveShiprocketToken() {
 
   if (isUsableSharedToken(cacheDoc, credentialFingerprint)) {
     hydrateMemoryToken(cacheDoc.accessToken, cacheDoc.tokenExpiresAt, credentialFingerprint);
-    logShiprocketAuth("shared_cache_hit", {
-      cachedTokenUsed: true,
-      sharedCacheHit: true,
-      freshLoginRequestMade: false,
-    });
     return cacheDoc.accessToken;
   }
 
   if (isAuthCooldownActive(cacheDoc, credentialFingerprint)) {
-    logShiprocketAuth("cooldown_active", {
-      cachedTokenUsed: false,
-      sharedCacheHit: false,
-      freshLoginRequestMade: false,
-    });
     throw createAuthCooldownError(cacheDoc);
   }
 
@@ -400,12 +358,6 @@ async function resolveShiprocketToken() {
       await releaseRefreshLock().catch(() => {});
     }
   }
-
-  logShiprocketAuth("refresh_lock_wait", {
-    cachedTokenUsed: false,
-    sharedCacheHit: false,
-    freshLoginRequestMade: false,
-  });
 
   const sharedToken = await waitForSharedToken(credentialFingerprint);
   if (sharedToken) return sharedToken;
@@ -426,31 +378,16 @@ async function resolveShiprocketToken() {
 
 export async function getShiprocketToken() {
   if (!hasShiprocketConfig()) {
-    logShiprocketAuth("missing_config", {
-      cachedTokenUsed: false,
-      sharedCacheHit: false,
-      freshLoginRequestMade: false,
-    });
     throw new Error("Shiprocket is not configured");
   }
 
   const credentialFingerprint = getCredentialFingerprint();
 
   if (isUsableMemoryToken(credentialFingerprint)) {
-    logShiprocketAuth("memory_cache_hit", {
-      cachedTokenUsed: true,
-      sharedCacheHit: false,
-      freshLoginRequestMade: false,
-    });
     return tokenCache.token;
   }
 
   if (authPromise) {
-    logShiprocketAuth("in_flight_join", {
-      cachedTokenUsed: false,
-      sharedCacheHit: false,
-      freshLoginRequestMade: false,
-    });
     return authPromise;
   }
 

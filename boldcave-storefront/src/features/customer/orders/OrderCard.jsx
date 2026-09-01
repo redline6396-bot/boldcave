@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Check, Copy } from "lucide-react";
+import { getOrderShippingSummary } from "@/lib/shipping/summary";
 
 const formatDate = (value) =>
   value
@@ -53,8 +54,10 @@ const getPaymentStatusLabel = (status, method) => {
 const getLineTotal = (item) =>
   (Number(item.unitPrice) || 0) * (Number(item.quantity) || 0);
 
-const hasTracking = (order) =>
-  Boolean(order.shiprocket?.trackingUrl || order.shiprocket?.awbCode);
+const hasTracking = (order) => {
+  const shipping = getOrderShippingSummary(order);
+  return Boolean(shipping.trackingUrl || shipping.awbCode);
+};
 
 const getItemCount = (items = []) =>
   items.reduce((total, item) => total + (Number(item.quantity) || 0), 0);

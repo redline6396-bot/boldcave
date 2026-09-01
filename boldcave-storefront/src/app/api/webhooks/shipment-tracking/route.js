@@ -13,12 +13,6 @@ function cleanWebhookString(value, maxLength = 200) {
   return String(value || "").trim().slice(0, maxLength);
 }
 
-function maskAwb(awb) {
-  const value = String(awb || "");
-  if (value.length <= 4) return "****";
-  return `****${value.slice(-4)}`;
-}
-
 function extractShiprocketWebhookEvent(payload) {
   const awb = cleanWebhookString(payload?.awb, 80);
   const shipmentStatus = cleanWebhookString(payload?.shipment_status, 120);
@@ -60,10 +54,6 @@ async function shipmentTrackingWebhookRoute(request) {
   const event = extractShiprocketWebhookEvent(payload);
 
   if (!event.awb || !event.rawStatus) {
-    console.info("Shiprocket tracking webhook ignored", {
-      reason: !event.awb ? "missing_awb" : "missing_status",
-    });
-
     return success({
       received: true,
       ignored: true,
@@ -78,10 +68,6 @@ async function shipmentTrackingWebhookRoute(request) {
   });
 
   if (!order) {
-    console.info("Shiprocket tracking webhook unmatched", {
-      awb: maskAwb(event.awb),
-    });
-
     return success({
       received: true,
       matched: false,
@@ -111,14 +97,6 @@ async function shipmentTrackingWebhookRoute(request) {
   const statusChanged = order.orderStatus !== previousOrderStatus;
   const shipmentStatusChanged =
     event.rawStatus !== String(previousShipmentStatus || "");
-
-  console.info("Shiprocket tracking webhook handled", {
-    awb: maskAwb(event.awb),
-    mappedStatus: mappedStatus || "ignored",
-    orderStatus: order.orderStatus,
-    statusChanged,
-    shipmentStatusChanged,
-  });
 
   return success({
     received: true,
