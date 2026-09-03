@@ -1,7 +1,10 @@
 export const metadata = {
-  title: "Contact Us | Bold Cave",
+  title: "Contact Us",
   description:
     "Get in touch with Bold Cave for product, order, account, privacy and business-related enquiries.",
+  alternates: {
+    canonical: "/contact",
+  },
 };
 
 const CONTACT_EMAIL = "contact@boldcave.com";

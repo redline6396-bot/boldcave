@@ -2,9 +2,12 @@ import PolicyDocument from "@/components/policy/PolicyDocument";
 import { privacyPolicy } from "@/lib/policyContent";
 
 export const metadata = {
-  title: "Privacy Policy | BOLD CAVE",
+  title: "Privacy Policy",
   description:
-    "BOLD CAVE Privacy Policy and privacy/data-rights information.",
+    "Bold Cave Privacy Policy and privacy/data-rights information.",
+  alternates: {
+    canonical: "/privacy",
+  },
 };
 
 export default function PrivacyPage() {

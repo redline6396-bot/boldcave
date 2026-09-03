@@ -40,6 +40,7 @@ const COMBO_REFERENCE_SELECT = [
 
 const CATALOG_SORT = { createdAt: -1 };
 const FEATURED_SORT = { featuredOrder: 1, name: 1 };
+const SITEMAP_PRODUCT_SELECT = ["slug", "updatedAt", "createdAt"].join(" ");
 
 const toObject = (value) =>
   typeof value?.toObject === "function" ? value.toObject() : value;
@@ -277,6 +278,25 @@ export async function getCatalogProducts(options = {}) {
 
 export async function getFeaturedCatalogProducts() {
   return getCatalogProducts({ featuredOnly: true });
+}
+
+export async function getPublishedProductSitemapEntries() {
+  await connectDB();
+
+  const products = await Product.find({
+    status: "published",
+    slug: { $type: "string", $ne: "" },
+  })
+    .select(SITEMAP_PRODUCT_SELECT)
+    .sort({ updatedAt: -1, createdAt: -1 })
+    .lean();
+
+  return products
+    .map((product) => ({
+      slug: String(product.slug || "").trim().toLowerCase(),
+      updatedAt: product.updatedAt || product.createdAt || null,
+    }))
+    .filter((product) => product.slug);
 }
 
 export async function getProductBySlug(slug, { includeRating = false } = {}) {

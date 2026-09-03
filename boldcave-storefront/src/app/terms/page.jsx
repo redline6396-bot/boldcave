@@ -2,8 +2,11 @@ import PolicyDocument from "@/components/policy/PolicyDocument";
 import { termsPolicy } from "@/lib/policyContent";
 
 export const metadata = {
-  title: "Terms & Conditions | BOLD CAVE",
-  description: "BOLD CAVE Terms & Conditions.",
+  title: "Terms & Conditions",
+  description: "Bold Cave Terms & Conditions.",
+  alternates: {
+    canonical: "/terms",
+  },
 };
 
 export default function TermsPage() {

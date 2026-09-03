@@ -1,7 +1,10 @@
 export const metadata = {
-  title: "About Us | Bold Cave",
+  title: "About Us",
   description:
     "Discover Bold Cave — a fragrance brand built around confidence, individuality and the side of you that refuses to stay hidden.",
+  alternates: {
+    canonical: "/about",
+  },
 };
 
 export default function AboutPage() {
