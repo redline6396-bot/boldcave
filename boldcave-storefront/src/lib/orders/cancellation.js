@@ -11,14 +11,14 @@ import {
   cancelShipment,
   getOrderShippingProvider,
   hasShipmentCancellationTarget,
-  mapShippingStatusToOrderStatus,
   SHIPPING_PROVIDERS,
 } from "@/lib/shipping";
-import { getOrderShippingSummary } from "@/lib/shipping/summary";
+import {
+  CANCELLABLE_ORDER_STATUSES,
+  getCancellationEligibility,
+} from "@/lib/orders/cancellationEligibility";
 import { cleanString, isObjectId } from "@/lib/validation";
 import Order from "@/models/Order";
-
-export const CANCELLABLE_ORDER_STATUSES = ["confirmed", "processing"];
 
 export class CancellationError extends Error {
   constructor(code, message, status = 400, details = undefined) {
@@ -73,40 +73,12 @@ async function processPrepaidRefund(order, { reason, actor }) {
   }
 }
 
-function shipmentStatusIndicatesMovement(rawStatus) {
-  const status = String(rawStatus || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, " ");
-
-  if (!status) return false;
-  if (status.includes("pickup scheduled")) return false;
-  if (status.includes("ready to ship")) return false;
-  if (status.includes("awb assigned")) return false;
-  if (status.includes("manifest generated")) return false;
-
-  return (
-    status.includes("out for pickup") ||
-    status.includes("picked up") ||
-    status.includes("pickup done") ||
-    status.includes("picked by") ||
-    status.includes("handed over") ||
-    status.includes("handed to courier") ||
-    status.includes("handover") ||
-    status.includes("shipped") ||
-    status.includes("dispatched") ||
-    status.includes("in transit") ||
-    status.includes("intransit") ||
-    status.includes("transit") ||
-    status.includes("out for delivery") ||
-    status.includes("outfordelivery") ||
-    status === "ofd" ||
-    (status.includes("delivered") && !status.includes("rto"))
-  );
-}
-
 function assertCancellable(order) {
-  if (order.orderStatus === "cancelled") {
+  const eligibility = getCancellationEligibility(order);
+
+  if (eligibility.cancellable) return;
+
+  if (eligibility.reason === "already_cancelled") {
     throw new CancellationError(
       "ORDER_ALREADY_CANCELLED",
       "This order is already cancelled.",
@@ -114,38 +86,19 @@ function assertCancellable(order) {
     );
   }
 
-  if (!CANCELLABLE_ORDER_STATUSES.includes(order.orderStatus)) {
+  if (eligibility.reason === "shipment_started") {
     throw new CancellationError(
-      "ORDER_NOT_CANCELLABLE",
-      "This order can no longer be cancelled.",
+      "SHIPMENT_ALREADY_STARTED",
+      "This order can no longer be cancelled after shipment has started.",
       409
     );
   }
 
-  const shipping = getOrderShippingSummary(order);
-  const mappedShipmentStatus = mapShippingStatusToOrderStatus(
-    order,
-    shipping.shipmentStatus
+  throw new CancellationError(
+    "ORDER_NOT_CANCELLABLE",
+    "This order can no longer be cancelled.",
+    409
   );
-
-  if (
-    mappedShipmentStatus &&
-    !CANCELLABLE_ORDER_STATUSES.includes(mappedShipmentStatus)
-  ) {
-    throw new CancellationError(
-      "SHIPMENT_ALREADY_STARTED",
-      "This order can no longer be cancelled after shipment has started.",
-      409
-    );
-  }
-
-  if (shipmentStatusIndicatesMovement(shipping.shipmentStatus)) {
-    throw new CancellationError(
-      "SHIPMENT_ALREADY_STARTED",
-      "This order can no longer be cancelled after shipment has started.",
-      409
-    );
-  }
 }
 
 async function loadOrder({ orderId, userId }) {

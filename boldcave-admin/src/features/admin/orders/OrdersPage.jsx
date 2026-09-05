@@ -185,9 +185,25 @@ export default function OrdersPage() {
     }
   };
 
-  const copyOrderId = async (orderId) => {
+  const copyOrderId = async (event, orderId) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+
     try {
-      await globalThis.navigator?.clipboard?.writeText(orderId);
+      if (globalThis.navigator?.clipboard?.writeText) {
+        await globalThis.navigator.clipboard.writeText(orderId);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = orderId;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.top = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+
       setCopiedOrderId(orderId);
       success('Copied');
       globalThis.setTimeout(() => {
@@ -248,7 +264,7 @@ export default function OrdersPage() {
                       <p className='font-semibold text-gray-950'>{displayOrderId}</p>
                       <button
                         type='button'
-                        onClick={() => copyOrderId(displayOrderId)}
+                        onClick={(event) => copyOrderId(event, displayOrderId)}
                         className='inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-950'
                         aria-label='Copy order ID'
                         title='Copy order ID'

@@ -16,6 +16,7 @@ const SETTINGS_STALE_AFTER_MS = 5 * 60 * 1000;
 
 const normalizeStoreSettings = (settings) => ({
   acceptingOrders: settings?.acceptingOrders !== false,
+  comingSoonMode: settings?.comingSoonMode === true,
   prepaidDiscount:
     settings?.prepaidDiscount || DEFAULT_PREPAID_DISCOUNT_SETTINGS,
   updatedAt: settings?.updatedAt || null,

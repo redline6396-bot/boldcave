@@ -70,6 +70,7 @@ export function getHomeJsonLd() {
       "@type": "Organization",
       "@id": organizationId,
       name: SITE_NAME,
+      alternateName: "BoldCave",
       url: SITE_URL,
       logo: canonicalUrl(BRAND_LOGO_PATH),
       image: canonicalUrl(BRAND_ICON_PATH),
@@ -85,6 +86,7 @@ export function getHomeJsonLd() {
       "@type": "WebSite",
       "@id": `${SITE_URL}/#website`,
       name: SITE_NAME,
+      alternateName: ["BoldCave", "boldcave.com"],
       url: SITE_URL,
       publisher: {
         "@id": organizationId,

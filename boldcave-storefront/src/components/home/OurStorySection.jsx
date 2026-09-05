@@ -3,8 +3,8 @@
 import Link from "next/link";
 
 const OUR_STORY_HREF = "/about";
-const DESKTOP_IMAGE = "/images/hero/ourstory-desktop.webp";
-const MOBILE_IMAGE = "/images/hero/ourstory-mobile.webp";
+const DESKTOP_IMAGE = "/images/hero/ourstory-desktop-v2.webp";
+const MOBILE_IMAGE = "/images/hero/ourstory-mobile-v2.webp";
 
 export default function OurStorySection() {
   return (

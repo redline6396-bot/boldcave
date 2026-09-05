@@ -17,10 +17,10 @@ import {
   fetchOrder,
   fetchOrderTracking,
 } from "@/lib/clientApi";
+import { isOrderCancellable } from "@/lib/orders/cancellationEligibility";
 import { getOrderShippingSummary } from "@/lib/shipping/summary";
 
 const ordersHref = "/profile?section=orders";
-const CANCELLABLE_ORDER_STATUSES = ["confirmed", "processing"];
 const CANCELLATION_REASONS = [
   "Ordered by mistake",
   "Need to change product or variant",
@@ -419,7 +419,7 @@ export default function OrderDetails() {
   const shipmentStatus = shipping.statusDisplay || shipping.shipmentStatus;
   const cancellation = order.cancellation || {};
   const isCancelledOrder = status === "cancelled";
-  const canCancelOrder = CANCELLABLE_ORDER_STATUSES.includes(status);
+  const canCancelOrder = isOrderCancellable(order);
   const displayOrderId = order.orderNumber || getOrderId(order);
   const refundStatus = String(order.payment?.refundStatus || "not_required");
   const showRefundInfo =

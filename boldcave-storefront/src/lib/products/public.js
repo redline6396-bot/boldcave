@@ -49,6 +49,33 @@ const toId = (value) => String(value?._id || value?.id || value || "").trim();
 
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
 
+const getFeaturedSortOrder = (product) => {
+  const order = Number(product?.featuredOrder);
+  return Number.isFinite(order) && order > 0 ? order : Number.MAX_SAFE_INTEGER;
+};
+
+function sortProductsByFeaturedOrder(products) {
+  return [...products].sort((left, right) => {
+    const leftFeatured = left?.featured === true;
+    const rightFeatured = right?.featured === true;
+
+    if (leftFeatured !== rightFeatured) {
+      return leftFeatured ? -1 : 1;
+    }
+
+    if (leftFeatured && rightFeatured) {
+      const orderDifference =
+        getFeaturedSortOrder(left) - getFeaturedSortOrder(right);
+
+      if (orderDifference !== 0) {
+        return orderDifference;
+      }
+    }
+
+    return String(left?.name || "").localeCompare(String(right?.name || ""));
+  });
+}
+
 const serializeImage = (image) => {
   if (!image) return undefined;
   if (typeof image === "string") return image ? { url: image } : undefined;
@@ -268,12 +295,15 @@ export async function getCatalogProducts(options = {}) {
   const serializedProducts = filteredProducts.map((product) =>
     serializeCatalogProduct(product, productsById)
   );
+  const catalogProducts = hasIdFilter
+    ? serializedProducts
+    : sortProductsByFeaturedOrder(serializedProducts);
 
   if (options.cache !== false) {
-    setProductCache(cacheKey, { products: serializedProducts });
+    setProductCache(cacheKey, { products: catalogProducts });
   }
 
-  return serializedProducts;
+  return catalogProducts;
 }
 
 export async function getFeaturedCatalogProducts() {

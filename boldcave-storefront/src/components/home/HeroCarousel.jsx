@@ -63,7 +63,7 @@ const getHeroSrcSet = (image, widths) =>
 const getCurrentHeroImage = (slide) => {
   if (!slide) return "";
 
-  if (typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches) {
+  if (typeof window !== "undefined" && window.matchMedia("(max-width: 740px)").matches) {
     return slide.mobileImage || slide.desktopImage || "";
   }
 
@@ -165,7 +165,7 @@ export default function HeroCarousel({ initialHeroSlides = [] }) {
     const nextSlide = slides[(activeIndex + 1) % slides.length];
     const nextSource = getCurrentHeroImage(nextSlide);
     const width =
-      typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches
+      typeof window !== "undefined" && window.matchMedia("(max-width: 740px)").matches
         ? 960
         : 1920;
     const preloadUrl = getHeroImageUrl(nextSource, width);
@@ -393,7 +393,7 @@ export default function HeroCarousel({ initialHeroSlides = [] }) {
       <div
         ref={carouselRef}
         className={[
-          "flex w-full cursor-pointer snap-x snap-mandatory touch-pan-y select-none overflow-x-hidden overflow-y-hidden overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden aspect-square sm:h-[45vw] sm:aspect-auto lg:h-[43vw] lg:max-h-[780px] lg:touch-auto",
+          "flex w-full cursor-pointer snap-x snap-mandatory touch-pan-y select-none overflow-x-hidden overflow-y-hidden overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden aspect-square min-[741px]:h-[45vw] min-[741px]:aspect-auto lg:h-[43vw] lg:max-h-[780px] lg:touch-auto",
           isInitialPositionReady ? "lg:overflow-x-auto" : "",
         ].join(" ")}
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
@@ -427,17 +427,17 @@ export default function HeroCarousel({ initialHeroSlides = [] }) {
               onClick={(event) => handleSlideClick(event, slide.href)}
               className="block w-full min-w-full shrink-0 snap-start overflow-hidden"
             >
-              <picture className="relative block aspect-square w-full bg-[#f7f5f2] sm:h-[45vw] sm:aspect-auto lg:h-[43vw] lg:max-h-[780px]">
+              <picture className="relative block aspect-square w-full bg-[#f7f5f2] min-[741px]:h-[45vw] min-[741px]:aspect-auto lg:h-[43vw] lg:max-h-[780px]">
                 {slide.mobileImage && (
                   <source
-                    media="(max-width: 639px)"
+                    media="(max-width: 740px)"
                     srcSet={getHeroSrcSet(slide.mobileImage, HERO_MOBILE_WIDTHS)}
                     sizes="100vw"
                   />
                 )}
                 {slide.desktopImage && (
                   <source
-                    media="(min-width: 640px)"
+                    media="(min-width: 741px)"
                     srcSet={getHeroSrcSet(slide.desktopImage, HERO_DESKTOP_WIDTHS)}
                     sizes="100vw"
                   />
@@ -451,7 +451,7 @@ export default function HeroCarousel({ initialHeroSlides = [] }) {
                   )}
                   alt=""
                   className={[
-                    "block h-full w-full max-w-none object-cover object-center transition-opacity duration-200 sm:h-full sm:object-cover lg:h-full lg:object-cover",
+                    "block h-full w-full max-w-none object-cover object-center transition-opacity duration-200 min-[741px]:h-full min-[741px]:object-cover lg:h-full lg:object-cover",
                     index === 0 || isImageLoaded ? "opacity-100" : "opacity-0",
                   ].join(" ")}
                   loading={index === 0 ? "eager" : "lazy"}
@@ -466,7 +466,7 @@ export default function HeroCarousel({ initialHeroSlides = [] }) {
         })}
       </div>
 
-      <div className="flex h-[30px] items-center justify-center border-y border-[#e5e5e5] bg-white sm:h-[45px]">
+      <div className="flex h-[30px] items-center justify-center border-y border-[#e5e5e5] bg-white min-[741px]:h-[45px]">
         <div className="flex items-center gap-3">
           {slides.map((slide, index) => {
             const isActive = index === activeIndex;
@@ -479,7 +479,7 @@ export default function HeroCarousel({ initialHeroSlides = [] }) {
                 aria-label={`Show banner ${index + 1}`}
                 aria-current={isActive ? "true" : undefined}
                 className={[
-                  "h-[10px] w-[10px] cursor-pointer rounded-full border transition-colors duration-200 sm:h-3 sm:w-3",
+                  "h-[10px] w-[10px] cursor-pointer rounded-full border transition-colors duration-200 min-[741px]:h-3 min-[741px]:w-3",
                   isActive
                     ? "border-neutral-950 bg-neutral-950"
                     : "border-neutral-400 bg-white hover:border-neutral-950",

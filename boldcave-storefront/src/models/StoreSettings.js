@@ -15,6 +15,10 @@ const storeSettingsSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    comingSoonMode: {
+      type: Boolean,
+      default: false,
+    },
     otpMode: {
       type: String,
       enum: ["test", "live"],
@@ -36,7 +40,8 @@ const storeSettingsSchema = new mongoose.Schema(
 
 if (
   mongoose.models.StoreSettings &&
-  !mongoose.models.StoreSettings.schema?.path("prepaidDiscount.enabled")
+  (!mongoose.models.StoreSettings.schema?.path("prepaidDiscount.enabled") ||
+    !mongoose.models.StoreSettings.schema?.path("comingSoonMode"))
 ) {
   delete mongoose.models.StoreSettings;
 }

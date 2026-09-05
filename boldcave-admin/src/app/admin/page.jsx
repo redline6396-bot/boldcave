@@ -135,7 +135,9 @@ const Dashboard = () => {
   }, [range, showError]);
 
   const toggleAcceptingOrders = async () => {
-    const nextAcceptingOrders = !dashboard?.storeSettings?.acceptingOrders;
+    const currentAcceptingOrders =
+      dashboard?.storeSettings?.acceptingOrders !== false;
+    const nextAcceptingOrders = !currentAcceptingOrders;
 
     try {
       setStoreSettingsSaving(true);
@@ -155,6 +157,36 @@ const Dashboard = () => {
       );
     } catch (error) {
       const message = getErrorMessage(error, 'Unable to update store order setting');
+      showError(message);
+    } finally {
+      setStoreSettingsSaving(false);
+    }
+  };
+
+  const toggleComingSoonMode = async () => {
+    const nextComingSoonMode = dashboard?.storeSettings?.comingSoonMode !== true;
+
+    try {
+      setStoreSettingsSaving(true);
+      const response = await api.patch('/api/admin/store-settings', {
+        comingSoonMode: nextComingSoonMode,
+      });
+
+      setDashboard((current) => ({
+        ...current,
+        storeSettings: response.data.data || {
+          ...(current?.storeSettings || {}),
+          comingSoonMode: nextComingSoonMode,
+        },
+      }));
+
+      showSuccess(
+        nextComingSoonMode
+          ? 'Coming Soon Mode is on.'
+          : 'Coming Soon Mode is off.'
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, 'Unable to update Coming Soon Mode');
       showError(message);
     } finally {
       setStoreSettingsSaving(false);
@@ -267,11 +299,16 @@ const Dashboard = () => {
         </div>
       </header>
 
-      <section className='grid gap-4 xl:grid-cols-2'>
+      <section className='grid gap-4 xl:grid-cols-3'>
         <StoreStatusCard
           acceptingOrders={dashboard.storeSettings?.acceptingOrders !== false}
           saving={storeSettingsSaving}
           onToggle={toggleAcceptingOrders}
+        />
+        <ComingSoonModeCard
+          comingSoonMode={dashboard.storeSettings?.comingSoonMode === true}
+          saving={storeSettingsSaving}
+          onToggle={toggleComingSoonMode}
         />
         <PrepaidOfferCard
           prepaidDiscount={dashboard.storeSettings?.prepaidDiscount}
@@ -376,6 +413,48 @@ function StoreStatusCard({ acceptingOrders, saving, onToggle }) {
             className={[
               'h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
               acceptingOrders ? 'translate-x-[25px]' : 'translate-x-[3px]',
+            ].join(' ')}
+          />
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ComingSoonModeCard({ comingSoonMode, saving, onToggle }) {
+  return (
+    <section className='rounded-[12px] border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]'>
+      <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
+        <div className='flex items-start gap-3'>
+          <span className='flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-slate-100 text-slate-700'>
+            <TriangleAlert size={19} strokeWidth={1.8} />
+          </span>
+          <div>
+            <p className='text-sm font-semibold text-slate-950'>Coming Soon Mode</p>
+            <p className='mt-1 text-xs text-slate-500'>
+              Hide the public storefront until the website is ready to launch.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type='button'
+          onClick={onToggle}
+          disabled={saving}
+          role='switch'
+          aria-checked={comingSoonMode}
+          className={[
+            'relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60',
+            comingSoonMode
+              ? 'border-slate-950 bg-slate-950'
+              : 'border-slate-300 bg-slate-300',
+          ].join(' ')}
+          title={comingSoonMode ? 'Turn Coming Soon Mode off' : 'Turn Coming Soon Mode on'}
+        >
+          <span
+            className={[
+              'h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
+              comingSoonMode ? 'translate-x-[25px]' : 'translate-x-[3px]',
             ].join(' ')}
           />
         </button>

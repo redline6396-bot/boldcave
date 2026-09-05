@@ -35,6 +35,9 @@ export function serializeStoreSettings(
     acceptingOrders:
       settings?.acceptingOrders !== false,
 
+    comingSoonMode:
+      settings?.comingSoonMode === true,
+
     prepaidDiscount:
       serializePrepaidDiscountSettings(
         settings?.prepaidDiscount,
@@ -91,6 +94,7 @@ export async function getStoreSettings({
       $setOnInsert: {
         key: GLOBAL_STORE_SETTINGS_KEY,
         acceptingOrders: true,
+        comingSoonMode: false,
         prepaidDiscount:
           DEFAULT_PREPAID_DISCOUNT,
       },
@@ -141,6 +145,7 @@ export async function getSerializedStoreSettings({
 
 export async function updateStoreSettings({
   acceptingOrders,
+  comingSoonMode,
   prepaidDiscount,
   StoreSettingsModel = StoreSettings,
 } = {}) {
@@ -149,6 +154,11 @@ export async function updateStoreSettings({
   if (acceptingOrders !== undefined) {
     updates.acceptingOrders =
       acceptingOrders !== false;
+  }
+
+  if (comingSoonMode !== undefined) {
+    updates.comingSoonMode =
+      comingSoonMode === true;
   }
 
   if (
@@ -168,6 +178,7 @@ export async function updateStoreSettings({
     $setOnInsert: {
       key: GLOBAL_STORE_SETTINGS_KEY,
       acceptingOrders: true,
+      comingSoonMode: false,
       prepaidDiscount:
         DEFAULT_PREPAID_DISCOUNT,
     },

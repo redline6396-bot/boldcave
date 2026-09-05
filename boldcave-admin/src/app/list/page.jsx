@@ -13,6 +13,9 @@ const getProductThumbnail = (product) =>
   getImageUrl((product.variants || []).find((variant) => variant.images?.[0])?.images?.[0]) ||
   getImageUrl((product.variants || []).find((variant) => variant.image)?.image);
 
+const getStockBadgeClass = (stock) =>
+  Number(stock) < 5 ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800';
+
 const ProductList = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -264,9 +267,12 @@ const ProductList = () => {
                 {visibleProducts.map((product) => {
                   const id = getId(product);
                   const isCombo = product.productType === 'combo';
-                  const totalStock = isCombo
-                    ? Number(product.comboAvailability ?? product.variants?.[0]?.stock ?? 0)
-                    : (product.variants || []).reduce((total, variant) => total + Number(variant.stock || 0), 0);
+                  const stockRows = isCombo
+                    ? [{ size: 'Combo', stock: Number(product.comboAvailability ?? product.variants?.[0]?.stock ?? 0) }]
+                    : (product.variants || []).map((variant) => ({
+                      size: variant.size || 'Variant',
+                      stock: Number(variant.stock || 0),
+                    }));
                   return (
                     <tr key={id}>
                       <td className='px-4 py-4'>
@@ -302,9 +308,16 @@ const ProductList = () => {
                         </div>
                       </td>
                       <td className='px-4 py-4'>
-                        <span className={`rounded px-2 py-1 text-xs font-semibold ${totalStock < 5 ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}>
-                          {totalStock}
-                        </span>
+                        <div className='space-y-1'>
+                          {stockRows.map((row) => (
+                            <div key={row.size} className='flex items-center justify-between gap-3 text-xs'>
+                              <span className='whitespace-nowrap text-gray-500'>{row.size}</span>
+                              <span className={`rounded px-2 py-1 font-semibold ${getStockBadgeClass(row.stock)}`}>
+                                {row.stock}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </td>
                       <td className='px-4 py-4'>
                         <button

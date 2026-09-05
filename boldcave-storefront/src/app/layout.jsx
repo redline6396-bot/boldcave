@@ -4,8 +4,10 @@ import CartProvider from '@/context/CartContext';
 import CouponProvider from '@/context/CouponContext';
 import NotificationProvider from '@/context/NotificationContext';
 import { StoreSettingsProvider } from '@/context/StoreSettingsContext';
+import ComingSoonScreen from '@/components/ComingSoonScreen';
 import RootLayoutClient from '@/components/RootLayoutClient';
 import { withRuntimeDatabase } from '@/lib/cloudflareMongoose';
+import appIcon from './icon-new.png';
 import {
   BRAND_ICON_PATH,
   DEFAULT_DESCRIPTION,
@@ -15,6 +17,10 @@ import {
 } from '@/lib/seo';
 import { getSerializedStoreSettings } from '@/lib/storeSettings';
 import '@/assets/globals.css';
+
+export const dynamic = 'force-dynamic';
+
+const APP_ICON_PATH = appIcon.src;
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),
@@ -28,9 +34,9 @@ export const metadata = {
     canonical: '/',
   },
   icons: {
-    icon: '/icon.png',
-    shortcut: '/icon.png',
-    apple: '/icon.png',
+    icon: APP_ICON_PATH,
+    shortcut: APP_ICON_PATH,
+    apple: APP_ICON_PATH,
   },
   openGraph: {
     type: 'website',
@@ -52,9 +58,27 @@ export default async function RootLayout({ children }) {
   let storeSettings = null;
 
   try {
-    storeSettings = await withRuntimeDatabase(() => getSerializedStoreSettings());
+    storeSettings = await withRuntimeDatabase(() =>
+      getSerializedStoreSettings({ cache: false })
+    );
   } catch {
     storeSettings = null;
+  }
+
+  if (storeSettings?.comingSoonMode) {
+    return (
+      <html lang="en">
+        <head>
+          <meta charSet="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <meta name="theme-color" content="#000000" />
+          <link rel="icon" href={APP_ICON_PATH} />
+        </head>
+        <body>
+          <ComingSoonScreen />
+        </body>
+      </html>
+    );
   }
 
   return (
@@ -63,7 +87,7 @@ export default async function RootLayout({ children }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#ffffff" />
-        <link rel="icon" href="/icon.png" />
+        <link rel="icon" href={APP_ICON_PATH} />
       </head>
       <body>
         <NotificationProvider>
