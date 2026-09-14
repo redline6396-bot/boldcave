@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -60,8 +60,70 @@ function getPrepaidTeaser(settings = {}, couponDiscount = 0) {
   ).toLocaleString("en-IN")}% when you pay online`;
 }
 
+function getCartViewportHeight() {
+  if (typeof window === "undefined") return null;
+
+  const heights = [
+    window.visualViewport?.height,
+    window.innerHeight,
+    document.documentElement.clientHeight,
+  ].filter((value) => Number.isFinite(value) && value > 0);
+  const height = heights.length ? Math.min(...heights) : null;
+
+  return height ? Math.floor(height) : null;
+}
+
+function useCartViewportHeight(isOpen) {
+  const [height, setHeight] = useState(null);
+  const animationFrameRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const updateHeight = () => {
+      if (animationFrameRef.current) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+      }
+
+      animationFrameRef.current = window.requestAnimationFrame(() => {
+        animationFrameRef.current = null;
+        const nextHeight = getCartViewportHeight();
+        if (nextHeight) setHeight(nextHeight);
+      });
+    };
+
+    updateHeight();
+
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", updateHeight);
+    viewport?.addEventListener("scroll", updateHeight);
+    window.addEventListener("resize", updateHeight);
+    window.addEventListener("orientationchange", updateHeight);
+
+    return () => {
+      if (animationFrameRef.current) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+
+      viewport?.removeEventListener("resize", updateHeight);
+      viewport?.removeEventListener("scroll", updateHeight);
+      window.removeEventListener("resize", updateHeight);
+      window.removeEventListener("orientationchange", updateHeight);
+    };
+  }, [isOpen]);
+
+  return height;
+}
+
 export default function CartDrawer({ isOpen, onClose }) {
   const router = useRouter();
+  const cartViewportHeight = useCartViewportHeight(isOpen);
+  const cartViewportStyle = {
+    "--cart-viewport-height": cartViewportHeight
+      ? `${cartViewportHeight}px`
+      : "100dvh",
+  };
 
   const [isSummaryOpen, setIsSummaryOpen] =
     useState(false);
@@ -195,19 +257,21 @@ export default function CartDrawer({ isOpen, onClose }) {
           type="button"
           aria-label="Close cart overlay"
           onClick={onClose}
-          className="fixed bottom-0 left-0 right-0 top-auto z-[120] h-[100dvh] cursor-pointer bg-black/45 sm:inset-0 sm:h-auto"
+          className="fixed bottom-0 left-0 right-0 top-auto z-[120] h-[var(--cart-viewport-height)] max-h-[var(--cart-viewport-height)] cursor-pointer bg-black/45"
+          style={cartViewportStyle}
         />
       )}
 
       <aside
         aria-hidden={!isOpen}
         className={[
-          "fixed bottom-0 right-0 z-[121] flex h-[100dvh] w-full max-w-[420px] flex-col bg-white text-neutral-950 shadow-xl transition-transform duration-300 ease-out sm:top-0 sm:h-[100vh] sm:max-w-[430px]",
+          "fixed bottom-0 right-0 z-[121] flex h-[var(--cart-viewport-height)] max-h-[var(--cart-viewport-height)] w-full max-w-[420px] flex-col overflow-hidden bg-white text-neutral-950 shadow-xl transition-transform duration-300 ease-out sm:max-w-[430px]",
           isOpen
             ? "translate-x-0"
             : "translate-x-[calc(100%+2px)]",
         ].join(" ")}
         style={{
+          ...cartViewportStyle,
           fontFamily:
             '"Helvetica Neue", Arial, sans-serif',
         }}
@@ -242,6 +306,8 @@ export default function CartDrawer({ isOpen, onClose }) {
           style={{
             scrollbarWidth: "none",
             msOverflowStyle: "none",
+            WebkitOverflowScrolling: "touch",
+            touchAction: "pan-y",
           }}
         >
           {isResolving ? (
@@ -526,7 +592,7 @@ export default function CartDrawer({ isOpen, onClose }) {
           <div className="shrink-0 bg-white">
             {/* Subtotal + checkout stay in the bottom dock. */}
 
-            <div className="relative bg-[#f3f3f3] px-4 pb-4 pt-3">
+            <div className="relative bg-[#f3f3f3] px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
               <button
                 type="button"
                 onClick={() =>
