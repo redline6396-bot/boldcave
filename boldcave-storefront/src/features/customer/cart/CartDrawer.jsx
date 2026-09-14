@@ -60,21 +60,27 @@ function getPrepaidTeaser(settings = {}, couponDiscount = 0) {
   ).toLocaleString("en-IN")}% when you pay online`;
 }
 
-function getCartViewportHeight() {
+function getCartViewportMetrics() {
   if (typeof window === "undefined") return null;
 
+  const viewport = window.visualViewport;
   const heights = [
-    window.visualViewport?.height,
+    viewport?.height,
     window.innerHeight,
     document.documentElement.clientHeight,
   ].filter((value) => Number.isFinite(value) && value > 0);
   const height = heights.length ? Math.min(...heights) : null;
 
-  return height ? Math.floor(height) : null;
+  return height
+    ? {
+        height: Math.floor(height),
+        top: Math.max(0, Math.floor(viewport?.offsetTop || 0)),
+      }
+    : null;
 }
 
-function useCartViewportHeight(isOpen) {
-  const [height, setHeight] = useState(null);
+function useCartViewportMetrics(isOpen) {
+  const [metrics, setMetrics] = useState(null);
   const animationFrameRef = useRef(null);
 
   useEffect(() => {
@@ -87,8 +93,14 @@ function useCartViewportHeight(isOpen) {
 
       animationFrameRef.current = window.requestAnimationFrame(() => {
         animationFrameRef.current = null;
-        const nextHeight = getCartViewportHeight();
-        if (nextHeight) setHeight(nextHeight);
+        const nextMetrics = getCartViewportMetrics();
+        if (!nextMetrics) return;
+
+        setMetrics((current) =>
+          current?.height === nextMetrics.height && current?.top === nextMetrics.top
+            ? current
+            : nextMetrics,
+        );
       });
     };
 
@@ -113,16 +125,19 @@ function useCartViewportHeight(isOpen) {
     };
   }, [isOpen]);
 
-  return height;
+  return metrics;
 }
 
 export default function CartDrawer({ isOpen, onClose }) {
   const router = useRouter();
-  const cartViewportHeight = useCartViewportHeight(isOpen);
+  const cartViewportMetrics = useCartViewportMetrics(isOpen);
   const cartViewportStyle = {
-    "--cart-viewport-height": cartViewportHeight
-      ? `${cartViewportHeight}px`
+    "--cart-viewport-height": cartViewportMetrics?.height
+      ? `${cartViewportMetrics.height}px`
       : "100dvh",
+    "--cart-viewport-top": cartViewportMetrics?.top
+      ? `${cartViewportMetrics.top}px`
+      : "0px",
   };
 
   const [isSummaryOpen, setIsSummaryOpen] =
@@ -257,7 +272,7 @@ export default function CartDrawer({ isOpen, onClose }) {
           type="button"
           aria-label="Close cart overlay"
           onClick={onClose}
-          className="fixed bottom-0 left-0 right-0 top-auto z-[120] h-[var(--cart-viewport-height)] max-h-[var(--cart-viewport-height)] cursor-pointer bg-black/45"
+          className="fixed bottom-auto left-0 right-0 top-[var(--cart-viewport-top)] z-[120] h-[var(--cart-viewport-height)] max-h-[var(--cart-viewport-height)] cursor-pointer bg-black/45"
           style={cartViewportStyle}
         />
       )}
@@ -265,7 +280,7 @@ export default function CartDrawer({ isOpen, onClose }) {
       <aside
         aria-hidden={!isOpen}
         className={[
-          "fixed bottom-0 right-0 z-[121] flex h-[var(--cart-viewport-height)] max-h-[var(--cart-viewport-height)] w-full max-w-[420px] flex-col overflow-hidden bg-white text-neutral-950 shadow-xl transition-transform duration-300 ease-out sm:max-w-[430px]",
+          "fixed bottom-auto right-0 top-[var(--cart-viewport-top)] z-[121] flex h-[var(--cart-viewport-height)] max-h-[var(--cart-viewport-height)] w-full max-w-[420px] flex-col overflow-hidden bg-white text-neutral-950 shadow-xl transition-transform duration-300 ease-out sm:max-w-[430px]",
           isOpen
             ? "translate-x-0"
             : "translate-x-[calc(100%+2px)]",
