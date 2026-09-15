@@ -69,7 +69,11 @@ jobs:
             fi
 
             echo "Building storefront..."
-            npm run build
+            if ! npm run build; then
+              echo "First build attempt failed; retrying once with the generated cache..."
+              sleep 2
+              npm run build
+            fi
 
             echo "Verifying production build..."
 
