@@ -60,8 +60,52 @@ function getPrepaidTeaser(settings = {}, couponDiscount = 0) {
   ).toLocaleString("en-IN")}% when you pay online`;
 }
 
+function getVisualViewportBottom() {
+  if (typeof window === "undefined") return null;
+
+  const viewport = window.visualViewport;
+  const bottom = viewport
+    ? viewport.offsetTop + viewport.height
+    : window.innerHeight;
+
+  return Number.isFinite(bottom) && bottom > 0
+    ? Math.floor(bottom)
+    : null;
+}
+
+function useVisualViewportBottom(isOpen) {
+  const [bottom, setBottom] = useState(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const updateBottom = () => {
+      const nextBottom = getVisualViewportBottom();
+      if (nextBottom) setBottom(nextBottom);
+    };
+
+    updateBottom();
+
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", updateBottom);
+    viewport?.addEventListener("scroll", updateBottom);
+    window.addEventListener("resize", updateBottom);
+    window.addEventListener("orientationchange", updateBottom);
+
+    return () => {
+      viewport?.removeEventListener("resize", updateBottom);
+      viewport?.removeEventListener("scroll", updateBottom);
+      window.removeEventListener("resize", updateBottom);
+      window.removeEventListener("orientationchange", updateBottom);
+    };
+  }, [isOpen]);
+
+  return bottom;
+}
+
 export default function CartDrawer({ isOpen, onClose }) {
   const router = useRouter();
+  const visualViewportBottom = useVisualViewportBottom(isOpen);
 
   const [isSummaryOpen, setIsSummaryOpen] =
     useState(false);
@@ -691,12 +735,18 @@ export default function CartDrawer({ isOpen, onClose }) {
       {items.length > 0 && (
           <div
             className={[
-              "fixed bottom-0 right-0 z-[122] w-full max-w-[420px] border-t border-neutral-200 bg-white px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] transition-transform duration-300 ease-out sm:max-w-[430px]",
+              "fixed bottom-auto right-0 z-[122] w-full max-w-[420px] transition-transform duration-300 ease-out sm:max-w-[430px]",
               isOpen
                 ? "translate-x-0"
                 : "translate-x-[calc(100%+2px)]",
             ].join(" ")}
+            style={{
+              top: visualViewportBottom
+                ? `${visualViewportBottom}px`
+                : "100svh",
+            }}
           >
+          <div className="-translate-y-full border-t border-neutral-200 bg-white px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
             <button
               type="button"
               onClick={handleCheckout}
@@ -716,6 +766,7 @@ export default function CartDrawer({ isOpen, onClose }) {
                 />
               )}
             </button>
+          </div>
           </div>
         )}
 
