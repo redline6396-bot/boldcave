@@ -11,7 +11,7 @@ export default function ForHimSection() {
     <section className="w-full bg-white">
       <Link
         href={FOR_HIM_HREF}
-        aria-label="Shop For Him"
+        aria-label="Shop For Hims"
         className="block w-full cursor-pointer"
       >
         <picture>
