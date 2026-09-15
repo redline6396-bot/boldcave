@@ -18,16 +18,21 @@ jobs:
     name: Pull and build storefront
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.5
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           host: ${{ secrets.MILESWEB_HOST }}
           username: ${{ secrets.STOREFRONT_SSH_USER }}
           key: ${{ secrets.MILESWEB_SSH_PRIVATE_KEY }}
           port: ${{ secrets.MILESWEB_SSH_PORT }}
           command_timeout: 12m
+          envs: GITHUB_TOKEN
           script: |
             set -e
 
@@ -42,7 +47,9 @@ jobs:
             BEFORE="$(git rev-parse HEAD)"
 
             echo "Pulling latest code..."
-            git pull --ff-only origin main
+            GITHUB_AUTH="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+            git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $GITHUB_AUTH" pull --ff-only origin main
+            unset GITHUB_AUTH GITHUB_TOKEN
 
             AFTER="$(git rev-parse HEAD)"
 
