@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -60,85 +60,8 @@ function getPrepaidTeaser(settings = {}, couponDiscount = 0) {
   ).toLocaleString("en-IN")}% when you pay online`;
 }
 
-function getCartViewportMetrics() {
-  if (typeof window === "undefined") return null;
-
-  const viewport = window.visualViewport;
-  const heights = [
-    viewport?.height,
-    window.innerHeight,
-    document.documentElement.clientHeight,
-  ].filter((value) => Number.isFinite(value) && value > 0);
-  const height = heights.length ? Math.min(...heights) : null;
-
-  return height
-    ? {
-        height: Math.floor(height),
-        top: Math.max(0, Math.floor(viewport?.offsetTop || 0)),
-      }
-    : null;
-}
-
-function useCartViewportMetrics(isOpen) {
-  const [metrics, setMetrics] = useState(null);
-  const animationFrameRef = useRef(null);
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-
-    const updateHeight = () => {
-      if (animationFrameRef.current) {
-        window.cancelAnimationFrame(animationFrameRef.current);
-      }
-
-      animationFrameRef.current = window.requestAnimationFrame(() => {
-        animationFrameRef.current = null;
-        const nextMetrics = getCartViewportMetrics();
-        if (!nextMetrics) return;
-
-        setMetrics((current) =>
-          current?.height === nextMetrics.height && current?.top === nextMetrics.top
-            ? current
-            : nextMetrics,
-        );
-      });
-    };
-
-    updateHeight();
-
-    const viewport = window.visualViewport;
-    viewport?.addEventListener("resize", updateHeight);
-    viewport?.addEventListener("scroll", updateHeight);
-    window.addEventListener("resize", updateHeight);
-    window.addEventListener("orientationchange", updateHeight);
-
-    return () => {
-      if (animationFrameRef.current) {
-        window.cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-
-      viewport?.removeEventListener("resize", updateHeight);
-      viewport?.removeEventListener("scroll", updateHeight);
-      window.removeEventListener("resize", updateHeight);
-      window.removeEventListener("orientationchange", updateHeight);
-    };
-  }, [isOpen]);
-
-  return metrics;
-}
-
 export default function CartDrawer({ isOpen, onClose }) {
   const router = useRouter();
-  const cartViewportMetrics = useCartViewportMetrics(isOpen);
-  const cartViewportStyle = {
-    "--cart-viewport-height": cartViewportMetrics?.height
-      ? `${cartViewportMetrics.height}px`
-      : "100dvh",
-    "--cart-viewport-top": cartViewportMetrics?.top
-      ? `${cartViewportMetrics.top}px`
-      : "0px",
-  };
 
   const [isSummaryOpen, setIsSummaryOpen] =
     useState(false);
@@ -272,21 +195,19 @@ export default function CartDrawer({ isOpen, onClose }) {
           type="button"
           aria-label="Close cart overlay"
           onClick={onClose}
-          className="fixed bottom-auto left-0 right-0 top-[var(--cart-viewport-top)] z-[120] h-[var(--cart-viewport-height)] max-h-[var(--cart-viewport-height)] cursor-pointer bg-black/45"
-          style={cartViewportStyle}
+          className="fixed inset-0 z-[120] cursor-pointer bg-black/45"
         />
       )}
 
       <aside
         aria-hidden={!isOpen}
         className={[
-          "fixed bottom-auto right-0 top-[var(--cart-viewport-top)] z-[121] flex h-[var(--cart-viewport-height)] max-h-[var(--cart-viewport-height)] w-full max-w-[420px] flex-col overflow-hidden bg-white text-neutral-950 shadow-xl transition-transform duration-300 ease-out sm:max-w-[430px]",
+          "fixed inset-y-0 right-0 z-[121] flex min-h-0 w-full max-w-[420px] flex-col overflow-hidden bg-white text-neutral-950 shadow-xl transition-transform duration-300 ease-out sm:max-w-[430px]",
           isOpen
             ? "translate-x-0"
             : "translate-x-[calc(100%+2px)]",
         ].join(" ")}
         style={{
-          ...cartViewportStyle,
           fontFamily:
             '"Helvetica Neue", Arial, sans-serif',
         }}
@@ -604,10 +525,17 @@ export default function CartDrawer({ isOpen, onClose }) {
         </div>
 
         {items.length > 0 && (
-          <div className="shrink-0 bg-white">
-            {/* Subtotal + checkout stay in the bottom dock. */}
+          <div
+            className="cart-drawer-scroll mb-[78px] min-h-0 max-h-[min(42svh,320px)] shrink overflow-y-auto bg-white"
+            style={{
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
+            {/* Pricing details can scroll without pushing checkout off-screen. */}
 
-            <div className="relative bg-[#f3f3f3] px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
+            <div className="relative bg-[#f3f3f3] px-4 pb-3 pt-3">
               <button
                 type="button"
                 onClick={() =>
@@ -754,35 +682,42 @@ export default function CartDrawer({ isOpen, onClose }) {
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={
-                  handleCheckout
-                }
-                disabled={
-                  !acceptingOrders
-                }
-                className="flex h-[54px] w-full cursor-pointer items-center justify-center gap-2 rounded-[3px] bg-neutral-950 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-600 disabled:hover:opacity-100"
-              >
-                <span>
-                  {acceptingOrders
-                    ? "Checkout"
-                    : "Currently Not Accepting Orders"}
-                </span>
-
-                {acceptingOrders && (
-                  <ChevronRight
-                    className="h-5 w-5"
-                    strokeWidth={
-                      1.7
-                    }
-                  />
-                )}
-              </button>
             </div>
           </div>
         )}
+
       </aside>
+
+      {items.length > 0 && (
+          <div
+            className={[
+              "fixed bottom-0 right-0 z-[122] w-full max-w-[420px] border-t border-neutral-200 bg-white px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] transition-transform duration-300 ease-out sm:max-w-[430px]",
+              isOpen
+                ? "translate-x-0"
+                : "translate-x-[calc(100%+2px)]",
+            ].join(" ")}
+          >
+            <button
+              type="button"
+              onClick={handleCheckout}
+              disabled={!acceptingOrders}
+              className="flex h-[54px] w-full cursor-pointer items-center justify-center gap-2 rounded-[3px] bg-neutral-950 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-600 disabled:hover:opacity-100"
+            >
+              <span>
+                {acceptingOrders
+                  ? "Checkout"
+                  : "Currently Not Accepting Orders"}
+              </span>
+
+              {acceptingOrders && (
+                <ChevronRight
+                  className="h-5 w-5"
+                  strokeWidth={1.7}
+                />
+              )}
+            </button>
+          </div>
+        )}
 
       <style jsx>{`
         .cart-drawer-scroll::-webkit-scrollbar {
