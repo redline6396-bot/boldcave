@@ -16,6 +16,7 @@ import { NotificationContext } from '@/context/NotificationContext';
 import { api, formatDateTime, getErrorMessage, money } from '@/lib/api';
 
 const ACTIVE_STATES = ['requesting', 'scheduled', 'needs_reconciliation'];
+const DELHIVERY_READY_TO_SHIP_URL = 'https://one.delhivery.com/orders/forward/ready-to-ship';
 const HISTORY_STATES = [
   'scheduled',
   'cancelled',
@@ -239,12 +240,12 @@ export default function PickupsPage() {
           <p className='mt-1 text-sm text-gray-500'>Schedule Delhivery pickups and see exactly which orders are ready or included.</p>
         </div>
         <a
-          href='https://one.delhivery.com/v2/pickup-requests/domestic'
+          href={DELHIVERY_READY_TO_SHIP_URL}
           target='_blank'
           rel='noreferrer'
           className='inline-flex h-10 w-fit items-center gap-2 rounded border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50'
         >
-          Open Delhivery One <ExternalLink size={15} />
+          Open Ready to Ship <ExternalLink size={15} />
         </a>
       </header>
 
@@ -279,6 +280,28 @@ export default function PickupsPage() {
               tone='neutral'
             />
           </section>
+
+          {settings.state === 'scheduled' && settings.pickupId ? (
+            <section className='rounded border border-blue-200 bg-blue-50 p-5'>
+              <div className='flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between'>
+                <div className='max-w-3xl'>
+                  <p className='text-xs font-semibold uppercase tracking-wide text-blue-700'>Action required in Delhivery One</p>
+                  <h2 className='mt-1 text-lg font-semibold text-blue-950'>Add your orders to pickup {settings.pickupId}</h2>
+                  <p className='mt-2 text-sm leading-6 text-blue-900'>
+                    Open Ready to Ship, select the {Number(settings.expectedPackageCount) || 0} expected order{Number(settings.expectedPackageCount) === 1 ? '' : 's'}, click <span className='font-semibold'>Add to Pickup</span>, and choose existing pickup <span className='font-mono font-semibold'>{settings.pickupId}</span>. Do not create another pickup.
+                  </p>
+                </div>
+                <a
+                  href={DELHIVERY_READY_TO_SHIP_URL}
+                  target='_blank'
+                  rel='noreferrer'
+                  className='inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded bg-blue-700 px-5 text-sm font-semibold text-white hover:bg-blue-800'
+                >
+                  Add orders in Delhivery One <ExternalLink size={15} />
+                </a>
+              </div>
+            </section>
+          ) : null}
 
           <section className='grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]'>
             <div className='rounded border border-gray-200 bg-white p-5'>
