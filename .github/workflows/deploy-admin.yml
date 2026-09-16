@@ -68,19 +68,31 @@ jobs:
               echo "Dependencies unchanged; skipping npm ci."
             fi
 
-            for BUILD_ATTEMPT in 1 2 3; do
-              echo "Building admin ($BUILD_ATTEMPT/3)..."
-              npm run build
+            BUILD_SUCCEEDED=false
 
-              if [ ! -f .next/BUILD_ID ]; then
-                echo "ERROR: Admin build $BUILD_ATTEMPT/3 did not produce .next/BUILD_ID."
-                exit 1
+            for BUILD_ATTEMPT in 1 2 3; do
+              echo "Building admin (attempt $BUILD_ATTEMPT/3)..."
+
+              if npm run build && [ -f .next/BUILD_ID ]; then
+                echo "Admin build attempt $BUILD_ATTEMPT/3 passed."
+                BUILD_SUCCEEDED=true
+                break
               fi
 
-              echo "Admin build $BUILD_ATTEMPT/3 passed."
+              echo "Admin build attempt $BUILD_ATTEMPT/3 failed."
+
+              if [ "$BUILD_ATTEMPT" -lt 3 ]; then
+                echo "Retrying admin build..."
+                sleep 2
+              fi
             done
 
-            echo "All 3 admin production builds passed."
+            if [ "$BUILD_SUCCEEDED" != true ]; then
+              echo "ERROR: Admin build failed after 3 attempts."
+              exit 1
+            fi
+
+            echo "Admin production build passed."
             echo "BUILD_ID:"
             cat .next/BUILD_ID
 
