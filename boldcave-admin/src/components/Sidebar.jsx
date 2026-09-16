@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
+  CalendarClock,
   Home,
   PackagePlus,
   PackageSearch,
@@ -20,6 +21,7 @@ const navItems = [
   { path: '/list', icon: PackageSearch, label: 'Products' },
   { path: '/add', icon: PackagePlus, label: 'Add Product' },
   { path: '/orders', icon: ShoppingCart, label: 'Orders' },
+  { path: '/pickups', icon: CalendarClock, label: 'Pickups' },
   { path: '/users', icon: Users, label: 'Users' },
   { path: '/reviews', icon: Star, label: 'Reviews' },
   { path: '/coupon', icon: TicketPercent, label: 'Coupons' },

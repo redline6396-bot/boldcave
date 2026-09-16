@@ -14,7 +14,6 @@ export const ORDER_STATUSES = [
 
 export const ADMIN_MANUAL_ORDER_STATUSES = [
   "confirmed",
-  "processing",
   "cancelled",
 ];
 

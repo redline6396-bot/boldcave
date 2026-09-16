@@ -30,6 +30,7 @@ async function getConnectionModels(connection) {
   const [
     { CouponSchema },
     { CouponUsageSchema },
+    { DelhiveryPickupRecordSchema },
     { HomepageSettingsSchema },
     { OrderSchema },
     { OtpRateLimitSchema },
@@ -43,6 +44,7 @@ async function getConnectionModels(connection) {
   ] = await Promise.all([
     import("@/models/Coupon"),
     import("@/models/CouponUsage"),
+    import("@/models/DelhiveryPickupRecord"),
     import("@/models/HomepageSettings"),
     import("@/models/Order"),
     import("@/models/OtpRateLimit"),
@@ -58,6 +60,7 @@ async function getConnectionModels(connection) {
   const modelDefinitions = {
     Coupon: CouponSchema,
     CouponUsage: CouponUsageSchema,
+    DelhiveryPickupRecord: DelhiveryPickupRecordSchema,
     HomepageSettings: HomepageSettingsSchema,
     Order: OrderSchema,
     OtpRateLimit: OtpRateLimitSchema,

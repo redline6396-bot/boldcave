@@ -1,14 +1,27 @@
 'use client';
 
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Copy, ExternalLink, Package, Search } from 'lucide-react';
 import { NotificationContext } from '@/context/NotificationContext';
-import { api, formatDate, getErrorMessage, getId, money } from '@/lib/api';
+import { api, formatDate, formatDateTime, getErrorMessage, getId, money } from '@/lib/api';
 
 const ORDER_STATUSES = ['confirmed', 'processing', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'cancelled'];
-const ADMIN_MANUAL_ORDER_STATUSES = ['confirmed', 'processing'];
+const ADMIN_MANUAL_ORDER_STATUSES = ['confirmed'];
 const PAYMENT_STATUSES = ['pending', 'paid', 'failed', 'cod'];
 const CANCELLABLE_ORDER_STATUSES = ['confirmed', 'processing'];
+
+function getDelhiveryTrackingUrl(waybill) {
+  const value = String(waybill || '').trim();
+  return value
+    ? `https://www.delhivery.com/track/package/${encodeURIComponent(value)}`
+    : '';
+}
+
+function formatIstDateTime(value) {
+  const formatted = formatDateTime(value);
+  if (formatted === '-') return '-';
+  return `${formatted.replace(/\b(am|pm)\b/gi, (period) => period.toUpperCase())} IST`;
+}
 
 function hasShadowfaxSummary(order) {
   const shadowfax = order?.shadowfax;
@@ -23,9 +36,79 @@ function hasShadowfaxSummary(order) {
   );
 }
 
+function hasDelhiverySummary(order) {
+  const delhivery = order?.delhivery;
+  return Boolean(
+    delhivery?.waybill ||
+      delhivery?.referenceNo ||
+      delhivery?.shipmentStatus ||
+      delhivery?.statusDisplay ||
+      delhivery?.syncStatus
+  );
+}
+
+function hasExternalDelhiveryCancellation(order) {
+  return [
+    order?.delhivery?.shipmentStatus,
+    order?.delhivery?.statusType,
+    order?.delhivery?.statusDisplay,
+    order?.delhivery?.lastWebhookStatus,
+    order?.delhivery?.cancelStatus,
+  ].some((value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized === 'cn' || normalized.includes('cancel');
+  });
+}
+
+function canReconcileExternalDelhiveryCancellation(order) {
+  if (
+    order?.shippingProvider !== 'delhivery' ||
+    !order?.delhivery?.waybill ||
+    order?.orderStatus === 'cancelled'
+  ) {
+    return false;
+  }
+
+  const shipmentStatus = String(
+    order?.delhivery?.statusDisplay || order?.delhivery?.shipmentStatus || ''
+  ).trim().toLowerCase();
+  return (
+    hasExternalDelhiveryCancellation(order) ||
+    ['shipping_pending', 'confirmed', 'processing'].includes(order?.orderStatus) &&
+      ['manifested', 'not picked', 'ready to ship'].some((status) =>
+        shipmentStatus.includes(status)
+      )
+  );
+}
+
 function getShippingSummary(order) {
   const provider = String(order?.shippingProvider || '').toLowerCase();
   const useShadowfax = provider === 'shadowfax' || (!provider && hasShadowfaxSummary(order));
+  const useDelhivery = provider === 'delhivery' || (!provider && hasDelhiverySummary(order));
+
+  if (useDelhivery) {
+    const delhivery = order?.delhivery || {};
+    const cancelled =
+      order?.orderStatus === 'cancelled' &&
+      (delhivery.cancelStatus === 'cancelled' ||
+        order?.cancellation?.status === 'cancelled');
+    return {
+      provider: 'delhivery',
+      providerLabel: 'Delhivery',
+      providerOrderId: delhivery.referenceNo || '',
+      awbCode: delhivery.waybill || '',
+      courierName: 'Delhivery',
+      shipmentStatus: cancelled
+        ? 'Cancelled'
+        : delhivery.statusDisplay || delhivery.shipmentStatus || '',
+      syncStatus: delhivery.syncStatus || '',
+      trackingUrl: delhivery.trackingUrl || getDelhiveryTrackingUrl(delhivery.waybill),
+      lastError: delhivery.lastError || '',
+      pickupId: delhivery.pickupId || '',
+      pickupState: delhivery.pickupState || '',
+      pickupRequestDate: delhivery.pickupRequestDate || '',
+    };
+  }
 
   if (useShadowfax) {
     const shadowfax = order?.shadowfax || {};
@@ -66,6 +149,7 @@ export default function OrdersPage() {
   const [busyId, setBusyId] = useState('');
   const [cancelReasons, setCancelReasons] = useState({});
   const [copiedOrderId, setCopiedOrderId] = useState('');
+  const openedOrderFromLink = useRef('');
   const { success, error: showError } = useContext(NotificationContext);
 
   const loadOrders = useCallback(async () => {
@@ -89,6 +173,24 @@ export default function OrdersPage() {
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
+  useEffect(() => {
+    if (!orders.length || typeof window === 'undefined') return undefined;
+    const target = new URLSearchParams(window.location.search).get('order');
+    if (!target || openedOrderFromLink.current === target) return undefined;
+    const matchingOrder = orders.find(
+      (order) => getId(order) === target || String(order.orderNumber || '') === target
+    );
+    if (!matchingOrder) return undefined;
+
+    const id = getId(matchingOrder);
+    openedOrderFromLink.current = target;
+    setExpanded((current) => ({ ...current, [id]: true }));
+    const timer = globalThis.setTimeout(() => {
+      document.getElementById(`order-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+    return () => globalThis.clearTimeout(timer);
+  }, [orders]);
 
   const visibleOrders = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -162,6 +264,73 @@ export default function OrdersPage() {
       success(response.data.data.synced ? 'Shiprocket sync completed' : 'Shiprocket sync checked');
     } catch (err) {
       showError(getErrorMessage(err, 'Unable to retry Shiprocket sync'));
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const retryDelhiverySync = async (order) => {
+    const id = getId(order);
+    try {
+      setBusyId(`delhivery:${id}`);
+      const response = await api.post(`/api/admin/orders/${id}/delhivery/retry`);
+      setOrders((current) => current.map((entry) => (getId(entry) === id ? response.data.data.order : entry)));
+      success(response.data.data.synced ? 'Delhivery sync completed' : 'Delhivery sync checked');
+    } catch (err) {
+      const updatedOrder = err?.response?.data?.error?.details?.order;
+      if (updatedOrder) {
+        setOrders((current) => current.map((entry) => (getId(entry) === id ? updatedOrder : entry)));
+      }
+      showError(getErrorMessage(err, 'Unable to retry Delhivery sync'));
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const refreshDelhiveryTracking = async (order) => {
+    const id = getId(order);
+    try {
+      setBusyId(`delhivery-tracking:${id}`);
+      const response = await api.post(`/api/admin/orders/${id}/delhivery/tracking`);
+      const updatedOrder = response.data.data.order;
+      setOrders((current) => current.map((entry) => (getId(entry) === id ? updatedOrder : entry)));
+      success('Delhivery tracking refreshed');
+    } catch (err) {
+      showError(getErrorMessage(err, 'Unable to refresh Delhivery tracking'));
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const reconcileDelhiveryCancellation = async (order) => {
+    const id = getId(order);
+    const confirmed = globalThis.confirm(
+      'Use this only after confirming the AWB is cancelled in Delhivery One. This will cancel the Bold Cave order, restore stock, and refund a paid Razorpay order.'
+    );
+    if (!confirmed) return;
+
+    try {
+      setBusyId(`delhivery-cancellation:${id}`);
+      const response = await api.post(
+        `/api/admin/orders/${id}/delhivery/reconcile-cancellation`,
+        {
+          confirmedExternalCancellation: true,
+          reason: 'Shipment cancellation confirmed in Delhivery One',
+        }
+      );
+      const updatedOrder = response.data.data.order;
+      setOrders((current) =>
+        current.map((entry) => (getId(entry) === id ? updatedOrder : entry))
+      );
+      success('Delhivery cancellation synced');
+    } catch (err) {
+      const updatedOrder = err?.response?.data?.error?.details?.order;
+      if (updatedOrder) {
+        setOrders((current) =>
+          current.map((entry) => (getId(entry) === id ? updatedOrder : entry))
+        );
+      }
+      showError(getErrorMessage(err, 'Unable to sync Delhivery cancellation'));
     } finally {
       setBusyId('');
     }
@@ -256,8 +425,14 @@ export default function OrdersPage() {
             const isOpen = Boolean(expanded[id]);
             const displayOrderId = order.orderNumber || id;
             const shipping = getShippingSummary(order);
+            const externalDelhiveryCancellation = hasExternalDelhiveryCancellation(order);
+            const canReconcileDelhiveryCancellation =
+              canReconcileExternalDelhiveryCancellation(order);
+            const canCancelOrder =
+              CANCELLABLE_ORDER_STATUSES.includes(order.orderStatus) ||
+              (order.orderStatus === 'shipping_pending' && externalDelhiveryCancellation);
             return (
-              <section key={id} className='rounded border border-gray-200 bg-white'>
+              <section id={`order-${id}`} key={id} className='scroll-mt-6 rounded border border-gray-200 bg-white'>
                 <div className='flex w-full items-center justify-between gap-4 px-5 py-4 text-left'>
                   <div className='min-w-0 flex-1'>
                     <div className='flex flex-wrap items-center gap-3'>
@@ -277,7 +452,7 @@ export default function OrdersPage() {
                     <p className='mt-1 text-sm text-gray-500'>
                       {customerName(order) || order.customer?.phone || 'Customer'} | {itemsSummary(order.items)} | {money(order.amounts?.finalAmount)}
                     </p>
-                    <p className='mt-1 text-xs text-gray-400'>{formatDate(order.createdAt)}</p>
+                    <p className='mt-1 text-xs text-gray-400'>Ordered: {formatIstDateTime(order.createdAt)}</p>
                   </div>
                   <button
                     type='button'
@@ -314,7 +489,10 @@ export default function OrdersPage() {
                         <select
                           value={order.orderStatus}
                           onChange={(event) => updateStatus(order, event.target.value)}
-                          disabled={busyId === id || order.orderStatus === 'cancelled'}
+                          disabled={
+                            busyId === id ||
+                            ['processing', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'cancelled'].includes(order.orderStatus)
+                          }
                           className='w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'
                         >
                           {!ADMIN_MANUAL_ORDER_STATUSES.includes(order.orderStatus) && (
@@ -368,7 +546,17 @@ export default function OrdersPage() {
                       shipping.courierName ? `Courier: ${shipping.courierName}` : '',
                       shipping.shipmentStatus ? `Shipment Status: ${shipping.shipmentStatus}` : '',
                       shipping.syncStatus ? `Sync: ${shipping.syncStatus}` : '',
+                      shipping.pickupId ? `Pickup ID: ${shipping.pickupId}` : '',
+                      shipping.pickupState ? `Pickup Status: ${displayValue(shipping.pickupState)}` : '',
+                      shipping.pickupRequestDate ? `Pickup Date: ${shipping.pickupRequestDate}` : '',
+                      shipping.lastError ? `Shipping Error: ${shipping.lastError}` : '',
                     ]} />
+                    {externalDelhiveryCancellation && order.orderStatus !== 'cancelled' && (
+                      <div className='rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800'>
+                        <p className='font-semibold'>Delhivery shipment is cancelled</p>
+                        <p className='mt-1'>Complete the Bold Cave cancellation below to restore stock and keep the order record consistent.</p>
+                      </div>
+                    )}
                     {order.payment?.method === 'razorpay' && order.payment?.refundStatus && order.payment.refundStatus !== 'not_required' && (
                       <div className='rounded border border-gray-200 p-4 text-sm'>
                         <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -409,7 +597,7 @@ export default function OrdersPage() {
                         </p>
                       </div>
                     )}
-                    {CANCELLABLE_ORDER_STATUSES.includes(order.orderStatus) && (
+                    {canCancelOrder && (
                       <div className='rounded border border-gray-200 p-4'>
                         <p className='mb-3 text-xs font-semibold uppercase text-gray-500'>Cancel Order</p>
                         <textarea
@@ -438,6 +626,38 @@ export default function OrdersPage() {
                         className='inline-flex w-fit rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50'
                       >
                         {busyId === `shiprocket:${id}` ? 'Retrying...' : 'Retry Shiprocket Sync'}
+                      </button>
+                    )}
+                    {order.shippingProvider === 'delhivery' && order.orderStatus !== 'cancelled' && order.delhivery?.syncStatus === 'failed' && !order.delhivery?.waybill && (
+                      <button
+                        type='button'
+                        onClick={() => retryDelhiverySync(order)}
+                        disabled={busyId === `delhivery:${id}`}
+                        className='inline-flex w-fit rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50'
+                      >
+                        {busyId === `delhivery:${id}` ? 'Retrying...' : 'Retry Delhivery Shipment'}
+                      </button>
+                    )}
+                    {order.shippingProvider === 'delhivery' && order.delhivery?.waybill && order.orderStatus !== 'cancelled' && (
+                      <button
+                        type='button'
+                        onClick={() => refreshDelhiveryTracking(order)}
+                        disabled={busyId === `delhivery-tracking:${id}`}
+                        className='inline-flex w-fit rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50'
+                      >
+                        {busyId === `delhivery-tracking:${id}` ? 'Refreshing...' : 'Refresh Delhivery Tracking'}
+                      </button>
+                    )}
+                    {canReconcileDelhiveryCancellation && (
+                      <button
+                        type='button'
+                        onClick={() => reconcileDelhiveryCancellation(order)}
+                        disabled={busyId === `delhivery-cancellation:${id}`}
+                        className='inline-flex w-fit rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50'
+                      >
+                        {busyId === `delhivery-cancellation:${id}`
+                          ? 'Syncing cancellation...'
+                          : 'Sync Delhivery Cancellation'}
                       </button>
                     )}
                     {shipping.trackingUrl && (

@@ -122,6 +122,15 @@ async function checkCheckoutServiceabilityRoute(request) {
       );
     }
 
+    if (String(error.code || "").startsWith("DELHIVERY_")) {
+      return failure(
+        "DELHIVERY_SERVICEABILITY_TEMPORARY_ERROR",
+        "Shipping serviceability could not be checked right now",
+        503,
+        locationDetails(location)
+      );
+    }
+
     if (error.message?.includes("not configured")) {
       return failure("SHIPROCKET_NOT_CONFIGURED", "Shipping service is not configured.", 503);
     }
@@ -180,6 +189,15 @@ async function checkPincodeServiceabilityRoute(request) {
         "SHADOWFAX_NOT_IMPLEMENTED",
         "Shipping service is not configured.",
         503
+      );
+    }
+
+    if (String(error.code || "").startsWith("DELHIVERY_")) {
+      return failure(
+        "DELHIVERY_SERVICEABILITY_TEMPORARY_ERROR",
+        "Shipping serviceability could not be checked right now",
+        503,
+        locationDetails(location)
       );
     }
 

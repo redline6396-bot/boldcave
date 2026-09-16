@@ -1,8 +1,16 @@
 export const SHIPROCKET_PROVIDER_ID = "shiprocket";
 export const SHADOWFAX_PROVIDER_ID = "shadowfax";
+export const DELHIVERY_PROVIDER_ID = "delhivery";
 
 function cleanProviderId(providerId) {
   return String(providerId || "").trim().toLowerCase();
+}
+
+function getDelhiveryTrackingUrl(waybill) {
+  const value = String(waybill || "").trim();
+  return value
+    ? `https://www.delhivery.com/track/package/${encodeURIComponent(value)}`
+    : "";
 }
 
 export function hasShadowfaxOrderData(order) {
@@ -23,11 +31,57 @@ export function hasShadowfaxOrderData(order) {
   );
 }
 
+export function hasDelhiveryOrderData(order) {
+  const delhivery = order?.delhivery;
+
+  return Boolean(
+    delhivery?.waybill ||
+      delhivery?.referenceNo ||
+      delhivery?.trackingUrl ||
+      delhivery?.shipmentStatus ||
+      delhivery?.statusDisplay ||
+      delhivery?.syncStatus ||
+      delhivery?.lastError ||
+      delhivery?.lastAttemptAt ||
+      delhivery?.lastSyncedAt ||
+      delhivery?.syncStartedAt
+  );
+}
+
 export function getOrderShippingSummary(order) {
   const storedProvider = cleanProviderId(order?.shippingProvider);
   const useShadowfax =
     storedProvider === SHADOWFAX_PROVIDER_ID ||
     (!storedProvider && hasShadowfaxOrderData(order));
+  const useDelhivery =
+    storedProvider === DELHIVERY_PROVIDER_ID ||
+    (!storedProvider && hasDelhiveryOrderData(order));
+
+  if (useDelhivery) {
+    const delhivery = order?.delhivery || {};
+    const cancelled =
+      order?.orderStatus === "cancelled" &&
+      (delhivery.cancelStatus === "cancelled" ||
+        order?.cancellation?.status === "cancelled");
+    const shipmentStatus = cancelled
+      ? "Cancelled"
+      : delhivery.statusDisplay || delhivery.shipmentStatus || "";
+    return {
+      provider: DELHIVERY_PROVIDER_ID,
+      providerLabel: "Delhivery",
+      providerOrderId: delhivery.referenceNo || "",
+      awbCode: delhivery.waybill || "",
+      trackingUrl:
+        delhivery.trackingUrl || getDelhiveryTrackingUrl(delhivery.waybill),
+      courierName: "Delhivery",
+      shipmentStatus,
+      statusDisplay: shipmentStatus,
+      syncStatus: delhivery.syncStatus || "",
+      lastError: delhivery.lastError || "",
+      lastAttemptAt: delhivery.lastAttemptAt || null,
+      lastSyncedAt: delhivery.lastSyncedAt || null,
+    };
+  }
 
   if (useShadowfax) {
     const shadowfax = order?.shadowfax || {};

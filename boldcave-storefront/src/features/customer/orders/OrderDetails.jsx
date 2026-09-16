@@ -302,6 +302,28 @@ export default function OrderDetails() {
                 };
               }
 
+              if (currentShipping.provider === "delhivery") {
+                return {
+                  ...current,
+                  orderStatus: tracking?.orderStatus || current.orderStatus,
+                  delhivery: {
+                    ...(current.delhivery || {}),
+                    shipmentStatus:
+                      tracking?.status ||
+                      current.delhivery?.shipmentStatus ||
+                      "",
+                    statusDisplay:
+                      tracking?.statusDisplay ||
+                      current.delhivery?.statusDisplay ||
+                      "",
+                    trackingUrl:
+                      tracking?.trackingUrl ||
+                      current.delhivery?.trackingUrl ||
+                      "",
+                  },
+                };
+              }
+
               return {
                 ...current,
                 orderStatus: tracking?.orderStatus || current.orderStatus,

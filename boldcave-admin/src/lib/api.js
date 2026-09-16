@@ -48,6 +48,21 @@ export function formatDate(value) {
   });
 }
 
+export function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 export function getId(record) {
   return record?.id || record?._id;
 }

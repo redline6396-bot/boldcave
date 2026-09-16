@@ -55,8 +55,30 @@ export function shipmentStatusIndicatesMovement(rawStatus) {
   );
 }
 
+export function shipmentStatusIndicatesCancellation(rawStatus) {
+  const status = normalizeStatus(rawStatus);
+  return Boolean(status && (status === "cn" || status.includes("cancel")));
+}
+
 export function getCancellationEligibility(order) {
   const orderStatus = String(order?.orderStatus || "confirmed").toLowerCase();
+  const shipping = getOrderShippingSummary(order);
+  const providerStatuses = [
+    shipping.shipmentStatus,
+    shipping.statusDisplay,
+    order?.shiprocket?.shipmentStatus,
+    order?.shadowfax?.shipmentStatus,
+    order?.shadowfax?.statusDisplay,
+    order?.shadowfax?.lastWebhookStatus,
+    order?.delhivery?.shipmentStatus,
+    order?.delhivery?.statusType,
+    order?.delhivery?.statusDisplay,
+    order?.delhivery?.lastWebhookStatus,
+    order?.delhivery?.cancelStatus,
+  ];
+  const externallyCancelled = providerStatuses.some(
+    shipmentStatusIndicatesCancellation
+  );
 
   if (orderStatus === "cancelled") {
     return { cancellable: false, reason: "already_cancelled" };
@@ -66,19 +88,13 @@ export function getCancellationEligibility(order) {
     return { cancellable: false, reason: "shipment_started" };
   }
 
+  if (orderStatus === "shipping_pending" && externallyCancelled) {
+    return { cancellable: true, reason: "external_provider_cancellation" };
+  }
+
   if (!CANCELLABLE_ORDER_STATUSES.includes(orderStatus)) {
     return { cancellable: false, reason: "order_status" };
   }
-
-  const shipping = getOrderShippingSummary(order);
-  const providerStatuses = [
-    shipping.shipmentStatus,
-    shipping.statusDisplay,
-    order?.shiprocket?.shipmentStatus,
-    order?.shadowfax?.shipmentStatus,
-    order?.shadowfax?.statusDisplay,
-    order?.shadowfax?.lastWebhookStatus,
-  ];
 
   if (providerStatuses.some(shipmentStatusIndicatesMovement)) {
     return { cancellable: false, reason: "shipment_started" };

@@ -219,11 +219,10 @@ export async function createRazorpayCheckout({
 }
 
 export async function verifyRazorpayCheckout(payload) {
-  const data = await requestJson(
+  return requestJson(
     "/api/checkout/razorpay/verify",
     jsonOptions("POST", payload)
   );
-  return data?.order || null;
 }
 
 export async function fetchMyOrders() {

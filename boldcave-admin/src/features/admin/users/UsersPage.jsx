@@ -3,7 +3,7 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { NotificationContext } from '@/context/NotificationContext';
-import { api, formatDate, getErrorMessage, getId, money } from '@/lib/api';
+import { api, formatDate, formatDateTime, getErrorMessage, getId, money } from '@/lib/api';
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -174,7 +174,7 @@ export default function UsersPage() {
                                       <p className='font-semibold text-gray-950'>{order.orderNumber}</p>
                                       <Badge>{order.orderStatus}</Badge>
                                     </div>
-                                    <p className='mt-1 text-gray-500'>{formatDate(order.createdAt)} | {money(order.amounts?.finalAmount)} | {order.payment?.method || '-'}</p>
+                                    <p className='mt-1 text-gray-500'>{formatDateTime(order.createdAt)} IST | {money(order.amounts?.finalAmount)} | {order.payment?.method || '-'}</p>
                                   </div>
                                 ))}
                               </div>

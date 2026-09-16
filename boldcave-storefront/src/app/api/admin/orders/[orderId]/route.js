@@ -18,6 +18,7 @@ async function findOrder(orderId) {
 }
 
 const COURIER_CONTROLLED_STATUSES = [
+  "processing",
   "shipped",
   "in_transit",
   "out_for_delivery",
@@ -62,7 +63,7 @@ async function updateAdminOrderRoute(request, { params }) {
         request,
         failure(
           "MANUAL_STATUS_NOT_ALLOWED",
-          "Courier-controlled statuses are updated by Shiprocket.",
+          "Courier-controlled statuses are updated by the shipping provider.",
           400
         )
       );
@@ -102,7 +103,7 @@ async function updateAdminOrderRoute(request, { params }) {
         request,
         failure(
           "STATUS_REGRESSION_NOT_ALLOWED",
-          "Shiprocket-controlled orders cannot be moved back manually.",
+          "Shipping-provider-controlled orders cannot be moved back manually.",
           400
         )
       );

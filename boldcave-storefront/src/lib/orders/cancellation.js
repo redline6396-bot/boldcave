@@ -16,6 +16,7 @@ import {
 import {
   CANCELLABLE_ORDER_STATUSES,
   getCancellationEligibility,
+  shipmentStatusIndicatesCancellation,
 } from "@/lib/orders/cancellationEligibility";
 import { cleanString, isObjectId } from "@/lib/validation";
 import Order from "@/models/Order";
@@ -116,7 +117,7 @@ async function loadOrder({ orderId, userId }) {
 function getClaimFilter(order, userId) {
   const filter = {
     _id: order._id,
-    orderStatus: { $in: CANCELLABLE_ORDER_STATUSES },
+    orderStatus: order.orderStatus,
     $or: [
       { "cancellation.status": { $exists: false } },
       { "cancellation.status": "none" },
@@ -146,6 +147,7 @@ async function finalizeCancellation({
   actor,
   reason,
   shiprocketCancelStatus,
+  allowedOrderStatuses = CANCELLABLE_ORDER_STATUSES,
 }) {
   const runtimeConnection = getRuntimeDatabaseContext()?.connection;
   const session = runtimeConnection
@@ -157,7 +159,7 @@ async function finalizeCancellation({
     await session.withTransaction(async () => {
       const order = await Order.findOne({
         _id: orderId,
-        orderStatus: { $in: CANCELLABLE_ORDER_STATUSES },
+        orderStatus: { $in: allowedOrderStatuses },
         "cancellation.status": "processing",
         "stockRestoration.status": { $ne: "restored" },
       }).session(session);
@@ -215,7 +217,7 @@ export async function cancelOrder({
     );
   }
 
-  if (!["customer", "admin"].includes(actor)) {
+  if (!["customer", "admin", "system"].includes(actor)) {
     throw new CancellationError("INVALID_ACTOR", "Invalid cancellation actor.", 400);
   }
 
@@ -326,9 +328,12 @@ export async function cancelOrder({
         "stockRestoration.error": "",
       };
 
-      if (!isShiprocketProvider) {
+      if (claimedShippingProvider === SHIPPING_PROVIDERS.SHADOWFAX) {
         failureUpdates["shadowfax.cancelStatus"] = "failed";
         failureUpdates["shadowfax.cancelError"] = sanitizeError(error);
+      } else if (claimedShippingProvider === SHIPPING_PROVIDERS.DELHIVERY) {
+        failureUpdates["delhivery.cancelStatus"] = "failed";
+        failureUpdates["delhivery.cancelError"] = sanitizeError(error);
       }
 
       const failedOrder = await failClaimedCancellation(
@@ -382,6 +387,7 @@ export async function cancelOrder({
       actor,
       reason: normalizedReason,
       shiprocketCancelStatus,
+      allowedOrderStatuses: [claimedOrder.orderStatus],
     });
 
     return {
@@ -412,6 +418,68 @@ export async function cancelOrder({
       500,
       { order: failedOrder }
     );
+  }
+}
+
+function hasExternalProviderCancellationSignal(order, provider) {
+  const providerState = order?.[provider] || {};
+  return [
+    providerState.shipmentStatus,
+    providerState.statusType,
+    providerState.statusDisplay,
+    providerState.lastWebhookStatus,
+    providerState.cancelStatus,
+  ].some(shipmentStatusIndicatesCancellation);
+}
+
+export async function reconcileExternalShipmentCancellation({
+  orderId,
+  provider,
+  reason,
+}) {
+  await connectDB();
+
+  const order = await loadOrder({ orderId });
+  if (order.orderStatus === "cancelled") {
+    return { ok: true, skipped: true, alreadyCancelled: true, order };
+  }
+  if (!hasExternalProviderCancellationSignal(order, provider)) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "external_cancellation_not_confirmed",
+      order,
+    };
+  }
+
+  const eligibility = getCancellationEligibility(order);
+  if (!eligibility.cancellable) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: eligibility.reason || "order_not_cancellable",
+      order,
+    };
+  }
+
+  try {
+    const result = await cancelOrder({
+      orderId: order._id,
+      actor: "system",
+      reason: reason || "Shipment cancelled at the shipping provider",
+    });
+    return { ok: true, skipped: false, ...result };
+  } catch (error) {
+    if (["ORDER_ALREADY_CANCELLED", "CANCELLATION_IN_PROGRESS"].includes(error?.code)) {
+      const latestOrder = await Order.findById(order._id);
+      return {
+        ok: latestOrder?.orderStatus === "cancelled",
+        skipped: true,
+        inProgress: error?.code === "CANCELLATION_IN_PROGRESS",
+        order: latestOrder || order,
+      };
+    }
+    throw error;
   }
 }
 
@@ -506,6 +574,7 @@ export async function retryOrderRefund({ orderId }) {
     reason: refundedOrder.cancellation?.reason || "Refund retry",
     shiprocketCancelStatus:
       refundedOrder.cancellation?.shiprocketCancelStatus || "cancelled",
+    allowedOrderStatuses: [refundedOrder.orderStatus],
   });
 
   return {

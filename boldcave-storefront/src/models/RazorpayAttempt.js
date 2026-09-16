@@ -72,7 +72,7 @@ const razorpayAttemptSchema = new mongoose.Schema(
     },
     shippingProvider: {
       type: String,
-      enum: ["shiprocket", "shadowfax"],
+      enum: ["shiprocket", "shadowfax", "delhivery"],
       trim: true,
     },
     razorpayOrderId: { type: String, required: true, unique: true },
@@ -125,9 +125,12 @@ const REQUIRED_ATTEMPT_ITEM_PATHS = [
 
 if (
   mongoose.models.RazorpayAttempt &&
-  REQUIRED_ATTEMPT_ITEM_PATHS.some(
+  (REQUIRED_ATTEMPT_ITEM_PATHS.some(
     (path) => !mongoose.models.RazorpayAttempt.schema?.path(path)
-  )
+  ) ||
+    !mongoose.models.RazorpayAttempt.schema
+      ?.path("shippingProvider")
+      ?.enumValues?.includes("delhivery"))
 ) {
   delete mongoose.models.RazorpayAttempt;
 }

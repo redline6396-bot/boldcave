@@ -176,9 +176,26 @@ async function persistShippingFailure(order, error) {
     update.$set["shadowfax.syncStatus"] = "failed";
     update.$set["shadowfax.lastError"] = cleanString(error?.message).slice(0, 300);
     update.$set["shadowfax.lastAttemptAt"] = new Date();
+  } else if (provider === "delhivery") {
+    update.$set["delhivery.syncStatus"] = "failed";
+    update.$set["delhivery.lastError"] = cleanString(error?.message).slice(0, 300);
+    update.$set["delhivery.lastAttemptAt"] = new Date();
   }
 
   return Order.findByIdAndUpdate(order._id, update, { returnDocument: "after" });
+}
+
+async function persistShippingPending(order) {
+  return Order.findByIdAndUpdate(
+    order._id,
+    {
+      $set: {
+        orderStatus:
+          order.orderStatus === "confirmed" ? "shipping_pending" : order.orderStatus,
+      },
+    },
+    { returnDocument: "after" }
+  );
 }
 
 export async function finalizeCapturedRazorpayAttempt({
@@ -298,12 +315,36 @@ export async function finalizeCapturedRazorpayAttempt({
   try {
     const shipmentSync = await syncShipment(order);
     order = shipmentSync.order || order;
-    return { order, shipmentSync, idempotent: false };
+    if (!shipmentSync.ok) {
+      const shippingPendingOrder = await persistShippingPending(order);
+      const shippingReconciliationRequired = Boolean(
+        shipmentSync.needsReconciliation ||
+          shipmentSync.inProgress ||
+          shipmentSync.syncStatus === "needs_reconciliation"
+      );
+      return {
+        order: shippingPendingOrder || order,
+        shipmentSync,
+        shippingError: true,
+        shippingPending: true,
+        shippingReconciliationRequired,
+        idempotent: false,
+      };
+    }
+    return {
+      order,
+      shipmentSync,
+      shippingPending: false,
+      shippingReconciliationRequired: false,
+      idempotent: false,
+    };
   } catch (error) {
     const shippingPendingOrder = await persistShippingFailure(order, error);
     return {
       order: shippingPendingOrder || order,
       shippingError: true,
+      shippingPending: true,
+      shippingReconciliationRequired: Boolean(error?.requestMayHaveReachedProvider),
       idempotent: false,
     };
   }

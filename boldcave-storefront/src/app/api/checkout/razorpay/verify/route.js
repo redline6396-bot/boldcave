@@ -135,7 +135,10 @@ async function verifyRazorpayOrderRoute(request) {
 
     return success({
       order: result.order,
-      shippingPending: Boolean(result.shippingError),
+      shippingPending: Boolean(result.shippingPending || result.shippingError),
+      shippingReconciliationRequired: Boolean(
+        result.shippingReconciliationRequired
+      ),
       idempotent: Boolean(result.idempotent),
     });
   } catch (error) {

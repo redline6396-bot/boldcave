@@ -136,6 +136,10 @@ async function handlePaymentCaptured(event) {
     updated: true,
     idempotent: Boolean(result.idempotent),
     finalOrderId: result.order?._id ? String(result.order._id) : "",
+    shippingPending: Boolean(result.shippingPending || result.shippingError),
+    shippingReconciliationRequired: Boolean(
+      result.shippingReconciliationRequired
+    ),
   };
 }
 

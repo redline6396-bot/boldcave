@@ -17,7 +17,7 @@ import {
   Users,
 } from 'lucide-react';
 import { NotificationContext } from '@/context/NotificationContext';
-import { api, formatDate, getErrorMessage } from '@/lib/api';
+import { api, formatDateTime, getErrorMessage } from '@/lib/api';
 
 const RANGE_OPTIONS = [
   { label: 'Last 7 days', value: '7d' },
@@ -773,7 +773,7 @@ function RecentOrdersCard({ className = '', orders }) {
                 <div key={order._id} className='grid min-h-[62px] grid-cols-[1.15fr_1fr_0.9fr_0.8fr_0.8fr_0.8fr] items-center gap-4 px-5 py-3 text-sm transition-colors hover:bg-slate-50/70'>
                   <p className='truncate font-medium text-slate-950'>{order.orderNumber || order._id}</p>
                   <p className='truncate text-slate-600'>{order.customerName || order.customer?.phone || 'Customer'}</p>
-                  <p className='text-slate-500'>{formatDate(order.createdAt)}</p>
+                  <p className='text-slate-500'>{formatDateTime(order.createdAt)} IST</p>
                   <p className='text-slate-600'>{paymentLabel(order.payment)}</p>
                   <p className='text-right font-medium text-slate-950'>{formatCurrency(order.amounts?.finalAmount)}</p>
                   <div className='flex justify-end'>
@@ -790,7 +790,7 @@ function RecentOrdersCard({ className = '', orders }) {
                 <div className='flex items-start justify-between gap-3'>
                   <div className='min-w-0'>
                     <p className='truncate text-sm font-medium text-slate-950'>{order.orderNumber || order._id}</p>
-                    <p className='mt-1 text-xs text-slate-500'>{order.customerName || order.customer?.phone || 'Customer'} · {formatDate(order.createdAt)}</p>
+                    <p className='mt-1 text-xs text-slate-500'>{order.customerName || order.customer?.phone || 'Customer'} · {formatDateTime(order.createdAt)} IST</p>
                   </div>
                   <StatusBadge status={order.orderStatus} />
                 </div>

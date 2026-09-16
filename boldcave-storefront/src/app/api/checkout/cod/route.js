@@ -37,10 +37,12 @@ const ORDER_SHIPMENT_PENDING_MESSAGE =
 function hasProviderShipmentIdentity(order) {
   const shadowfax = order?.shadowfax || {};
   const shiprocket = order?.shiprocket || {};
+  const delhivery = order?.delhivery || {};
 
   return Boolean(
     shadowfax.orderId ||
       shadowfax.awbNumber ||
+      delhivery.waybill ||
       shiprocket.shiprocketOrderId ||
       shiprocket.shipmentId ||
       shiprocket.awbCode
@@ -48,12 +50,8 @@ function hasProviderShipmentIdentity(order) {
 }
 
 function getShippingSyncStatus(order, shipmentSync) {
-  return (
-    shipmentSync?.syncStatus ||
-    order?.shadowfax?.syncStatus ||
-    order?.shiprocket?.syncStatus ||
-    ""
-  );
+  const provider = String(order?.shippingProvider || "").trim().toLowerCase();
+  return shipmentSync?.syncStatus || order?.[provider]?.syncStatus || "";
 }
 
 async function markCodOrderConfirmed(order) {
@@ -107,8 +105,10 @@ async function voidCodOrderAfterShippingFailure(order, { userId }) {
     userId: String(userId),
     shippingProvider: order.shippingProvider,
     shadowfaxSyncStatus: voidedOrder?.shadowfax?.syncStatus,
+    delhiverySyncStatus: voidedOrder?.delhivery?.syncStatus,
     shiprocketSyncStatus: voidedOrder?.shiprocket?.syncStatus,
     shadowfaxLastError: voidedOrder?.shadowfax?.lastError,
+    delhiveryLastError: voidedOrder?.delhivery?.lastError,
     shiprocketLastError: voidedOrder?.shiprocket?.lastError,
   });
 

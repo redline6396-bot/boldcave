@@ -7,18 +7,25 @@ import {
   shiprocketProvider,
 } from "@/lib/shipping/providers/shiprocket";
 import {
+  DELHIVERY_PROVIDER_ID,
+  delhiveryProvider,
+} from "@/lib/shipping/providers/delhivery";
+import {
   getOrderShippingSummary,
+  hasDelhiveryOrderData,
   hasShadowfaxOrderData,
 } from "@/lib/shipping/summary";
 
 export const SHIPPING_PROVIDERS = Object.freeze({
   SHIPROCKET: SHIPROCKET_PROVIDER_ID,
   SHADOWFAX: SHADOWFAX_PROVIDER_ID,
+  DELHIVERY: DELHIVERY_PROVIDER_ID,
 });
 
 const PROVIDERS = Object.freeze({
   [SHIPROCKET_PROVIDER_ID]: shiprocketProvider,
   [SHADOWFAX_PROVIDER_ID]: shadowfaxProvider,
+  [DELHIVERY_PROVIDER_ID]: delhiveryProvider,
 });
 
 const DEFAULT_SHIPPING_PROVIDER = SHIPROCKET_PROVIDER_ID;
@@ -100,6 +107,10 @@ export function getOrderShippingProvider(order) {
     return SHIPROCKET_PROVIDER_ID;
   }
 
+  if (hasDelhiveryOrderData(order)) {
+    return DELHIVERY_PROVIDER_ID;
+  }
+
   return getConfiguredShippingProvider();
 }
 
@@ -120,11 +131,24 @@ export async function validateCheckoutServiceability(options) {
 }
 
 export async function syncShipment(order) {
-  return getShippingProvider(getOrderShippingProvider(order)).syncShipment(order);
+  const providerId = getOrderShippingProvider(order);
+  const result = await getShippingProvider(providerId).syncShipment(order);
+
+  return {
+    ...result,
+    syncStatus:
+      result?.syncStatus ||
+      result?.order?.[providerId]?.syncStatus ||
+      order?.[providerId]?.syncStatus ||
+      "",
+  };
 }
 
-export async function trackShipment(order) {
-  return getShippingProvider(getOrderShippingProvider(order)).trackShipment(order);
+export async function trackShipment(order, options = {}) {
+  return getShippingProvider(getOrderShippingProvider(order)).trackShipment(
+    order,
+    options
+  );
 }
 
 export async function cancelShipment(order) {
