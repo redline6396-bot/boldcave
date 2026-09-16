@@ -17,17 +17,22 @@ jobs:
   deploy:
     name: Pull and build admin
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    permissions:
+      contents: read
 
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.5
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           host: ${{ secrets.MILESWEB_HOST }}
           username: ${{ secrets.ADMIN_SSH_USER }}
           key: ${{ secrets.MILESWEB_SSH_PRIVATE_KEY }}
           port: ${{ secrets.MILESWEB_SSH_PORT }}
-          command_timeout: 12m
+          command_timeout: 25m
+          envs: GITHUB_TOKEN
           script: |
             set -e
 
@@ -42,7 +47,9 @@ jobs:
             BEFORE="$(git rev-parse HEAD)"
 
             echo "Pulling latest code..."
-            git pull --ff-only origin main
+            GITHUB_AUTH="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+            git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $GITHUB_AUTH" pull --ff-only origin main
+            unset GITHUB_AUTH GITHUB_TOKEN
 
             AFTER="$(git rev-parse HEAD)"
 
@@ -61,18 +68,19 @@ jobs:
               echo "Dependencies unchanged; skipping npm ci."
             fi
 
-            echo "Building admin..."
-            npm run build
+            for BUILD_ATTEMPT in 1 2 3; do
+              echo "Building admin ($BUILD_ATTEMPT/3)..."
+              npm run build
 
-            echo "Verifying production build..."
+              if [ ! -f .next/BUILD_ID ]; then
+                echo "ERROR: Admin build $BUILD_ATTEMPT/3 did not produce .next/BUILD_ID."
+                exit 1
+              fi
 
-            if [ ! -f .next/BUILD_ID ]; then
-              echo "ERROR: Production build verification failed."
-              echo ".next/BUILD_ID was not found."
-              exit 1
-            fi
+              echo "Admin build $BUILD_ATTEMPT/3 passed."
+            done
 
-            echo "Production build verified successfully."
+            echo "All 3 admin production builds passed."
             echo "BUILD_ID:"
             cat .next/BUILD_ID
 

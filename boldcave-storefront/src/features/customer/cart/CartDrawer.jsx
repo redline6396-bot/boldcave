@@ -525,11 +525,10 @@ export default function CartDrawer({ isOpen, onClose }) {
                 },
               )}
 
-              {/* Smart coupon placement:
-                  - few products: uses remaining space and sits at the bottom of the scroll area
-                  - many products: naturally follows the final product and scrolls into view */}
+              {/* Keep coupons directly after the products. Anchoring this block to
+                  the bottom makes it jump upward when the pricing panel expands. */}
 
-              <div className="mt-auto border-t border-neutral-200 pb-4 pt-3 sm:pb-5 sm:pt-4">
+              <div className="border-t border-neutral-200 pb-4 pt-3 sm:pb-5 sm:pt-4">
                 <CouponSection
                   subtotal={
                     sellingSubtotal

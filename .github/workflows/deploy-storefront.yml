@@ -17,7 +17,7 @@ jobs:
   deploy:
     name: Pull and build storefront
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: read
 
@@ -31,7 +31,7 @@ jobs:
           username: ${{ secrets.STOREFRONT_SSH_USER }}
           key: ${{ secrets.MILESWEB_SSH_PRIVATE_KEY }}
           port: ${{ secrets.MILESWEB_SSH_PORT }}
-          command_timeout: 12m
+          command_timeout: 25m
           envs: GITHUB_TOKEN
           script: |
             set -e
@@ -68,22 +68,19 @@ jobs:
               echo "Dependencies unchanged; skipping npm ci."
             fi
 
-            echo "Building storefront..."
-            if ! npm run build; then
-              echo "First build attempt failed; retrying once with the generated cache..."
-              sleep 2
+            for BUILD_ATTEMPT in 1 2 3; do
+              echo "Building storefront ($BUILD_ATTEMPT/3)..."
               npm run build
-            fi
 
-            echo "Verifying production build..."
+              if [ ! -f .next/BUILD_ID ]; then
+                echo "ERROR: Storefront build $BUILD_ATTEMPT/3 did not produce .next/BUILD_ID."
+                exit 1
+              fi
 
-            if [ ! -f .next/BUILD_ID ]; then
-              echo "ERROR: Production build verification failed."
-              echo ".next/BUILD_ID was not found."
-              exit 1
-            fi
+              echo "Storefront build $BUILD_ATTEMPT/3 passed."
+            done
 
-            echo "Production build verified successfully."
+            echo "All 3 storefront production builds passed."
             echo "BUILD_ID:"
             cat .next/BUILD_ID
 
