@@ -96,5 +96,7 @@ jobs:
             echo "BUILD_ID:"
             cat .next/BUILD_ID
 
-            echo "Admin deployment build completed successfully."
-            echo "MilesWeb Node app still needs Restart in mPanel."
+            mkdir -p tmp
+            touch tmp/restart.txt
+
+            echo "Admin deployment completed and Passenger restart requested."
