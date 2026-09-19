@@ -164,6 +164,35 @@ export async function fetchEligibleCoupons({ subtotal = 0 } = {}) {
   return data?.coupons || [];
 }
 
+let publicPromotionsCache = null;
+let publicPromotionsPromise = null;
+let publicPromotionsCacheTime = 0;
+
+export async function fetchPublicPromotions() {
+  const now = Date.now();
+  if (publicPromotionsCache && now - publicPromotionsCacheTime < 60000) {
+    return publicPromotionsCache;
+  }
+
+  if (!publicPromotionsPromise) {
+    publicPromotionsPromise = requestJson("/api/coupons/public-promotions", {
+      cache: "no-store",
+    })
+      .then((data) => {
+        publicPromotionsCache = data || { firstOrderCoupon: null, generalCoupon: null };
+        publicPromotionsCacheTime = Date.now();
+        publicPromotionsPromise = null;
+        return publicPromotionsCache;
+      })
+      .catch((error) => {
+        publicPromotionsPromise = null;
+        throw error;
+      });
+  }
+
+  return publicPromotionsPromise;
+}
+
 export async function checkShippingServiceability({ pincode, cod = false, items = [] }) {
   return requestJson(
     "/api/shipping/serviceability",

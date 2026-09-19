@@ -42,6 +42,10 @@ export function calculatePrepaidDiscount({
     toPaise(subtotal) - toPaise(couponDiscount) + toPaise(shipping)
   );
 
+  if (eligiblePaise < 1000) {
+    return 0;
+  }
+
   if (prepaidDiscountSettings?.discountType === "fixed") {
     return fromPaise(
       Math.min(eligiblePaise, toPaise(prepaidDiscountSettings.discountValue))

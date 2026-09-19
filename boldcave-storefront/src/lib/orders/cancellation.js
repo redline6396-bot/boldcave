@@ -359,25 +359,9 @@ export async function cancelOrder({
         actor,
       });
     } catch (error) {
-      const failedOrder = await failClaimedCancellation(claimedOrder._id, {
-        "cancellation.shiprocketCancelStatus": shiprocketCancelStatus,
-        "cancellation.shiprocketCancelError":
-          shiprocketCancelStatus === "failed" ? sanitizeError(error) : "",
-        "stockRestoration.status": "not_required",
-        "stockRestoration.error": "",
-      });
-
-      if (error instanceof CancellationError) {
-        error.details = { ...(error.details || {}), order: failedOrder };
-        throw error;
-      }
-
-      throw new CancellationError(
-        "RAZORPAY_REFUND_FAILED",
-        customerSafeRefundError(),
-        error?.status || 502,
-        { order: failedOrder }
-      );
+      // We don't fail the cancellation if refund fails. 
+      // The order should still be cancelled. Refund status will be marked as needs_reconciliation.
+      console.error("[Cancellation] Refund could not be automatically processed during cancellation:", error);
     }
   }
 
