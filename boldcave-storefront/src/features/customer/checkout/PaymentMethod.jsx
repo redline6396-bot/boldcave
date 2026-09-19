@@ -1,6 +1,7 @@
 "use client";
 
 import { Banknote, CreditCard } from "lucide-react";
+import { MINIMUM_COD_ORDER_AMOUNT } from "@/lib/orders/paymentRules";
 
 const money = (value) =>
   `₹${new Intl.NumberFormat("en-IN", {
@@ -18,11 +19,15 @@ export default function PaymentMethod({
   prepaidDiscountSettings,
   onlineAmount = 0,
   codAmount = 0,
+  codBelowMinimum = false,
   onlineSavings = 0,
   loading = false,
 }) {
   const codDisabled =
-    disabled || serviceable === false || codAvailable === false;
+    disabled ||
+    serviceable === false ||
+    codAvailable === false ||
+    codBelowMinimum;
   const onlineDisabled = disabled || serviceable === false;
   const paymentSavings = Math.max(0, Number(onlineSavings) || 0);
   const prepaidOfferText = getPrepaidOfferText({
@@ -54,6 +59,8 @@ export default function PaymentMethod({
           text={
             loading
               ? "Refreshing payment price..."
+              : codBelowMinimum
+              ? `Available only for orders of ₹${MINIMUM_COD_ORDER_AMOUNT} or more`
               : codAvailable === false
               ? "COD is unavailable for this pincode"
               : "Pay when your order arrives"

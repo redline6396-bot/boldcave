@@ -84,7 +84,7 @@ function userMatchesCoupon(coupon, userId) {
   return eligibleUserIds.includes(String(userId));
 }
 
-async function hasPreviousOrder(userId, { excludeOrderId = null } = {}) {
+export async function hasPreviousOrder(userId, { excludeOrderId = null } = {}) {
   if (!userId || !isObjectId(userId)) return false;
   const filter = { user: userId };
   if (excludeOrderId && isObjectId(excludeOrderId)) {

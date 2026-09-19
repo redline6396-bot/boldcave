@@ -19,6 +19,11 @@ import {
   validateAddress,
 } from "@/lib/orders/pricing";
 import {
+  COD_MINIMUM_AMOUNT_MESSAGE,
+  isCodOrderAmountEligible,
+  MINIMUM_COD_ORDER_AMOUNT,
+} from "@/lib/orders/paymentRules";
+import {
   getConfiguredShippingProvider,
   syncShipment,
   validateCheckoutServiceability,
@@ -192,6 +197,15 @@ async function createCodOrderRoute(request) {
 
     if (cart.error) {
       return failure(cart.error.code, cart.error.message, cart.error.status, cart.error.details);
+    }
+
+    if (!isCodOrderAmountEligible(cart.finalAmount)) {
+      return failure(
+        "COD_MINIMUM_AMOUNT",
+        COD_MINIMUM_AMOUNT_MESSAGE,
+        422,
+        { minimumAmount: MINIMUM_COD_ORDER_AMOUNT }
+      );
     }
 
     const shippingProvider = getConfiguredShippingProvider();

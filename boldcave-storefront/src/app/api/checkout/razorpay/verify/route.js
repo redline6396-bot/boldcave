@@ -120,7 +120,7 @@ async function verifyRazorpayOrderRoute(request) {
       payment,
       razorpaySignature: body.razorpay_signature,
       shippingProvider:
-        attempt.shippingProvider || SHIPPING_PROVIDERS.SHIPROCKET,
+        attempt.shippingProvider || SHIPPING_PROVIDERS.DELHIVERY,
     });
 
     try {

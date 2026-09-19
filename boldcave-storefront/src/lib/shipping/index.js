@@ -28,7 +28,7 @@ const PROVIDERS = Object.freeze({
   [DELHIVERY_PROVIDER_ID]: delhiveryProvider,
 });
 
-const DEFAULT_SHIPPING_PROVIDER = SHIPROCKET_PROVIDER_ID;
+const DEFAULT_SHIPPING_PROVIDER = DELHIVERY_PROVIDER_ID;
 
 function normalizeProviderId(providerId) {
   return String(providerId || "").trim().toLowerCase();

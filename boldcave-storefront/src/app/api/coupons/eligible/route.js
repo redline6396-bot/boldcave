@@ -5,8 +5,11 @@ import {
   success,
 } from "@/lib/api/response";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
+import { requireUser } from "@/lib/auth/session";
+import { hasPreviousOrder } from "@/lib/orders/pricing";
 import { toPositiveNumber } from "@/lib/validation";
 import Coupon from "@/models/Coupon";
+import CouponUsage from "@/models/CouponUsage";
 
 export const runtime = "nodejs";
 
@@ -25,7 +28,17 @@ function getDisplayDiscount(coupon, subtotal) {
   return Math.min(value, amount);
 }
 
+function normalizeOptionalLimit(value) {
+  if (value === undefined || value === null || value === "") return null;
+
+  const limit = Number(value);
+  return Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : null;
+}
+
 function serializeEligibleCoupon(coupon, discount) {
+  const usageLimit = normalizeOptionalLimit(coupon.usageLimit);
+  const perCustomerLimit = normalizeOptionalLimit(coupon.perCustomerLimit);
+
   return {
     id: String(coupon._id),
     code: coupon.code,
@@ -35,6 +48,13 @@ function serializeEligibleCoupon(coupon, discount) {
     startsAt: coupon.startsAt,
     expiryDate: coupon.expiryDate,
     firstOrderOnly: Boolean(coupon.firstOrderOnly),
+    usageLimit,
+    perCustomerLimit,
+    requiresLogin: Boolean(
+      coupon.firstOrderOnly ||
+        usageLimit !== null ||
+        perCustomerLimit !== null
+    ),
     selectedCustomersOnly: false,
     discount,
   };
@@ -56,6 +76,8 @@ async function getEligibleCouponsRoute(request) {
     );
 
     const now = new Date();
+    const auth = await requireUser(request);
+    const userId = auth.response ? null : auth.user._id;
 
     const coupons = await Coupon.find({
       active: true,
@@ -88,8 +110,59 @@ async function getEligibleCouponsRoute(request) {
       })
       .limit(50);
 
+    const firstOrderEligible = userId
+      ? !(await hasPreviousOrder(userId))
+      : true;
+
+    const usageCounts = new Map();
+
+    if (userId && coupons.length) {
+      const usageRows = await CouponUsage.aggregate([
+        {
+          $match: {
+            userId,
+            couponId: { $in: coupons.map((coupon) => coupon._id) },
+          },
+        },
+        {
+          $group: {
+            _id: "$couponId",
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      usageRows.forEach((row) => {
+        usageCounts.set(String(row._id), Number(row.count) || 0);
+      });
+    }
+
     const visibleCoupons = coupons
       .map((coupon) => {
+        const usageLimit = normalizeOptionalLimit(coupon.usageLimit);
+        const perCustomerLimit = normalizeOptionalLimit(
+          coupon.perCustomerLimit
+        );
+
+        if (
+          usageLimit !== null &&
+          Number(coupon.usedCount || 0) >= usageLimit
+        ) {
+          return null;
+        }
+
+        if (userId && coupon.firstOrderOnly && !firstOrderEligible) {
+          return null;
+        }
+
+        if (
+          userId &&
+          perCustomerLimit !== null &&
+          (usageCounts.get(String(coupon._id)) || 0) >= perCustomerLimit
+        ) {
+          return null;
+        }
+
         const discount = getDisplayDiscount(
           coupon,
           subtotal
@@ -100,7 +173,7 @@ async function getEligibleCouponsRoute(request) {
           discount
         );
       })
-      .filter((coupon) => coupon.discount > 0)
+      .filter((coupon) => coupon?.discount > 0)
       .slice(0, 12);
 
     return success(

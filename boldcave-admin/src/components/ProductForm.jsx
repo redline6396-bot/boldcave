@@ -886,7 +886,7 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
           <div className='grid gap-4 md:grid-cols-3'>
             <Field
               label='Combo SKU'
-              helper='Business SKU sent to Shiprocket.'
+              helper='Business SKU sent to Delhivery.'
               value={form.comboSku || generateSku(form.slug || form.name, 'COMBO')}
               onChange={(value) => setField('comboSku', value)}
               placeholder='DISCOVERY-COMBO'
@@ -1078,7 +1078,7 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
         <div className='grid gap-4 md:grid-cols-2'>
           <Field
             label='HSN Code'
-            helper='Numeric tax classification sent to Shiprocket.'
+            helper='Numeric tax classification sent to Delhivery.'
             value={form.hsnCode}
             onChange={(value) => setField('hsnCode', value)}
             placeholder='330300'

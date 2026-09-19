@@ -48,14 +48,32 @@ export function hasDelhiveryOrderData(order) {
   );
 }
 
+function hasShiprocketOrderData(order) {
+  const shiprocket = order?.shiprocket;
+
+  return Boolean(
+    shiprocket?.shiprocketOrderId ||
+      shiprocket?.shipmentId ||
+      shiprocket?.awbCode ||
+      shiprocket?.courierName ||
+      shiprocket?.trackingUrl ||
+      shiprocket?.shipmentStatus ||
+      shiprocket?.syncStatus
+  );
+}
+
 export function getOrderShippingSummary(order) {
   const storedProvider = cleanProviderId(order?.shippingProvider);
+  const hasShadowfax = hasShadowfaxOrderData(order);
+  const hasDelhivery = hasDelhiveryOrderData(order);
+  const hasShiprocket = hasShiprocketOrderData(order);
   const useShadowfax =
     storedProvider === SHADOWFAX_PROVIDER_ID ||
-    (!storedProvider && hasShadowfaxOrderData(order));
+    (!storedProvider && hasShadowfax);
   const useDelhivery =
     storedProvider === DELHIVERY_PROVIDER_ID ||
-    (!storedProvider && hasDelhiveryOrderData(order));
+    (!storedProvider && hasDelhivery) ||
+    (!storedProvider && !hasShadowfax && !hasShiprocket);
 
   if (useDelhivery) {
     const delhivery = order?.delhivery || {};

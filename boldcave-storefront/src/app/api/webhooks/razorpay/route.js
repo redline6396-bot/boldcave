@@ -119,7 +119,7 @@ async function handlePaymentCaptured(event) {
       attempt,
       payment,
       razorpaySignature: attempt.razorpaySignature,
-      shippingProvider: attempt.shippingProvider || SHIPPING_PROVIDERS.SHIPROCKET,
+      shippingProvider: attempt.shippingProvider || SHIPPING_PROVIDERS.DELHIVERY,
     });
   } catch (error) {
     if (!(error instanceof RazorpayPaymentVerificationError)) throw error;

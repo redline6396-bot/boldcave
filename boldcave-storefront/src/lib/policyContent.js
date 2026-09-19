@@ -27,7 +27,7 @@ export const privacyPolicy = {
     {
       title: "Disclosure of Information",
       paragraphs: [
-        "We may share information reasonably necessary with payment processors, courier and logistics partners including Shiprocket where used for fulfilment, hosting and technology providers, analytics or marketing providers, customer-support providers, professional advisers, and government or law-enforcement authorities where required or permitted by law.",
+        "We may share information reasonably necessary with payment processors, courier and logistics partners including Delhivery where used for fulfilment, hosting and technology providers, analytics or marketing providers, customer-support providers, professional advisers, and government or law-enforcement authorities where required or permitted by law.",
         "We do not sell personal information as a standalone commodity.",
       ],
     },
@@ -86,7 +86,7 @@ export const termsPolicy = {
     {
       title: "Shipping, Returns & Promotions",
       paragraphs: [
-        "Orders are generally dispatched within 48 hours of successful order confirmation/payment. After dispatch, delivery time depends on the courier/logistics partner selected through Shiprocket and the destination. See the Orders & Shipping Policy for details.",
+        "Orders are generally dispatched within 48 hours of successful order confirmation/payment. After dispatch, delivery time depends on Delhivery serviceability, courier operations and the destination. See the Orders & Shipping Policy for details.",
         "Cancellation, return, replacement and refund requests are governed by the Cancellation, Returns & Refunds Policy. Nothing in that policy is intended to remove non-waivable rights available under applicable law.",
         "Promotions, discount codes, bundles and free gifts may have additional terms. Where promotional terms conflict with these Terms, the specific promotion terms apply to that promotion.",
       ],
@@ -125,14 +125,14 @@ export const shippingPolicy = {
       title: "Order Processing, Delivery & Charges",
       paragraphs: [
         "Orders are generally processed and dispatched within 48 hours of successful order confirmation/payment. Orders placed on weekends, public holidays, during launches or during unusually high order volumes may require additional processing time.",
-        "After dispatch, delivery time depends on the courier/logistics partner selected through Shiprocket, the customer's destination and serviceability. Delivery timelines may also be affected by weather, public holidays, courier operations, high shipment volumes and other circumstances beyond BOLD CAVE's reasonable control. We do not guarantee a fixed delivery date unless expressly stated.",
+        "After dispatch, delivery time depends on Delhivery serviceability, the customer's destination and courier operations. Delivery timelines may also be affected by weather, public holidays, high shipment volumes and other circumstances beyond BOLD CAVE's reasonable control. We do not guarantee a fixed delivery date unless expressly stated.",
         "Customer shipping is FREE for every order. Delivery serviceability is still checked during checkout before payment.",
       ],
     },
     {
       title: "Courier Partner, Serviceability & Tracking",
       paragraphs: [
-        "BOLD CAVE uses Shiprocket as its shipping and logistics platform to facilitate order fulfilment and courier services. The actual delivery may be handled by a courier/logistics partner selected through Shiprocket.",
+        "BOLD CAVE uses Delhivery as its shipping and logistics partner to facilitate order fulfilment, shipment tracking and delivery services.",
         "Orders are delivered to locations supported by our logistics partners. Certain remote, restricted or otherwise non-serviceable PIN codes may not be eligible for delivery.",
         "Customers are responsible for entering an accurate and complete delivery address, including PIN code and active phone number. Delays or failed deliveries caused by incorrect or incomplete information may be the customer's responsibility.",
         "After dispatch, a tracking link or tracking number may be provided by email, SMS, WhatsApp or another available channel.",

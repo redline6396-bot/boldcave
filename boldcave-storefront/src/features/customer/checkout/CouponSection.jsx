@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BadgePercent,
   ChevronDown,
@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import { useCoupon } from "@/context/CouponContext";
+import { useAuth } from "@/context/AuthContext";
 import { fetchEligibleCoupons } from "@/lib/clientApi";
 
 const money = (value) =>
@@ -86,7 +87,7 @@ const getFriendlyCouponError = (value) => {
     text.includes("first order") ||
     text.includes("first-order")
   ) {
-    return "This coupon is only available on your first order.";
+    return "This offer is only valid on your first order.";
   }
 
   if (
@@ -127,6 +128,13 @@ export default function CouponSection({
   collapsible = false,
 }) {
   const {
+    isAuthenticated,
+    isAuthOpen,
+    loading: authLoading,
+    openAuth,
+  } = useAuth();
+
+  const {
     couponCode,
     setCouponCode,
     appliedCoupon,
@@ -155,6 +163,12 @@ export default function CouponSection({
 
   const [couponPanelOpen, setCouponPanelOpen] =
     useState(false);
+
+  const [pendingCouponCode, setPendingCouponCode] =
+    useState("");
+
+  const pendingAuthOpenedRef = useRef(false);
+  const pendingApplyInFlightRef = useRef(false);
 
   const displayDiscount =
     activeDiscount === null
@@ -242,6 +256,7 @@ export default function CouponSection({
   }, [
     disabled,
     availableOffersExpanded,
+    isAuthenticated,
     showEligibleOffers,
     subtotal,
   ]);
@@ -256,6 +271,67 @@ export default function CouponSection({
   }, [
     eligibleCoupons.length,
     showEligibleOffers,
+  ]);
+
+  /* =====================================================
+     RETRY FIRST-ORDER OFFER AFTER LOGIN
+  ===================================================== */
+
+  useEffect(() => {
+    if (!pendingCouponCode) {
+      pendingAuthOpenedRef.current = false;
+      return;
+    }
+
+    if (isAuthenticated) {
+      if (pendingApplyInFlightRef.current) {
+        return;
+      }
+
+      const codeToApply = pendingCouponCode;
+
+      pendingApplyInFlightRef.current = true;
+      setLocalActionError("");
+      setShowLocalFeedback(true);
+
+      void applyCoupon(
+        codeToApply,
+        {
+          paymentMethod,
+        },
+      ).finally(() => {
+        pendingApplyInFlightRef.current = false;
+        setPendingCouponCode("");
+      });
+      return;
+    }
+
+    if (authLoading) {
+      return;
+    }
+
+    if (!pendingAuthOpenedRef.current) {
+      pendingAuthOpenedRef.current = true;
+      openAuth();
+      return;
+    }
+
+    if (
+      pendingAuthOpenedRef.current &&
+      !isAuthOpen
+    ) {
+      setPendingCouponCode("");
+      setLocalActionError("");
+      setShowLocalFeedback(false);
+    }
+  }, [
+    applyCoupon,
+    authLoading,
+    isAuthenticated,
+    isAuthOpen,
+    openAuth,
+    paymentMethod,
+    pendingCouponCode,
   ]);
 
   /* =====================================================
@@ -297,13 +373,28 @@ export default function CouponSection({
   ===================================================== */
 
   const handleApplyEligibleCoupon = async (
-    code,
+    coupon,
   ) => {
+    const code = coupon?.code;
+
     if (
       !code ||
       disabled ||
       validating
     ) {
+      return;
+    }
+
+    if (coupon.requiresLogin && !isAuthenticated) {
+      setPendingCouponCode(code);
+      setLocalActionError("");
+      setShowLocalFeedback(false);
+
+      if (!authLoading) {
+        pendingAuthOpenedRef.current = true;
+        openAuth();
+      }
+
       return;
     }
 
@@ -334,18 +425,22 @@ export default function CouponSection({
   ===================================================== */
 
   const couponOfferLabel = (coupon) => {
+    const orderLabel = coupon.firstOrderOnly
+      ? "your first order"
+      : "this order";
+
     if (
       coupon.discountType === "percentage"
     ) {
       return `${
         Number(coupon.discountValue) || 0
-      }% off`;
+      }% off on ${orderLabel}`;
     }
 
     return `${money(
       coupon.discount ??
         coupon.discountValue,
-    )} off on this order`;
+    )} off on ${orderLabel}`;
   };
 
   /* =====================================================
@@ -490,7 +585,7 @@ export default function CouponSection({
                         coupon.id ||
                         coupon.code
                       }
-                      className="py-2.5"
+                      className="py-2"
                     >
                       {/* MAIN ROW */}
 
@@ -505,6 +600,13 @@ export default function CouponSection({
                               coupon,
                             )}
                           </p>
+
+                          {coupon.requiresLogin &&
+                            !isAuthenticated && (
+                              <p className="mt-0.5 text-[10px] font-medium leading-4 text-[#526173]">
+                                Login to apply this offer
+                              </p>
+                            )}
                         </div>
 
                         {/* APPLY */}
@@ -513,7 +615,7 @@ export default function CouponSection({
                           type="button"
                           onClick={() =>
                             handleApplyEligibleCoupon(
-                              coupon.code,
+                              coupon,
                             )
                           }
                           disabled={
@@ -627,16 +729,15 @@ export default function CouponSection({
           ORIGINAL HEIGHT/WIDTH PRESERVED
       ================================================= */}
 
-      <div className="relative">
+      <div>
         {visibleFieldFeedback && (
           <p
             className={[
-              "pointer-events-none absolute -top-[18px] left-1/2 max-w-[calc(100%-120px)] -translate-x-1/2 truncate text-center text-[10px] font-medium leading-none",
+              "mb-2 px-1 text-left text-[10.5px] font-medium leading-4",
               hasFeedbackError
                 ? "text-[#b42318]"
                 : "text-[#66717e]",
             ].join(" ")}
-            title={visibleFieldFeedback}
             aria-live="polite"
           >
             {visibleFieldFeedback}

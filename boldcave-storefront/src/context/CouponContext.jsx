@@ -15,6 +15,10 @@ const cartPayload = (cart) =>
   }));
 
 function getCustomerCouponError(error) {
+  if (error?.code === "COUPON_FIRST_ORDER_ONLY") {
+    return "This offer is only valid on your first order.";
+  }
+
   if (
     ["COUPON_NOT_FOUND", "COUPON_INACTIVE"].includes(error?.code) ||
     /coupon code not found/i.test(error?.message || "")

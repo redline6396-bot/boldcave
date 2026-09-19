@@ -11,6 +11,7 @@ import {
   Share2,
 } from "lucide-react";
 import YouMayAlsoLike from "@/components/product/YouMayAlsoLike";
+import PublicCouponOfferPreview from "@/components/product/PublicCouponOfferPreview";
 import { useCart } from "@/context/CartContext";
 import { NotificationContext } from "@/context/NotificationContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
@@ -950,6 +951,12 @@ export default function ProductDetailClient({
               </span>
             )}
           </div>
+
+          <PublicCouponOfferPreview
+            subtotal={selectedVariant?.sellingPrice}
+            placement="detail"
+            enabled={Number(selectedVariant?.stock) > 0}
+          />
 
           {isCombo ? (
             <div className="mt-4 border-t border-[#e8e2d9] pt-3.5 sm:mt-4 sm:pt-4 min-[600px]:mt-3 min-[600px]:pt-3 lg:mt-4 lg:pt-4">

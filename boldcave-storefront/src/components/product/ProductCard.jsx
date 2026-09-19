@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
+import PublicCouponOfferPreview from "@/components/product/PublicCouponOfferPreview";
 import { requestCartDrawerOpen } from "@/lib/cartEvents";
 import {
   getProductImageUrl,
@@ -332,6 +333,11 @@ export default function ProductCard({ product, priority = false }) {
             {formatRupees(selectedVariant?.sellingPrice)}
           </span>
         </div>
+
+        <PublicCouponOfferPreview
+          subtotal={selectedVariant?.sellingPrice}
+          enabled={!isSelectedOutOfStock}
+        />
 
         {!isCombo && (
           <div className="mt-3 grid grid-cols-2 gap-1.5 max-[450px]:mt-2.5 sm:mx-auto sm:mt-4 sm:w-[92%] sm:gap-2">

@@ -84,7 +84,7 @@ async function checkCheckoutServiceabilityRoute(request) {
 
     if (result.status && !result.serviceable) {
       return failure(
-        result.code || "SHIPROCKET_TEMPORARY_ERROR",
+        result.code || "SHIPPING_SERVICEABILITY_TEMPORARY_ERROR",
         result.message || "Shipping serviceability could not be checked right now",
         result.status,
         {
@@ -132,11 +132,11 @@ async function checkCheckoutServiceabilityRoute(request) {
     }
 
     if (error.message?.includes("not configured")) {
-      return failure("SHIPROCKET_NOT_CONFIGURED", "Shipping service is not configured.", 503);
+      return failure("SHIPPING_NOT_CONFIGURED", "Shipping service is not configured.", 503);
     }
 
     return failure(
-      "SHIPROCKET_TEMPORARY_ERROR",
+      "SHIPPING_SERVICEABILITY_TEMPORARY_ERROR",
       "Shipping serviceability could not be checked right now",
       503,
       locationDetails(location)
@@ -202,11 +202,11 @@ async function checkPincodeServiceabilityRoute(request) {
     }
 
     if (error.message?.includes("not configured")) {
-      return failure("SHIPROCKET_NOT_CONFIGURED", "Shipping service is not configured.", 503);
+      return failure("SHIPPING_NOT_CONFIGURED", "Shipping service is not configured.", 503);
     }
 
     return failure(
-      "SHIPROCKET_TEMPORARY_ERROR",
+      "SHIPPING_SERVICEABILITY_TEMPORARY_ERROR",
       "Shipping serviceability could not be checked right now",
       503,
       locationDetails(location)

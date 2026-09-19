@@ -12,13 +12,13 @@ Customer storefront and API routes for Bold Cave.
 - `npm run start:milesweb` starts the production Node server for MilesWeb/cPanel.
 
 Configure production secrets in the target host, not in source control.
-`SHIPPING_PROVIDER` is optional and defaults to `shiprocket`; set
-`SHIPPING_PROVIDER=shiprocket` explicitly when documenting an environment.
+`SHIPPING_PROVIDER` is optional and defaults to `delhivery`; set
+`SHIPPING_PROVIDER=delhivery` explicitly when documenting an environment.
 Shadowfax is implemented behind an explicit opt-in and must remain disabled
 unless a safe test/production rollout is intended:
 
 ```env
-SHIPPING_PROVIDER=shiprocket
+SHIPPING_PROVIDER=delhivery
 SHADOWFAX_API_ENABLED=false
 SHADOWFAX_ENV=production
 SHADOWFAX_API_TOKEN=

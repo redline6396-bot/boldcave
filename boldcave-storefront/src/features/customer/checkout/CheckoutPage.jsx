@@ -44,6 +44,10 @@ import DeliveryAddress, {
 } from "@/features/customer/checkout/DeliveryAddress";
 import OrderSummary from "@/features/customer/checkout/OrderSummary";
 import PaymentMethod from "@/features/customer/checkout/PaymentMethod";
+import {
+  COD_MINIMUM_AMOUNT_MESSAGE,
+  isCodOrderAmountEligible,
+} from "@/lib/orders/paymentRules";
 import CheckoutSheet from "@/features/customer/checkout/CheckoutSheet";
 
 const RAZORPAY_SCRIPT_URL =
@@ -355,6 +359,20 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     0,
     Number(codPricing.finalAmount || 0) - Number(onlinePricing.finalAmount || 0)
   );
+  const codBelowMinimum = !isCodOrderAmountEligible(
+    codPricing.finalAmount
+  );
+
+  useEffect(() => {
+    if (
+      paymentMethod === "cod" &&
+      codBelowMinimum &&
+      !pricingPreviewLoading
+    ) {
+      setPaymentMethod("razorpay");
+      setError("");
+    }
+  }, [codBelowMinimum, paymentMethod, pricingPreviewLoading]);
 
   const refreshPricingPreview = useCallback(async () => {
     if (!previewItems.length) {
@@ -1139,6 +1157,11 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
       return false;
     }
 
+    if (paymentMethod === "cod" && codBelowMinimum) {
+      setError(COD_MINIMUM_AMOUNT_MESSAGE);
+      return false;
+    }
+
     if (!paymentMethod) {
       setError("Select a payment method to continue.");
       return false;
@@ -1154,6 +1177,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     addressError,
     addressSaveError,
     codAvailable,
+    codBelowMinimum,
     handleCheckServiceability,
     hasUnresolvedCart,
     isAuthenticated,
@@ -1368,7 +1392,8 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     pricingPreviewLoading ||
     Boolean(pricingPreviewError) ||
     serviceability.status === "checking" ||
-    (paymentMethod === "cod" && codAvailable === false);
+    (paymentMethod === "cod" &&
+      (codAvailable === false || codBelowMinimum));
 
   if (!storeSettingsLoading && !acceptingOrders) {
     return (
@@ -1655,6 +1680,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                         prepaidDiscountSettings={prepaidDiscountSettings}
                         onlineAmount={onlinePricing.finalAmount}
                         codAmount={codPricing.finalAmount}
+                        codBelowMinimum={codBelowMinimum}
                         onlineSavings={onlinePaymentSavings}
                         loading={pricingPreviewLoading && !pricingPreview}
                       />

@@ -47,6 +47,19 @@ function hasDelhiverySummary(order) {
   );
 }
 
+function hasShiprocketSummary(order) {
+  const shiprocket = order?.shiprocket;
+  return Boolean(
+    shiprocket?.shiprocketOrderId ||
+      shiprocket?.shipmentId ||
+      shiprocket?.awbCode ||
+      shiprocket?.courierName ||
+      shiprocket?.trackingUrl ||
+      shiprocket?.shipmentStatus ||
+      shiprocket?.syncStatus
+  );
+}
+
 function hasExternalDelhiveryCancellation(order) {
   return [
     order?.delhivery?.shipmentStatus,
@@ -83,8 +96,14 @@ function canReconcileExternalDelhiveryCancellation(order) {
 
 function getShippingSummary(order) {
   const provider = String(order?.shippingProvider || '').toLowerCase();
-  const useShadowfax = provider === 'shadowfax' || (!provider && hasShadowfaxSummary(order));
-  const useDelhivery = provider === 'delhivery' || (!provider && hasDelhiverySummary(order));
+  const hasShadowfax = hasShadowfaxSummary(order);
+  const hasDelhivery = hasDelhiverySummary(order);
+  const hasShiprocket = hasShiprocketSummary(order);
+  const useShadowfax = provider === 'shadowfax' || (!provider && hasShadowfax);
+  const useDelhivery =
+    provider === 'delhivery' ||
+    (!provider && hasDelhivery) ||
+    (!provider && !hasShadowfax && !hasShiprocket);
 
   if (useDelhivery) {
     const delhivery = order?.delhivery || {};
