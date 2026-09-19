@@ -96,7 +96,11 @@ jobs:
             echo "BUILD_ID:"
             cat .next/BUILD_ID
 
-            echo "Restarting the MilesWeb admin application..."
-            cloudlinux-selector restart --json --interpreter nodejs --app-root boldcave/boldcave-admin
+            echo "Registered MilesWeb Passenger applications:"
+            /usr/local/cpanel/bin/uapi --output=jsonpretty PassengerApps list_applications || true
 
-            echo "Admin deployment completed and the MilesWeb application was restarted."
+            echo "Restarting the MilesWeb admin application through Passenger..."
+            mkdir -p tmp
+            touch tmp/restart.txt
+
+            echo "Admin deployment completed and Passenger restart was requested."
