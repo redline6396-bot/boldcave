@@ -952,6 +952,13 @@ function getTrackingFields(payload, fallbackWaybill) {
   return {
     waybill: cleanString(shipment?.AWB || shipment?.Waybill || fallbackWaybill),
     referenceNo: cleanString(shipment?.ReferenceNo || shipment?.Order || shipment?.refnum),
+    pickupId: cleanString(
+      shipment?.PickupID ||
+        shipment?.PickupId ||
+        shipment?.pickup_id ||
+        payload?.PickupID ||
+        payload?.pickup_id
+    ),
     shipmentStatus: cleanString(status?.Status || status?.status || shipment?.Status),
     statusType: cleanString(status?.StatusType || status?.status_type),
     statusDisplay: cleanString(
@@ -967,6 +974,11 @@ function getTrackingFields(payload, fallbackWaybill) {
 function statusValueIndicatesCancellation(value) {
   const status = normalizeStatus(value);
   return status === "cn" || status.includes("cancel");
+}
+
+function statusValueIndicatesPickupScheduled(value) {
+  const status = normalizeStatus(value);
+  return status.includes("ready for pickup") || status.includes("pickup scheduled");
 }
 
 function trackingFieldsIndicateCancellation(fields) {
@@ -1018,6 +1030,10 @@ export async function trackShipment(order, { forceRefresh = false } = {}) {
     }
 
     const externallyCancelled = trackingFieldsIndicateCancellation(fields);
+    const pickupScheduled = [
+      fields.shipmentStatus,
+      fields.statusDisplay,
+    ].some(statusValueIndicatesPickupScheduled);
     order.delhivery = {
       ...(order.delhivery || {}),
       waybill: fields.waybill || waybill,
@@ -1043,6 +1059,15 @@ export async function trackShipment(order, { forceRefresh = false } = {}) {
     };
     applyStatusToOrder(order, fields.shipmentStatus);
     await order.save();
+    if (pickupScheduled) {
+      const { confirmDelhiveryPickupAssociation } = await import(
+        "@/lib/shipping/delhiveryPickup"
+      );
+      await confirmDelhiveryPickupAssociation(order, {
+        pickupId: fields.pickupId,
+        source: "provider_tracking",
+      });
+    }
 
     let persistedOrder = order;
     if (externallyCancelled && order.orderStatus !== "cancelled") {

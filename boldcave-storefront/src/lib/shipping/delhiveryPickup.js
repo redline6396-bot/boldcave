@@ -223,6 +223,17 @@ export async function getDelhiveryPickupSettings() {
   };
 }
 
+export async function getActiveDelhiveryPickupReference() {
+  const settings = await getStoreSettings();
+  const pickup = settings?.delhiveryPickup || {};
+  if (pickup.state !== "scheduled" || !cleanString(pickup.pickupId)) return null;
+  return {
+    pickupId: cleanString(pickup.pickupId),
+    requestDate: cleanString(pickup.requestDate),
+    requestedAt: pickup.requestedAt || null,
+  };
+}
+
 export async function setDelhiveryAutoPickupEnabled(enabled) {
   await getStoreSettings();
   const settings = await StoreSettings.findOneAndUpdate(
@@ -245,7 +256,12 @@ function getReadyShipmentFilter() {
     shippingProvider: "delhivery",
     "delhivery.waybill": { $exists: true, $nin: [null, ""] },
     "delhivery.syncStatus": "created",
-    "delhivery.pickupState": { $ne: "scheduled" },
+    "delhivery.pickupState": { $ne: "confirmed" },
+    $nor: [
+      { "delhivery.shipmentStatus": /ready for pickup|pickup scheduled/i },
+      { "delhivery.statusDisplay": /ready for pickup|pickup scheduled/i },
+      { "delhivery.lastWebhookStatus": /ready for pickup|pickup scheduled/i },
+    ],
     orderStatus: { $in: ["shipping_pending", "confirmed", "processing"] },
   };
 }
@@ -257,22 +273,44 @@ function serializePickupOrder(order) {
     order: orderId,
     orderId: cleanString(orderId),
     orderNumber: value?.orderNumber || "",
-    waybill: value?.delhivery?.waybill || "",
+    waybill: value?.waybill || value?.delhivery?.waybill || "",
     orderStatus: value?.orderStatus || "",
-    paymentMethod: value?.payment?.method || "",
-    finalAmount: Number(value?.amounts?.finalAmount) || 0,
-    customerName: [value?.customer?.firstName, value?.customer?.lastName]
-      .filter(Boolean)
-      .join(" ")
-      .trim(),
-    orderedAt: value?.createdAt || null,
-    pickupId: value?.delhivery?.pickupId || "",
-    pickupState: value?.delhivery?.pickupState || "",
+    paymentMethod: value?.paymentMethod || value?.payment?.method || "",
+    finalAmount:
+      Number(value?.finalAmount ?? value?.amounts?.finalAmount) || 0,
+    customerName:
+      value?.customerName ||
+      [value?.customer?.firstName, value?.customer?.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim(),
+    orderedAt: value?.orderedAt || value?.createdAt || null,
+    pickupId: value?.pickupId || value?.delhivery?.pickupId || "",
+    pickupState:
+      value?.associationState || value?.pickupState || value?.delhivery?.pickupState || "",
+    pickupStateSource:
+      value?.associationSource ||
+      value?.pickupStateSource ||
+      value?.delhivery?.pickupStateSource ||
+      "",
+    pickupConfirmedAt:
+      value?.confirmedAt || value?.pickupConfirmedAt || value?.delhivery?.pickupConfirmedAt || null,
   };
 }
 
 async function getReadyShipmentOrders() {
   const orders = await Order.find(getReadyShipmentFilter()).sort({ createdAt: 1 });
+  return orders.map(serializePickupOrder);
+}
+
+async function getConfirmedPickupOrders(pickupId) {
+  const normalizedPickupId = cleanString(pickupId);
+  if (!normalizedPickupId) return [];
+  const orders = await Order.find({
+    shippingProvider: "delhivery",
+    "delhivery.pickupId": normalizedPickupId,
+    "delhivery.pickupState": "confirmed",
+  }).sort({ "delhivery.pickupConfirmedAt": 1, createdAt: 1 });
   return orders.map(serializePickupOrder);
 }
 
@@ -406,15 +444,16 @@ export async function getDelhiveryPickupHistory({ limit = 100, state = "" } = {}
   const normalizedState = cleanString(state);
   if (normalizedState) filter.state = normalizedState;
 
-  const [records, storedTotal, settings, readyOrders] = await Promise.all([
-    DelhiveryPickupRecord.find(filter).sort({ createdAt: -1 }).limit(safeLimit),
-    DelhiveryPickupRecord.countDocuments(filter),
-    getStoreSettings(),
-    getReadyShipmentOrders(),
-  ]);
-  const pickups = records.map(serializePickupRecord);
+  const settings = await getStoreSettings();
   const current = settings?.delhiveryPickup || {};
   const currentPickupId = cleanString(current.pickupId);
+  const [records, storedTotal, readyOrders, confirmedOrders] = await Promise.all([
+    DelhiveryPickupRecord.find(filter).sort({ createdAt: -1 }).limit(safeLimit),
+    DelhiveryPickupRecord.countDocuments(filter),
+    getReadyShipmentOrders(),
+    getConfirmedPickupOrders(currentPickupId),
+  ]);
+  const pickups = records.map(serializePickupRecord);
   const includeCurrent =
     currentPickupId &&
     (!normalizedState || current.state === normalizedState) &&
@@ -454,7 +493,193 @@ export async function getDelhiveryPickupHistory({ limit = 100, state = "" } = {}
     pickups,
     total: storedTotal + (includeCurrent ? 1 : 0),
     readyOrders,
+    confirmedOrders,
   };
+}
+
+async function persistConfirmedOrderInPickupRecord({
+  order,
+  pickupId,
+  source,
+  confirmedAt,
+  activePickup,
+}) {
+  let record = await DelhiveryPickupRecord.findOne({ pickupId }).sort({ createdAt: -1 });
+  if (!record) {
+    record = await DelhiveryPickupRecord.create({
+      pickupId,
+      state: "scheduled",
+      source: "legacy_snapshot",
+      requestDate: activePickup?.requestDate || "",
+      pickupTime: getPickupTime(),
+      pickupLocation: cleanString(process.env.DELHIVERY_PICKUP_LOCATION),
+      expectedPackageCount: 0,
+      requestedAt: activePickup?.requestedAt || null,
+      statusSource: "mongodb_reconciliation",
+      orders: [],
+      events: [],
+    });
+  }
+
+  const serialized = serializePickupOrder(order);
+  const nextOrder = {
+    order: order._id,
+    orderNumber: serialized.orderNumber,
+    waybill: serialized.waybill,
+    orderStatus: serialized.orderStatus,
+    paymentMethod: serialized.paymentMethod,
+    finalAmount: serialized.finalAmount,
+    customerName: serialized.customerName,
+    orderedAt: serialized.orderedAt,
+    associationState: "confirmed",
+    associationSource: source,
+    confirmedAt,
+  };
+  const existing = record.orders.find(
+    (entry) =>
+      String(entry.order || "") === String(order._id) ||
+      (serialized.waybill && entry.waybill === serialized.waybill)
+  );
+  if (existing) Object.assign(existing, nextOrder);
+  else record.orders.push(nextOrder);
+  record.events.push({
+    type: "order_pickup_confirmed",
+    message: `${serialized.orderNumber || serialized.waybill} added to pickup.`,
+    at: confirmedAt,
+  });
+  await record.save();
+}
+
+export async function confirmDelhiveryPickupAssociation(
+  order,
+  { pickupId = "", source = "provider_tracking", confirmedAt = new Date() } = {}
+) {
+  if (!order?._id || !cleanString(order?.delhivery?.waybill)) return null;
+  const activePickup = await getActiveDelhiveryPickupReference();
+  const normalizedPickupId = cleanString(pickupId) || activePickup?.pickupId || "";
+  if (!normalizedPickupId) return null;
+  const normalizedSource = cleanString(source);
+  const alreadyProviderConfirmed =
+    order.delhivery?.pickupState === "confirmed" &&
+    cleanString(order.delhivery?.pickupId) === normalizedPickupId &&
+    ["provider_tracking", "provider_webhook"].includes(
+      cleanString(order.delhivery?.pickupStateSource)
+    );
+  if (alreadyProviderConfirmed) return order;
+
+  order.delhivery ||= {};
+  order.delhivery.pickupId = normalizedPickupId;
+  order.delhivery.pickupState = "confirmed";
+  order.delhivery.pickupStateSource = normalizedSource;
+  order.delhivery.pickupConfirmedAt = order.delhivery.pickupConfirmedAt || confirmedAt;
+  if (!order.delhivery.pickupRequestDate && activePickup?.requestDate) {
+    order.delhivery.pickupRequestDate = activePickup.requestDate;
+  }
+  if (!order.delhivery.pickupRequestedAt && activePickup?.requestedAt) {
+    order.delhivery.pickupRequestedAt = activePickup.requestedAt;
+  }
+  await order.save();
+  await persistConfirmedOrderInPickupRecord({
+    order,
+    pickupId: normalizedPickupId,
+    source: normalizedSource,
+    confirmedAt: order.delhivery.pickupConfirmedAt,
+    activePickup,
+  });
+  return order;
+}
+
+export async function confirmDelhiveryOrderAddedToPickup({ orderId, pickupId } = {}) {
+  const activePickup = await getActiveDelhiveryPickupReference();
+  if (!activePickup) {
+    throw createDelhiveryError(
+      "DELHIVERY_ACTIVE_PICKUP_REQUIRED",
+      "No active Delhivery pickup is available.",
+      409
+    );
+  }
+  const normalizedPickupId = cleanString(pickupId) || activePickup.pickupId;
+  if (normalizedPickupId !== activePickup.pickupId) {
+    throw createDelhiveryError(
+      "DELHIVERY_PICKUP_CHANGED",
+      "The active Delhivery pickup changed. Refresh before confirming the order.",
+      409
+    );
+  }
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw createDelhiveryError("ORDER_NOT_FOUND", "Order not found.", 404);
+  }
+  if (
+    order.shippingProvider !== "delhivery" ||
+    !cleanString(order.delhivery?.waybill) ||
+    order.orderStatus === "cancelled"
+  ) {
+    throw createDelhiveryError(
+      "DELHIVERY_READY_ORDER_REQUIRED",
+      "This order is not an active manifested Delhivery shipment.",
+      409
+    );
+  }
+  const alreadyConfirmed =
+    order.delhivery?.pickupState === "confirmed" &&
+    cleanString(order.delhivery?.pickupId) === normalizedPickupId;
+  if (!alreadyConfirmed) {
+    await confirmDelhiveryPickupAssociation(order, {
+      pickupId: normalizedPickupId,
+      source: "admin_confirmed_delhivery_one",
+    });
+  }
+  return { order, pickupId: normalizedPickupId, alreadyConfirmed };
+}
+
+export async function revokeDelhiveryOrderPickupConfirmation({ orderId, pickupId } = {}) {
+  const normalizedPickupId = cleanString(pickupId);
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw createDelhiveryError("ORDER_NOT_FOUND", "Order not found.", 404);
+  }
+  if (
+    order.delhivery?.pickupState !== "confirmed" ||
+    cleanString(order.delhivery?.pickupId) !== normalizedPickupId
+  ) {
+    return { order, pickupId: normalizedPickupId, alreadyReverted: true };
+  }
+  if (["provider_tracking", "provider_webhook"].includes(order.delhivery?.pickupStateSource)) {
+    throw createDelhiveryError(
+      "DELHIVERY_PROVIDER_CONFIRMATION_LOCKED",
+      "Delhivery confirmed this order, so it cannot be changed manually.",
+      409
+    );
+  }
+
+  const revertedAt = new Date();
+  order.delhivery.pickupState = "requested";
+  order.delhivery.pickupStateSource = "admin_reverted_confirmation";
+  order.delhivery.pickupConfirmedAt = undefined;
+  await order.save();
+
+  const record = await DelhiveryPickupRecord.findOne({ pickupId: normalizedPickupId }).sort({ createdAt: -1 });
+  if (record) {
+    const embeddedOrder = record.orders.find(
+      (entry) =>
+        String(entry.order || "") === String(order._id) ||
+        (order.delhivery?.waybill && entry.waybill === order.delhivery.waybill)
+    );
+    if (embeddedOrder) {
+      embeddedOrder.associationState = "requested";
+      embeddedOrder.associationSource = "admin_reverted_confirmation";
+      embeddedOrder.confirmedAt = undefined;
+    }
+    record.events.push({
+      type: "order_pickup_confirmation_reverted",
+      message: `${order.orderNumber || order.delhivery?.waybill} marked as not added.`,
+      at: revertedAt,
+    });
+    await record.save();
+  }
+
+  return { order, pickupId: normalizedPickupId, alreadyReverted: false };
 }
 
 async function archiveCurrentPickupSnapshot(settings) {
@@ -890,11 +1115,15 @@ export async function ensureDelhiveryPickupScheduled({
           {
             $set: {
               "delhivery.pickupId": pickupId,
-              "delhivery.pickupState": "scheduled",
+              "delhivery.pickupState": "requested",
+              "delhivery.pickupStateSource": "pickup_request_snapshot",
               "delhivery.pickupRequestDate": pickupDate,
               "delhivery.pickupRequestedAt": requestedAt,
             },
-            $unset: { "delhivery.pickupCancelledAt": "" },
+            $unset: {
+              "delhivery.pickupConfirmedAt": "",
+              "delhivery.pickupCancelledAt": "",
+            },
           }
         );
       } catch (orderUpdateError) {

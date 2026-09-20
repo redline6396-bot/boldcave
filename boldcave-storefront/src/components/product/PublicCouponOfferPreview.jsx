@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Tag } from "lucide-react";
 import { fetchPublicPromotions } from "@/lib/clientApi";
 
 const OFFER_TEXT_COLOR = "text-[#526173]";
@@ -10,14 +11,45 @@ const formatNumber = (value) =>
     maximumFractionDigits: 2,
   }).format(Number(value) || 0);
 
-function calculateExactDiscount(coupon, amount) {
-  if (coupon.minimumOrder > amount) {
-    return 0; // Does not meet minimum order
+const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+function calculateExactPromotionalPrice(coupon, amount) {
+  if (Number(coupon.minimumOrder) > amount) return null;
+
+  const rawDiscount =
+    coupon.discountType === "percentage"
+      ? (amount * Number(coupon.discountValue || 0)) / 100
+      : Number(coupon.discountValue || 0);
+  const discount = Math.min(amount, roundMoney(rawDiscount));
+
+  if (discount <= 0) return null;
+  return Math.max(0, roundMoney(amount - discount));
+}
+
+function getFallbackText(coupon, isFirstOrder, meetsMinimum) {
+  const prefix = isFirstOrder ? "First order" : "Offer";
+  const benefit =
+    coupon.discountType === "percentage"
+      ? `Get ${formatNumber(coupon.discountValue)}% off`
+      : `Save ₹${formatNumber(coupon.discountValue)}`;
+
+  if (!meetsMinimum && Number(coupon.minimumOrder) > 0) {
+    return `${prefix} · ${benefit} on orders above ₹${formatNumber(coupon.minimumOrder)}`;
   }
-  if (coupon.discountType === "percentage") {
-    return (amount * coupon.discountValue) / 100;
+
+  return `${prefix} · ${benefit}`;
+}
+
+function getCardFallbackText(coupon, isFirstOrder, meetsMinimum) {
+  const benefit =
+    coupon.discountType === "percentage"
+      ? `${formatNumber(coupon.discountValue)}% off`
+      : `₹${formatNumber(coupon.discountValue)} off`;
+  const prefix = isFirstOrder ? "1st order · " : "";
+  if (!meetsMinimum && Number(coupon.minimumOrder) > 0) {
+    return `${prefix}${benefit} on ₹${formatNumber(coupon.minimumOrder)}+`;
   }
-  return Math.min(coupon.discountValue, amount);
+  return `${prefix}${benefit}`;
 }
 
 export default function PublicCouponOfferPreview({
@@ -58,72 +90,66 @@ export default function PublicCouponOfferPreview({
   const targetCoupon = promotions.firstOrderCoupon || promotions.generalCoupon;
   if (!targetCoupon) return null;
 
-  const isFirstOrder = targetCoupon.firstOrderOnly;
-  const meetsMinimum = targetCoupon.minimumOrder <= amount;
-  
-  // Calculate Exact Price (if minimum met)
-  let exactPromotionalPrice = null;
-  if (meetsMinimum) {
-    const discount = calculateExactDiscount(targetCoupon, amount);
-    if (discount > 0) {
-      exactPromotionalPrice = Math.max(0, amount - discount);
-    }
-  }
+  const isFirstOrder = targetCoupon.firstOrderOnly === true;
+  const meetsMinimum = Number(targetCoupon.minimumOrder) <= amount;
+  const exactPromotionalPrice = calculateExactPromotionalPrice(
+    targetCoupon,
+    amount
+  );
 
-  // Fallback wording if exact price cannot be used
-  let fallbackText = "";
-  if (isFirstOrder) {
-    if (targetCoupon.discountType === "percentage") {
-      fallbackText = `First order · Get ${formatNumber(targetCoupon.discountValue)}% off`;
-    } else {
-      fallbackText = `First order · Save ₹${formatNumber(targetCoupon.discountValue)}`;
-    }
-  } else {
-    if (targetCoupon.minimumOrder > 0 && !meetsMinimum) {
-      fallbackText = `Save ₹${formatNumber(targetCoupon.discountValue)} on orders above ₹${formatNumber(targetCoupon.minimumOrder)}`;
-    } else if (targetCoupon.discountType === "percentage") {
-      fallbackText = `Offer · Get ${formatNumber(targetCoupon.discountValue)}% off`;
-    } else {
-      fallbackText = `Offer · Save ₹${formatNumber(targetCoupon.discountValue)}`;
-    }
-  }
+  const fallbackText = getFallbackText(
+    targetCoupon,
+    isFirstOrder,
+    meetsMinimum
+  );
 
   if (placement === "detail") {
-    if (exactPromotionalPrice !== null) {
-      const titleText = isFirstOrder
-        ? `FIRST ORDER PRICE ₹${formatNumber(exactPromotionalPrice)}`
-        : `GET IT FOR ₹${formatNumber(exactPromotionalPrice)}`;
-      
-      return (
-        <div className={`mt-2 ${OFFER_TEXT_COLOR}`}>
-          <p className="text-[10.5px] font-medium uppercase leading-4 tracking-[0.08em] sm:text-[11px]">
-            {titleText}
-          </p>
-          <p className="mt-0.5 text-[10.5px] leading-4 sm:text-[11px]">
-            Use code <span className="font-medium">{targetCoupon.code}</span> at cart
-          </p>
-        </div>
-      );
-    }
-
     return (
-      <div className={`mt-2 ${OFFER_TEXT_COLOR}`}>
-        <p className="text-[10.5px] font-medium uppercase leading-4 tracking-[0.08em] sm:text-[11px]">
-          {fallbackText}
+      <div
+        className={`mt-3 rounded-[2px] bg-neutral-100 px-3 py-2.5 sm:px-3.5 sm:py-3 ${OFFER_TEXT_COLOR}`}
+      >
+        <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.11em] sm:text-[10.5px]">
+          {isFirstOrder ? "FIRST ORDER OFFER" : "SPECIAL OFFER"}
         </p>
-        <p className="mt-0.5 text-[10.5px] leading-4 sm:text-[11px]">
-          Use code <span className="font-medium">{targetCoupon.code}</span> at cart
+
+        {exactPromotionalPrice !== null ? (
+          <p className="mt-1.5 flex items-baseline gap-1.5 text-[13px] leading-none text-neutral-700 sm:text-[14px]">
+            <span>Get it for</span>
+            <span className="text-[19px] font-medium tracking-[-0.01em] text-neutral-900 sm:text-[20px]">
+              ₹{formatNumber(exactPromotionalPrice)}
+            </span>
+          </p>
+        ) : (
+          <p className="mt-1.5 text-[13px] font-semibold leading-5 text-neutral-900 sm:text-[14px]">
+            {fallbackText}
+          </p>
+        )}
+
+        <p className="mt-1.5 text-[10.5px] leading-4 text-neutral-500 sm:text-[11px]">
+          Use code{" "}
+          <span className="font-semibold text-neutral-700">
+            {targetCoupon.code}
+          </span>{" "}
+          at cart
         </p>
       </div>
     );
   }
 
-  // Product Card placement
+  const cardText =
+    exactPromotionalPrice !== null
+      ? isFirstOrder
+        ? `First order: ₹${formatNumber(exactPromotionalPrice)} with coupon`
+        : `₹${formatNumber(exactPromotionalPrice)} with coupon`
+      : getCardFallbackText(targetCoupon, isFirstOrder, meetsMinimum);
+
   return (
-    <p
-      className={`mt-1.5 truncate text-[9px] font-medium leading-4 max-[450px]:text-[8.5px] sm:text-[10px] ${OFFER_TEXT_COLOR}`}
-    >
-      {fallbackText}
+    <p className={`mt-1.5 flex min-w-0 items-center justify-center gap-1 text-[10px] font-semibold leading-4 max-[450px]:text-[9px] sm:text-[11px] ${OFFER_TEXT_COLOR}`}>
+      <Tag
+        aria-hidden="true"
+        className="h-3 w-3 shrink-0 stroke-[1.8]"
+      />
+      <span className="truncate">{cardText}</span>
     </p>
   );
 }

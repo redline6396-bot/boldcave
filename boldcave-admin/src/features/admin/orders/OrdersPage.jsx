@@ -73,6 +73,13 @@ function hasExternalDelhiveryCancellation(order) {
   });
 }
 
+function pickupAssociationLabel(state) {
+  if (state === 'confirmed') return 'Added to pickup';
+  if (state === 'cancelled') return 'Pickup cancelled';
+  if (state === 'requested' || state === 'scheduled') return 'Awaiting Delhivery confirmation';
+  return displayValue(state);
+}
+
 function canReconcileExternalDelhiveryCancellation(order) {
   if (
     order?.shippingProvider !== 'delhivery' ||
@@ -565,8 +572,8 @@ export default function OrdersPage() {
                       shipping.courierName ? `Courier: ${shipping.courierName}` : '',
                       shipping.shipmentStatus ? `Shipment Status: ${shipping.shipmentStatus}` : '',
                       shipping.syncStatus ? `Sync: ${shipping.syncStatus}` : '',
-                      shipping.pickupId ? `Pickup ID: ${shipping.pickupId}` : '',
-                      shipping.pickupState ? `Pickup Status: ${displayValue(shipping.pickupState)}` : '',
+                      shipping.pickupId ? `${shipping.pickupState === 'confirmed' ? 'Pickup ID' : 'Requested Pickup ID'}: ${shipping.pickupId}` : '',
+                      shipping.pickupState ? `Pickup Association: ${pickupAssociationLabel(shipping.pickupState)}` : '',
                       shipping.pickupRequestDate ? `Pickup Date: ${shipping.pickupRequestDate}` : '',
                       shipping.lastError ? `Shipping Error: ${shipping.lastError}` : '',
                     ]} />

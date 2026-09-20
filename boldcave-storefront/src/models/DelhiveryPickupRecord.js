@@ -21,6 +21,13 @@ const pickupOrderSchema = new mongoose.Schema(
     finalAmount: { type: Number, min: 0 },
     customerName: { type: String, trim: true },
     orderedAt: { type: Date },
+    associationState: {
+      type: String,
+      enum: ["requested", "confirmed", "cancelled"],
+      default: "requested",
+    },
+    associationSource: { type: String, trim: true },
+    confirmedAt: { type: Date },
   },
   { _id: false }
 );
@@ -68,7 +75,8 @@ export const DelhiveryPickupRecordSchema = delhiveryPickupRecordSchema;
 
 if (
   mongoose.models.DelhiveryPickupRecord &&
-  !mongoose.models.DelhiveryPickupRecord.schema?.path("orders")
+  (!mongoose.models.DelhiveryPickupRecord.schema?.path("orders") ||
+    !mongoose.models.DelhiveryPickupRecord.schema?.path("orders.associationState"))
 ) {
   delete mongoose.models.DelhiveryPickupRecord;
 }

@@ -235,10 +235,12 @@ const orderSchema = new mongoose.Schema(
       pickupId: { type: String },
       pickupState: {
         type: String,
-        enum: ["scheduled", "cancelled"],
+        enum: ["requested", "scheduled", "confirmed", "cancelled"],
       },
+      pickupStateSource: { type: String },
       pickupRequestDate: { type: String },
       pickupRequestedAt: { type: Date },
+      pickupConfirmedAt: { type: Date },
       pickupCancelledAt: { type: Date },
     },
     cancellation: {
@@ -362,8 +364,10 @@ const REQUIRED_ORDER_ITEM_PATHS = [
   "delhivery.cancelledAt",
   "delhivery.pickupId",
   "delhivery.pickupState",
+  "delhivery.pickupStateSource",
   "delhivery.pickupRequestDate",
   "delhivery.pickupRequestedAt",
+  "delhivery.pickupConfirmedAt",
   "delhivery.pickupCancelledAt",
 ];
 

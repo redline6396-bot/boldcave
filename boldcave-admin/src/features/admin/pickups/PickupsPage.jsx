@@ -88,16 +88,25 @@ function sourceLabel(source) {
   return 'Created from admin';
 }
 
-function statusSourceLabel(source) {
-  return source === 'admin_confirmed_provider_action'
-    ? 'Cancellation confirmed by admin'
-    : 'Bold Cave record';
+function timelineLabel(type) {
+  const labels = {
+    request_started: 'Booking started',
+    request_skipped: 'Booking skipped',
+    scheduled: 'Pickup booked',
+    cancellation_confirmed: 'Pickup cancelled',
+    existing_pickup: 'Existing pickup',
+    legacy_snapshot_archived: 'Pickup saved',
+    order_pickup_confirmed: 'Order added',
+    order_pickup_confirmation_reverted: 'Order marked not added',
+  };
+  return labels[type] || displayValue(type);
 }
 
 export default function PickupsPage() {
   const [settings, setSettings] = useState(null);
   const [pickups, setPickups] = useState([]);
   const [readyOrders, setReadyOrders] = useState([]);
+  const [confirmedOrders, setConfirmedOrders] = useState([]);
   const [total, setTotal] = useState(0);
   const [pickupDate, setPickupDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -123,6 +132,7 @@ export default function PickupsPage() {
       setPickupDate((current) => getPickupDateSelection(current, nextSettings));
       setPickups(historyResponse.data.data.pickups || []);
       setReadyOrders(historyResponse.data.data.readyOrders || []);
+      setConfirmedOrders(historyResponse.data.data.confirmedOrders || []);
       setTotal(Number(historyResponse.data.data.total) || 0);
     } catch (error) {
       const message = getErrorMessage(error, 'Unable to load Delhivery pickups');
@@ -153,6 +163,10 @@ export default function PickupsPage() {
         .some((value) => String(value).toLowerCase().includes(needle))
     );
   }, [pickups, search]);
+
+  const hasActivePickup = Boolean(
+    settings?.pickupId && ACTIVE_STATES.includes(settings?.state)
+  );
 
   const applySettings = (nextSettings) => {
     setSettings(nextSettings);
@@ -187,12 +201,12 @@ export default function PickupsPage() {
         pickupDate,
       });
       applySettings(response.data.data.delhiveryPickup);
-      success(response.data.data.message || 'Delhivery pickup scheduled');
+      success(response.data.data.message || 'Pickup booked');
       await loadData();
     } catch (error) {
       const updated = error?.response?.data?.error?.details?.delhiveryPickup;
       if (updated) applySettings(updated);
-      showError(getErrorMessage(error, 'Unable to request Delhivery pickup'));
+      showError(getErrorMessage(error, 'Unable to book the pickup'));
       await loadData();
     } finally {
       setBusy('');
@@ -232,6 +246,48 @@ export default function PickupsPage() {
     }
   };
 
+  const confirmOrderAdded = async (order) => {
+    const pickupId = String(settings?.pickupId || '').trim();
+    if (!pickupId || busy) return;
+    const confirmed = globalThis.confirm(
+      `Confirm only if ${order.orderNumber || 'this order'} is visible under Ready For Pickup in Delhivery One. A processing message is not confirmation.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setBusy(`confirm-order:${order.orderId}`);
+      const response = await api.post(
+        '/api/admin/shipping/delhivery/pickup-order-confirmation',
+        { orderId: order.orderId, pickupId }
+      );
+      success(response.data.data.message || 'Order marked as added');
+      await loadData();
+    } catch (error) {
+      showError(getErrorMessage(error, 'Unable to mark the order as added'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const revokeOrderConfirmation = async (order) => {
+    const pickupId = String(settings?.pickupId || '').trim();
+    if (!pickupId || busy) return;
+    if (!globalThis.confirm(`Mark ${order.orderNumber || 'this order'} as not added to the pickup?`)) return;
+    try {
+      setBusy(`revoke-order:${order.orderId}`);
+      const response = await api.post(
+        '/api/admin/shipping/delhivery/pickup-order-confirmation',
+        { orderId: order.orderId, pickupId, action: 'revoke' }
+      );
+      success(response.data.data.message || 'Order marked as not added');
+      await loadData();
+    } catch (error) {
+      showError(getErrorMessage(error, 'Unable to update the order'));
+    } finally {
+      setBusy('');
+    }
+  };
+
   return (
     <div className='space-y-6'>
       <header className='flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
@@ -260,56 +316,17 @@ export default function PickupsPage() {
         <section className='rounded border border-gray-200 bg-white p-5 text-sm text-gray-500'>Loading pickup controls...</section>
       ) : settings ? (
         <>
-          <section className='grid gap-4 md:grid-cols-3'>
-            <SummaryTile
-              label='Ready for pickup'
-              value={`${readyOrders.length} order${readyOrders.length === 1 ? '' : 's'}`}
-              detail='Will be included in the next request'
-              tone={readyOrders.length ? 'blue' : 'neutral'}
-            />
-            <SummaryTile
-              label='Latest pickup'
-              value={displayValue(settings.state)}
-              detail={settings.pickupId ? `Pickup ID ${settings.pickupId}` : 'No provider pickup ID yet'}
-              tone={settings.state === 'scheduled' ? 'green' : settings.state === 'failed' ? 'red' : 'neutral'}
-            />
-            <SummaryTile
-              label='Pickup location'
-              value={settings.pickupLocation || '-'}
-              detail='Pickup window 2:00 PM – 6:00 PM'
-              tone='neutral'
-            />
-          </section>
-
-          {settings.state === 'scheduled' && settings.pickupId ? (
-            <section className='rounded border border-blue-200 bg-blue-50 p-5'>
-              <div className='flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between'>
-                <div className='max-w-3xl'>
-                  <p className='text-xs font-semibold uppercase tracking-wide text-blue-700'>Action required in Delhivery One</p>
-                  <h2 className='mt-1 text-lg font-semibold text-blue-950'>Add your orders to pickup {settings.pickupId}</h2>
-                  <p className='mt-2 text-sm leading-6 text-blue-900'>
-                    Open Ready to Ship, select the {Number(settings.expectedPackageCount) || 0} expected order{Number(settings.expectedPackageCount) === 1 ? '' : 's'}, click <span className='font-semibold'>Add to Pickup</span>, and choose existing pickup <span className='font-mono font-semibold'>{settings.pickupId}</span>. Do not create another pickup.
-                  </p>
-                </div>
-                <a
-                  href={DELHIVERY_READY_TO_SHIP_URL}
-                  target='_blank'
-                  rel='noreferrer'
-                  className='inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded bg-blue-700 px-5 text-sm font-semibold text-white hover:bg-blue-800'
-                >
-                  Add orders in Delhivery One <ExternalLink size={15} />
-                </a>
-              </div>
-            </section>
-          ) : null}
-
           <section className='grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]'>
             <div className='rounded border border-gray-200 bg-white p-5'>
               <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
                 <div>
-                  <p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Most recent request</p>
+                  <p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>
+                    {hasActivePickup ? 'Active pickup' : 'Latest pickup'}
+                  </p>
                   <div className='mt-2 flex flex-wrap items-center gap-2'>
-                    <h2 className='text-lg font-semibold text-gray-950'>Latest pickup details</h2>
+                    <h2 className='text-xl font-semibold text-gray-950'>
+                      {settings.pickupId ? `Pickup ${settings.pickupId}` : 'No active pickup'}
+                    </h2>
                     <StatusBadge state={settings.state} />
                   </div>
                 </div>
@@ -325,18 +342,19 @@ export default function PickupsPage() {
               </div>
 
               <dl className='mt-5 divide-y divide-gray-100 rounded border border-gray-200'>
-                <DataRow label='Pickup ID' value={settings.pickupId || 'Not assigned'} mono />
                 <DataRow label='Pickup date' value={formatPickupDate(settings.requestDate)} />
-                <DataRow label='Expected packages' value={Number(settings.expectedPackageCount) || 0} />
-                <DataRow label='Created' value={formatIstDateTime(settings.requestedAt)} />
+                <DataRow label='Pickup window' value='2:00 PM – 6:00 PM' />
+                <DataRow label='Pickup location' value={settings.pickupLocation || '-'} />
+                <DataRow label='Orders planned' value={Number(settings.expectedPackageCount) || 0} />
+                <DataRow label='Booked on' value={formatIstDateTime(settings.requestedAt)} />
                 {settings.cancelledAt ? <DataRow label='Cancelled' value={formatIstDateTime(settings.cancelledAt)} /> : null}
                 {settings.lastError ? <DataRow label='Last error' value={settings.lastError} /> : null}
               </dl>
 
-              {settings.state === 'scheduled' && settings.pickupId ? (
-                <div className='mt-5 rounded border border-amber-200 bg-amber-50 p-4'>
-                  <p className='text-sm font-semibold text-amber-900'>Need to cancel this pickup?</p>
-                  <p className='mt-1 text-xs leading-5 text-amber-800'>Cancel it in Delhivery first, then confirm here so Bold Cave shows the same status.</p>
+              {hasActivePickup ? (
+                <details className='mt-5 rounded border border-gray-200 bg-gray-50 p-4'>
+                  <summary className='cursor-pointer text-sm font-semibold text-gray-700'>Cancel this pickup</summary>
+                  <p className='mt-2 text-xs leading-5 text-gray-600'>Cancel it in Delhivery first, then confirm here so both systems show the same status.</p>
                   <div className='mt-3 flex flex-wrap gap-2'>
                     <button
                       type='button'
@@ -355,44 +373,76 @@ export default function PickupsPage() {
                       {busy === 'cancel-confirm' ? 'Updating...' : 'Confirm cancellation'}
                     </button>
                   </div>
-                </div>
+                </details>
               ) : null}
             </div>
 
             <div className='rounded border border-gray-200 bg-white p-5'>
-              <div className='flex items-center gap-2'>
-                <CalendarClock size={20} className='text-gray-500' />
-                <h2 className='text-lg font-semibold text-gray-950'>Schedule next pickup</h2>
-              </div>
-              <p className='mt-1 text-sm leading-5 text-gray-500'>This warehouse-level request sends Delhivery the expected package count for the orders listed below.</p>
-
-              <label className='mt-5 block text-xs font-semibold uppercase tracking-wide text-gray-500'>
-                Pickup date
-                <input
-                  type='date'
-                  value={pickupDate}
-                  min={settings.pickupDateMin || undefined}
-                  max={settings.pickupDateMax || undefined}
-                  onChange={(event) => setPickupDate(event.target.value)}
-                  disabled={Boolean(busy) || ACTIVE_STATES.includes(settings.state)}
-                  className='mt-2 block h-11 w-full px-3 text-sm font-normal text-gray-950 disabled:bg-gray-100'
-                />
-              </label>
-              <p className='mt-2 text-xs text-gray-500'>Selected: {formatPickupDate(pickupDate)} · 2:00 PM – 6:00 PM</p>
-              <button
-                type='button'
-                onClick={requestPickup}
-                disabled={Boolean(busy) || !pickupDate || ACTIVE_STATES.includes(settings.state)}
-                className='mt-4 inline-flex h-11 w-full items-center justify-center rounded bg-black px-4 text-sm font-semibold text-white disabled:opacity-50'
-              >
-                {busy === 'request' ? 'Requesting...' : `Request pickup for ${readyOrders.length} order${readyOrders.length === 1 ? '' : 's'}`}
-              </button>
+              {hasActivePickup ? (
+                <>
+                  <p className='text-xs font-semibold uppercase tracking-wide text-emerald-700'>Pickup booked</p>
+                  <h2 className='mt-2 text-lg font-semibold text-gray-950'>Add waiting orders to this pickup</h2>
+                  <p className='mt-2 text-sm leading-6 text-gray-600'>
+                    {readyOrders.length
+                      ? `${readyOrders.length} order${readyOrders.length === 1 ? ' is' : 's are'} still waiting to be added.`
+                      : 'No orders are waiting to be added.'}
+                  </p>
+                  {readyOrders.length ? (
+                    <div className='mt-5 rounded border border-amber-200 bg-amber-50 p-4'>
+                      <p className='text-xs font-semibold uppercase tracking-wide text-amber-800'>Manual Delhivery step</p>
+                      <p className='mt-2 text-xs leading-5 text-amber-900'>Open Ready to Ship and add the order to Pickup <span className='font-mono font-semibold'>{settings.pickupId}</span>. Confirm below only after it appears under Ready For Pickup.</p>
+                    </div>
+                  ) : null}
+                  <a
+                    href={readyOrders.length ? DELHIVERY_READY_TO_SHIP_URL : providerPickupUrl(settings.pickupId)}
+                    target='_blank'
+                    rel='noreferrer'
+                    className='mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded bg-black px-4 text-sm font-semibold text-white hover:bg-gray-800'
+                  >
+                    {readyOrders.length ? 'Add orders in Delhivery One' : 'Open Delhivery pickup'} <ExternalLink size={15} />
+                  </a>
+                </>
+              ) : (
+                <>
+                  <div className='flex items-center gap-2'>
+                    <CalendarClock size={20} className='text-gray-500' />
+                    <h2 className='text-lg font-semibold text-gray-950'>Book a pickup</h2>
+                  </div>
+                  <p className='mt-1 text-sm leading-5 text-gray-500'>Book one pickup for all ready orders.</p>
+                  <label className='mt-5 block text-xs font-semibold uppercase tracking-wide text-gray-500'>
+                    Pickup date
+                    <input
+                      type='date'
+                      value={pickupDate}
+                      min={settings.pickupDateMin || undefined}
+                      max={settings.pickupDateMax || undefined}
+                      onChange={(event) => setPickupDate(event.target.value)}
+                      disabled={Boolean(busy)}
+                      className='mt-2 block h-11 w-full px-3 text-sm font-normal text-gray-950 disabled:bg-gray-100'
+                    />
+                  </label>
+                  <p className='mt-2 text-xs text-gray-500'>Selected: {formatPickupDate(pickupDate)} · 2:00 PM – 6:00 PM</p>
+                  {readyOrders.length ? (
+                    <button
+                      type='button'
+                      onClick={requestPickup}
+                      disabled={Boolean(busy) || !pickupDate}
+                      className='mt-4 inline-flex h-11 w-full items-center justify-center rounded bg-black px-4 text-sm font-semibold text-white disabled:opacity-50'
+                    >
+                      {busy === 'request' ? 'Booking...' : `Book pickup for ${readyOrders.length} order${readyOrders.length === 1 ? '' : 's'}`}
+                    </button>
+                  ) : (
+                    <p className='mt-4 rounded border border-dashed border-gray-300 p-4 text-center text-sm text-gray-500'>No orders are waiting, so there is nothing to schedule.</p>
+                  )}
+                </>
+              )}
 
               <div className='mt-5 border-t border-gray-100 pt-4'>
                 <div className='flex items-center justify-between gap-4'>
                   <div>
                     <p className='text-sm font-semibold text-gray-800'>Automatic scheduling</p>
                     <p className='mt-1 text-xs text-gray-500'>{settings.autoPickupEnabled ? 'Enabled' : 'Disabled'}</p>
+                    <p className='mt-1 max-w-xs text-xs leading-5 text-gray-500'>Books a pickup automatically when orders are ready.</p>
                   </div>
                   <button
                     type='button'
@@ -423,14 +473,45 @@ export default function PickupsPage() {
           <div>
             <div className='flex items-center gap-2'>
               <PackageCheck size={20} className='text-gray-500' />
-              <h2 className='font-semibold text-gray-950'>Orders ready for pickup</h2>
+              <h2 className='font-semibold text-gray-950'>Ready-to-Ship orders</h2>
             </div>
-            <p className='mt-1 text-sm text-gray-500'>These manifested orders are counted when the next warehouse pickup is requested.</p>
+            <p className='mt-1 text-sm text-gray-500'>
+              {hasActivePickup
+                ? `These orders have not been added to Pickup ${settings.pickupId} yet.`
+                : 'These orders are ready for the next pickup.'}
+            </p>
           </div>
           <p className='text-sm font-semibold text-gray-700'>{readyOrders.length} ready</p>
         </div>
-        <ReadyOrdersTable orders={readyOrders} loading={loading} />
+        <ReadyOrdersTable
+          orders={readyOrders}
+          loading={loading}
+          pickupId={hasActivePickup ? settings.pickupId : ''}
+          busy={busy}
+          onConfirm={confirmOrderAdded}
+        />
       </section>
+
+      {hasActivePickup ? (
+        <section className='rounded border border-gray-200 bg-white p-5'>
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between'>
+            <div>
+              <div className='flex items-center gap-2'>
+                <PackageCheck size={20} className='text-emerald-600' />
+                <h2 className='font-semibold text-gray-950'>Added to active pickup</h2>
+              </div>
+              <p className='mt-1 text-sm text-gray-500'>Orders added to Pickup {settings.pickupId}.</p>
+            </div>
+            <p className='text-sm font-semibold text-gray-700'>{confirmedOrders.length} added</p>
+          </div>
+          <ConfirmedOrdersTable
+            orders={confirmedOrders}
+            loading={loading}
+            busy={busy}
+            onRevoke={revokeOrderConfirmation}
+          />
+        </section>
+      ) : null}
 
       <section className='rounded border border-gray-200 bg-white p-5'>
         <div className='flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
@@ -439,7 +520,7 @@ export default function PickupsPage() {
               <History size={20} className='text-gray-500' />
               <h2 className='font-semibold text-gray-950'>Pickup history</h2>
             </div>
-            <p className='mt-1 text-sm text-gray-500'>{total} pickup record{total === 1 ? '' : 's'}.</p>
+            <p className='mt-1 text-sm text-gray-500'>{total} pickup{total === 1 ? '' : 's'}.</p>
           </div>
           <div className='grid gap-2 sm:grid-cols-[260px_190px_auto]'>
             <label className='relative block'>
@@ -491,7 +572,7 @@ export default function PickupsPage() {
                     <p className='mt-1 text-sm text-gray-600'>
                       {formatPickupDate(pickup.requestDate)} · {formatPickupTime(pickup.pickupTime)} IST · {pickup.pickupLocation || '-'}
                     </p>
-                    <p className='mt-1 text-xs text-gray-400'>Recorded {formatIstDateTime(pickup.createdAt)}</p>
+                    <p className='mt-1 text-xs text-gray-400'>Created {formatIstDateTime(pickup.createdAt)}</p>
                   </div>
                   <div className='flex flex-wrap items-center gap-2'>
                     {pickup.pickupId ? (
@@ -524,40 +605,24 @@ export default function PickupsPage() {
   );
 }
 
-function SummaryTile({ label, value, detail, tone = 'neutral' }) {
-  const accents = {
-    blue: 'border-l-blue-500',
-    green: 'border-l-emerald-500',
-    red: 'border-l-red-500',
-    neutral: 'border-l-gray-400',
-  };
-  return (
-    <div className={`rounded border border-gray-200 border-l-4 bg-white p-4 ${accents[tone]}`}>
-      <p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>{label}</p>
-      <p className='mt-2 break-words text-xl font-semibold text-gray-950'>{value}</p>
-      <p className='mt-1 text-xs leading-5 text-gray-500'>{detail}</p>
-    </div>
-  );
-}
-
-function DataRow({ label, value, mono = false }) {
+function DataRow({ label, value }) {
   return (
     <div className='grid gap-1 px-4 py-3 sm:grid-cols-[150px_1fr] sm:items-start'>
       <dt className='text-xs font-semibold uppercase tracking-wide text-gray-500'>{label}</dt>
-      <dd className={`break-words text-sm font-medium text-gray-900 ${mono ? 'font-mono' : ''}`}>{value}</dd>
+      <dd className='break-words text-sm font-medium text-gray-900'>{value}</dd>
     </div>
   );
 }
 
-function ReadyOrdersTable({ orders, loading }) {
+function ReadyOrdersTable({ orders, loading, pickupId, busy, onConfirm }) {
   if (loading && orders.length === 0) {
     return <p className='mt-5 text-sm text-gray-500'>Loading ready orders...</p>;
   }
   if (orders.length === 0) {
     return (
       <div className='mt-5 rounded border border-dashed border-gray-300 p-6 text-center'>
-        <p className='font-semibold text-gray-800'>No orders are waiting for pickup</p>
-        <p className='mt-1 text-sm text-gray-500'>Manifested Delhivery orders will appear here automatically.</p>
+        <p className='font-semibold text-gray-800'>No orders are waiting</p>
+        <p className='mt-1 text-sm text-gray-500'>New manifested Delhivery orders will appear here automatically.</p>
       </div>
     );
   }
@@ -573,7 +638,7 @@ function ReadyOrdersTable({ orders, loading }) {
             <th className='px-4 py-3 font-semibold'>Payment</th>
             <th className='px-4 py-3 font-semibold'>Amount</th>
             <th className='px-4 py-3 font-semibold'>Order status</th>
-            <th className='px-4 py-3 font-semibold'>Pickup</th>
+            <th className='px-4 py-3 font-semibold'>Next action</th>
           </tr>
         </thead>
         <tbody className='divide-y divide-gray-100 bg-white'>
@@ -591,9 +656,71 @@ function ReadyOrdersTable({ orders, loading }) {
               <td className='px-4 py-3 font-semibold text-gray-800'>{money(order.finalAmount)}</td>
               <td className='px-4 py-3'><StatusBadge state={order.orderStatus} /></td>
               <td className='px-4 py-3'>
-                <span className='rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700'>Counted in request</span>
+                {pickupId ? (
+                  <div className='flex min-w-44 flex-col gap-2'>
+                    <span className='w-fit rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800'>Not added yet</span>
+                    <button
+                      type='button'
+                      onClick={() => onConfirm(order)}
+                      disabled={Boolean(busy)}
+                      className='inline-flex h-8 w-fit items-center rounded border border-gray-300 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50'
+                    >
+                      {busy === `confirm-order:${order.orderId}` ? 'Saving...' : 'Mark as added'}
+                    </button>
+                  </div>
+                ) : (
+                  <span className='rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700'>Include in next pickup</span>
+                )}
                 {order.pickupId && order.pickupState === 'cancelled' ? (
                   <p className='mt-1 text-xs text-gray-400'>Previous {order.pickupId} cancelled</p>
+                ) : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ConfirmedOrdersTable({ orders, loading, busy, onRevoke }) {
+  if (loading && orders.length === 0) {
+    return <p className='mt-5 text-sm text-gray-500'>Loading added orders...</p>;
+  }
+  if (orders.length === 0) {
+    return <p className='mt-5 rounded border border-dashed border-gray-300 p-5 text-center text-sm text-gray-500'>No orders have been added yet.</p>;
+  }
+  return (
+    <div className='mt-5 overflow-x-auto rounded border border-gray-200'>
+      <table className='min-w-full divide-y divide-gray-200 text-left text-sm'>
+        <thead className='bg-gray-50 text-xs uppercase text-gray-500'>
+          <tr>
+            <th className='px-4 py-3 font-semibold'>Order</th>
+            <th className='px-4 py-3 font-semibold'>AWB</th>
+            <th className='px-4 py-3 font-semibold'>Customer</th>
+            <th className='px-4 py-3 font-semibold'>Amount</th>
+            <th className='px-4 py-3 font-semibold'>Pickup status</th>
+          </tr>
+        </thead>
+        <tbody className='divide-y divide-gray-100 bg-white'>
+          {orders.map((order) => (
+            <tr key={order.orderId} className='align-top'>
+              <td className='px-4 py-3'><Link href={orderHref(order)} className='font-semibold text-blue-700 hover:underline'>{order.orderNumber || '-'}</Link></td>
+              <td className='px-4 py-3 font-mono text-xs text-gray-700'>{order.waybill || '-'}</td>
+              <td className='px-4 py-3 text-gray-700'>{order.customerName || '-'}</td>
+              <td className='px-4 py-3 font-semibold text-gray-800'>{money(order.finalAmount)}</td>
+              <td className='px-4 py-3'>
+                <span className='rounded bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700'>Added to pickup</span>
+                <p className='mt-1 text-xs text-gray-400'>{formatIstDateTime(order.pickupConfirmedAt)}</p>
+                {order.pickupStateSource === 'admin_confirmed_delhivery_one' ? (
+                  <button
+                    type='button'
+                    onClick={() => onRevoke(order)}
+                    disabled={Boolean(busy)}
+                    className='mt-2 text-xs font-semibold text-gray-500 underline underline-offset-2 disabled:opacity-50'
+                  >
+                    {busy === `revoke-order:${order.orderId}` ? 'Updating...' : 'Mark as not added'}
+                  </button>
                 ) : null}
               </td>
             </tr>
@@ -613,7 +740,15 @@ function StatusBadge({ state }) {
     no_ready_shipments: 'bg-gray-100 text-gray-600',
     requesting: 'bg-violet-50 text-violet-700',
   };
-  return <span className={`rounded px-2 py-1 text-xs font-semibold ${tones[state] || 'bg-gray-100 text-gray-700'}`}>{displayValue(state)}</span>;
+  const labels = {
+    scheduled: 'Booked',
+    cancelled: 'Cancelled',
+    failed: 'Failed',
+    needs_reconciliation: 'Check required',
+    no_ready_shipments: 'No orders',
+    requesting: 'Booking',
+  };
+  return <span className={`rounded px-2 py-1 text-xs font-semibold ${tones[state] || 'bg-gray-100 text-gray-700'}`}>{labels[state] || displayValue(state)}</span>;
 }
 
 function PickupDetails({ pickup }) {
@@ -621,16 +756,15 @@ function PickupDetails({ pickup }) {
     <div className='border-t border-gray-200 bg-gray-50 p-4'>
       <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
         <Detail label='Pickup ID' value={pickup.pickupId || '-'} />
-        <Detail label='Expected packages' value={pickup.expectedPackageCount} />
-        <Detail label='Provider HTTP status' value={pickup.providerHttpStatus || '-'} />
-        <Detail label='Record source' value={statusSourceLabel(pickup.statusSource)} />
-        <Detail label='Requested at' value={formatIstDateTime(pickup.requestedAt)} />
-        <Detail label='Cancelled at' value={formatIstDateTime(pickup.cancelledAt)} />
+        <Detail label='Orders planned' value={pickup.expectedPackageCount} />
+        <Detail label='Booked on' value={formatIstDateTime(pickup.requestedAt)} />
         <Detail label='Last updated' value={formatIstDateTime(pickup.updatedAt)} />
-        <Detail label='Last error' value={pickup.lastError || '-'} />
+        {pickup.cancelledAt ? <Detail label='Cancelled at' value={formatIstDateTime(pickup.cancelledAt)} /> : null}
+        {pickup.lastError ? <Detail label='Last error' value={pickup.lastError} /> : null}
       </div>
       <div className='mt-4'>
-        <p className='text-xs font-semibold uppercase text-gray-500'>Bold Cave orders counted ({pickup.orders?.length || 0})</p>
+        <p className='text-xs font-semibold uppercase text-gray-500'>Orders listed when booked ({pickup.orders?.length || 0})</p>
+        <p className='mt-1 text-xs text-gray-500'>This was the order list when the pickup was booked. Orders actually added are marked below.</p>
         {pickup.orders?.length ? (
           <div className='mt-2 overflow-x-auto rounded border border-gray-200 bg-white'>
             <table className='min-w-full divide-y divide-gray-200 text-left text-sm'>
@@ -641,7 +775,7 @@ function PickupDetails({ pickup }) {
                   <th className='px-3 py-2 font-semibold'>Customer</th>
                   <th className='px-3 py-2 font-semibold'>Payment</th>
                   <th className='px-3 py-2 font-semibold'>Amount</th>
-                  <th className='px-3 py-2 font-semibold'>Status when requested</th>
+                  <th className='px-3 py-2 font-semibold'>Pickup status</th>
                 </tr>
               </thead>
               <tbody className='divide-y divide-gray-100'>
@@ -656,7 +790,13 @@ function PickupDetails({ pickup }) {
                     <td className='px-3 py-2 text-gray-700'>{order.customerName || '-'}</td>
                     <td className='px-3 py-2 text-gray-700'>{displayValue(order.paymentMethod)}</td>
                     <td className='px-3 py-2 font-semibold text-gray-800'>{money(order.finalAmount)}</td>
-                    <td className='px-3 py-2 text-gray-700'>{displayValue(order.orderStatus)}</td>
+                    <td className='px-3 py-2 text-gray-700'>
+                      {order.pickupState === 'confirmed' ? (
+                        <span className='rounded bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700'>Added</span>
+                      ) : (
+                        <span className='rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600'>Not verified</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -672,7 +812,7 @@ function PickupDetails({ pickup }) {
           <div className='mt-2 space-y-2'>
             {[...pickup.events].reverse().map((event, index) => (
               <div key={`${event.type}-${event.at}-${index}`} className='rounded border border-gray-200 bg-white p-3 text-sm'>
-                <p className='font-semibold text-gray-900'>{displayValue(event.type)}</p>
+                <p className='font-semibold text-gray-900'>{timelineLabel(event.type)}</p>
                 <p className='text-gray-600'>{event.message || '-'}</p>
                 <p className='mt-1 text-xs text-gray-400'>{formatIstDateTime(event.at)}</p>
               </div>

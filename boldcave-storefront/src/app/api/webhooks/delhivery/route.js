@@ -64,6 +64,14 @@ function extractEvent(payload) {
   return {
     waybill,
     referenceNo,
+    pickupId: cleanString(
+      shipment?.PickupID ||
+        shipment?.PickupId ||
+        shipment?.pickup_id ||
+        payload?.PickupID ||
+        payload?.pickup_id,
+      120
+    ),
     status: statusValue,
     statusType: cleanString(status?.StatusType || status?.status_type, 80),
     eventAt: parseEventDate(statusDateText),
@@ -105,6 +113,11 @@ function eventIndicatesCancellation(event) {
     const normalized = cleanString(value, 300).toLowerCase();
     return normalized === "cn" || normalized.includes("cancel");
   });
+}
+
+function eventIndicatesPickupConfirmation(event) {
+  const status = cleanString(event?.status, 120).toLowerCase();
+  return status.includes("ready for pickup") || status.includes("pickup scheduled");
 }
 
 async function reconcileCancellation(order) {
@@ -170,6 +183,26 @@ async function delhiveryWebhookRoute(request) {
       event.eventId &&
       cleanString(order.delhivery?.lastWebhookEvent, 400) === event.eventId
     ) {
+      if (
+        eventIndicatesPickupConfirmation(event) &&
+        order.delhivery?.pickupState !== "confirmed"
+      ) {
+        const { confirmDelhiveryPickupAssociation } = await import(
+          "@/lib/shipping/delhiveryPickup"
+        );
+        await confirmDelhiveryPickupAssociation(order, {
+          pickupId: event.pickupId,
+          source: "provider_webhook",
+          confirmedAt: event.eventAt || new Date(),
+        });
+        return success({
+          received: true,
+          matched: true,
+          updated: true,
+          duplicate: true,
+          orderStatus: order.orderStatus,
+        });
+      }
       if (externalCancellation && order.orderStatus !== "cancelled") {
         order.delhivery ||= {};
         order.delhivery.cancelStatus = "cancelled";
@@ -225,6 +258,7 @@ async function delhiveryWebhookRoute(request) {
     order.delhivery.lastWebhookInstructions = event.instructions;
     order.delhivery.lastWebhookNslCode = event.nslCode;
     order.delhivery.lastSyncedAt = new Date();
+    const pickupConfirmed = eventIndicatesPickupConfirmation(event);
     if (externalCancellation) {
       order.delhivery.cancelStatus = "cancelled";
       order.delhivery.cancelError = "";
@@ -232,6 +266,16 @@ async function delhiveryWebhookRoute(request) {
     }
     applyShippingStatusToOrder(order, event.status);
     await order.save();
+    if (pickupConfirmed) {
+      const { confirmDelhiveryPickupAssociation } = await import(
+        "@/lib/shipping/delhiveryPickup"
+      );
+      await confirmDelhiveryPickupAssociation(order, {
+        pickupId: event.pickupId,
+        source: "provider_webhook",
+        confirmedAt: event.eventAt || new Date(),
+      });
+    }
 
     let persistedOrder = order;
     if (externalCancellation && order.orderStatus !== "cancelled") {
