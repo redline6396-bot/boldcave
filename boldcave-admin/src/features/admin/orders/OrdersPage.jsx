@@ -557,9 +557,10 @@ export default function OrdersPage() {
                       </div>
                     </div>
 
-                    <div className='grid gap-3 text-sm md:grid-cols-4'>
+                    <div className='grid gap-3 text-sm md:grid-cols-5'>
                       <Summary label='Subtotal' value={money(order.amounts?.subtotal)} />
                       <Summary label='Discount' value={money(order.amounts?.discount)} />
+                      <Summary label='COD Charges' value={money(order.amounts?.codCharge)} />
                       <Summary label='Coupon' value={order.coupon?.code || '-'} />
                       <Summary label='Final Amount' value={money(order.amounts?.finalAmount)} strong />
                     </div>

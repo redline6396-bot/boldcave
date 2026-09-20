@@ -44,10 +44,7 @@ export default function CouponProvider({ children }) {
 
   useEffect(() => {
     try {
-      const storedCode = window.localStorage.getItem(COUPON_STORAGE_KEY);
-      if (storedCode) {
-        setCouponCode(storedCode);
-      }
+      window.localStorage.removeItem(COUPON_STORAGE_KEY);
     } catch {
       setCouponCode("");
     }
@@ -100,10 +97,6 @@ export default function CouponProvider({ children }) {
         setServerSubtotal(Number(result.subtotal) || 0);
         setServerTotal(Number(result.total) || 0);
         setMessage(result.message || "Coupon applied.");
-
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem(COUPON_STORAGE_KEY, code);
-        }
 
         return result;
       } catch (couponError) {

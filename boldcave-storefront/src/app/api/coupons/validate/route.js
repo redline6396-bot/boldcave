@@ -32,12 +32,9 @@ async function validateCouponRoute(request) {
       );
     }
 
-    const couponWasEntered = Boolean(body.code || body.couponCode);
     const couponApplied = Boolean(result.coupon?.code);
     const message =
-      couponWasEntered && !couponApplied && result.discountWinner === "prepaid"
-        ? "Online payment offer gives you a better saving."
-        : couponApplied
+      couponApplied
           ? "Coupon applied successfully"
           : "No coupon applied";
 
@@ -46,9 +43,8 @@ async function validateCouponRoute(request) {
       discount: result.discount,
       subtotal: result.subtotal,
       shipping: result.shipping,
-      prepaidDiscount: result.prepaidDiscount,
+      codCharge: result.codCharge,
       total: result.finalAmount,
-      discountWinner: result.discountWinner,
       coupon: result.coupon?.code
         ? {
             code: result.coupon.code,

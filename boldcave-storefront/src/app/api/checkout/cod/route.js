@@ -199,7 +199,7 @@ async function createCodOrderRoute(request) {
       return failure(cart.error.code, cart.error.message, cart.error.status, cart.error.details);
     }
 
-    if (!isCodOrderAmountEligible(cart.finalAmount)) {
+    if (!isCodOrderAmountEligible(cart.finalAmount - cart.codCharge)) {
       return failure(
         "COD_MINIMUM_AMOUNT",
         COD_MINIMUM_AMOUNT_MESSAGE,
@@ -251,7 +251,7 @@ async function createCodOrderRoute(request) {
       amounts: {
         subtotal: cart.subtotal,
         discount: cart.discount,
-        prepaidDiscount: cart.prepaidDiscount,
+        codCharge: cart.codCharge,
         shipping: cart.shipping,
         finalAmount: cart.finalAmount,
       },

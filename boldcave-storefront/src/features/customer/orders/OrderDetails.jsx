@@ -431,8 +431,13 @@ export default function OrderDetails() {
 
   const subtotal = Number(order.amounts?.subtotal) || 0;
   const discount = Number(order.amounts?.discount) || 0;
-  const prepaidDiscount = Number(order.amounts?.prepaidDiscount) || 0;
+  const codCharge = Number(order.amounts?.codCharge) || 0;
+  const shippingAmount = Number(order.amounts?.shipping) || 0;
   const finalAmount = Number(order.amounts?.finalAmount) || 0;
+  const additionalDiscount = Math.max(
+    0,
+    subtotal - discount + shippingAmount + codCharge - finalAmount
+  );
 
   const shipping = getOrderShippingSummary(order);
   const trackingUrl = shipping.trackingUrl;
@@ -854,13 +859,19 @@ export default function OrderDetails() {
                 value={`-${formatPrice(discount)}`}
               />
             )}
-            {prepaidDiscount > 0 && (
+            {additionalDiscount > 0 && (
               <SummaryRow
-                label="Online Payment Discount (10%)"
-                value={`-${formatPrice(prepaidDiscount)}`}
+                label="Additional Discount"
+                value={`-${formatPrice(additionalDiscount)}`}
               />
             )}
-            <SummaryRow label="Shipping" value="FREE" />
+            <SummaryRow
+              label="Shipping"
+              value={shippingAmount > 0 ? formatPrice(shippingAmount) : "FREE"}
+            />
+            {codCharge > 0 && (
+              <SummaryRow label="COD Charges" value={`+${formatPrice(codCharge)}`} />
+            )}
 
             <div className="border-t border-neutral-200 pt-3">
               <SummaryRow
@@ -915,10 +926,10 @@ export default function OrderDetails() {
                   />
                 )}
 
-                {prepaidDiscount > 0 && (
+                {additionalDiscount > 0 && (
                   <SummaryRow
-                    label="Online Payment Discount (10%)"
-                    value={`-${formatPrice(prepaidDiscount)}`}
+                    label="Additional Discount"
+                    value={`-${formatPrice(additionalDiscount)}`}
                   />
                 )}
 
@@ -926,7 +937,13 @@ export default function OrderDetails() {
                   label="Items Subtotal"
                   value={formatPrice(subtotal)}
                 />
-                <SummaryRow label="Shipping" value="FREE" />
+                <SummaryRow
+                  label="Shipping"
+                  value={shippingAmount > 0 ? formatPrice(shippingAmount) : "FREE"}
+                />
+                {codCharge > 0 && (
+                  <SummaryRow label="COD Charges" value={`+${formatPrice(codCharge)}`} />
+                )}
                 <SummaryRow
                   label="Payable Total"
                   value={formatPrice(finalAmount)}

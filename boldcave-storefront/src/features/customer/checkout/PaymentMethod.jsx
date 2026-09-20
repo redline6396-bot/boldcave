@@ -16,11 +16,10 @@ export default function PaymentMethod({
   codAvailable,
   serviceable,
   disabled = false,
-  prepaidDiscountSettings,
   onlineAmount = 0,
   codAmount = 0,
+  codCharge = 0,
   codBelowMinimum = false,
-  onlineSavings = 0,
   loading = false,
 }) {
   const codDisabled =
@@ -29,11 +28,7 @@ export default function PaymentMethod({
     codAvailable === false ||
     codBelowMinimum;
   const onlineDisabled = disabled || serviceable === false;
-  const paymentSavings = Math.max(0, Number(onlineSavings) || 0);
-  const prepaidOfferText = getPrepaidOfferText({
-    settings: prepaidDiscountSettings,
-    savings: paymentSavings,
-  });
+  const appliedCodCharge = Math.max(0, Number(codCharge) || 0);
 
   return (
     <section>
@@ -46,7 +41,7 @@ export default function PaymentMethod({
           active={value === "razorpay"}
           icon={CreditCard}
           title="Pay Online"
-          text={loading ? "Refreshing payment price..." : prepaidOfferText}
+          text={loading ? "Refreshing payment price..." : "Pay securely online"}
           amount={onlineAmount}
           onClick={() => onChange("razorpay")}
           disabled={onlineDisabled}
@@ -63,7 +58,9 @@ export default function PaymentMethod({
               ? `Available only for orders of ₹${MINIMUM_COD_ORDER_AMOUNT} or more`
               : codAvailable === false
               ? "COD is unavailable for this pincode"
-              : "Pay when your order arrives"
+              : appliedCodCharge > 0
+                ? `Pay ${money(appliedCodCharge)} extra with Cash on Delivery`
+                : "Pay when your order arrives"
           }
           amount={codAmount}
           onClick={() => onChange("cod")}
@@ -72,22 +69,6 @@ export default function PaymentMethod({
       </div>
     </section>
   );
-}
-
-function getPrepaidOfferText({ settings = {}, savings = 0 } = {}) {
-  if (settings?.enabled === false || Number(settings?.discountValue || 0) <= 0) {
-    return "Pay securely online";
-  }
-
-  if (savings > 0) {
-    const percent =
-      settings.discountType === "percentage"
-        ? ` (${Number(settings.discountValue || 0).toLocaleString("en-IN")}%)`
-        : "";
-    return `Save ${money(savings)}${percent} online`;
-  }
-
-  return settings?.enabled === false ? "Pay securely online" : "Online payment available";
 }
 
 function PaymentOption({

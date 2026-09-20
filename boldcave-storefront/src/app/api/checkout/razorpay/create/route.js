@@ -127,7 +127,7 @@ async function createRazorpayOrderRoute(request) {
       amounts: {
         subtotal: cart.subtotal,
         discount: cart.discount,
-        prepaidDiscount: cart.prepaidDiscount,
+        codCharge: cart.codCharge,
         shipping: cart.shipping,
         finalAmount: cart.finalAmount,
       },

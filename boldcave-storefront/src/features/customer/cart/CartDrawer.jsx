@@ -34,32 +34,6 @@ const formatPrice = (value) =>
 
 const formatRupees = (value) => `₹${formatPrice(value)}`;
 
-function getPrepaidTeaser(settings = {}, couponDiscount = 0) {
-  if (
-    settings?.enabled === false ||
-    Number(settings?.discountValue || 0) <= 0
-  ) {
-    return "";
-  }
-
-  if (
-    settings?.allowCouponStacking === false &&
-    Number(couponDiscount || 0) > 0
-  ) {
-    return "Online payment offer available at checkout";
-  }
-
-  if (settings?.discountType === "fixed") {
-    return `Save up to ${formatRupees(
-      settings.discountValue,
-    )} when you pay online`;
-  }
-
-  return `Save ${Number(
-    settings.discountValue || 0,
-  ).toLocaleString("en-IN")}% when you pay online`;
-}
-
 function getVisualViewportBottom() {
   if (typeof window === "undefined") return null;
 
@@ -123,7 +97,6 @@ export default function CartDrawer({ isOpen, onClose }) {
 
   const {
     acceptingOrders,
-    prepaidDiscount: prepaidDiscountSettings,
     refreshStoreSettings,
   } = useStoreSettings();
 
@@ -159,12 +132,6 @@ export default function CartDrawer({ isOpen, onClose }) {
     Math.max(
       0,
       Number(discount) || 0,
-    );
-
-  const prepaidTeaser =
-    getPrepaidTeaser(
-      prepaidDiscountSettings,
-      discount,
     );
 
   const isResolving =
@@ -707,21 +674,6 @@ export default function CartDrawer({ isOpen, onClose }) {
                       </span>
                     </div>
                   </div>
-                </div>
-              )}
-
-              {prepaidTeaser && (
-                <div className="mb-3 border-t border-neutral-200 px-2 pt-3 text-[11px] leading-4 text-neutral-600">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-950">
-                    Online payment
-                    offer
-                  </p>
-
-                  <p className="mt-1 text-neutral-700">
-                    {
-                      prepaidTeaser
-                    }
-                  </p>
                 </div>
               )}
 

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Banknote,
   CheckCircle2,
   ChevronRight,
   IndianRupee,
@@ -24,11 +25,10 @@ const RANGE_OPTIONS = [
   { label: 'Last 30 days', value: '30d' },
 ];
 
-const DEFAULT_PREPAID_DISCOUNT = {
-  enabled: true,
-  discountType: 'percentage',
-  discountValue: 10,
-  allowCouponStacking: true,
+const DEFAULT_COD_CHARGE = {
+  enabled: false,
+  chargeType: 'fixed',
+  chargeValue: 0,
 };
 
 const STATUS_META = {
@@ -193,24 +193,24 @@ const Dashboard = () => {
     }
   };
 
-  const savePrepaidDiscount = async (prepaidDiscount) => {
+  const saveCodCharge = async (codCharge) => {
     try {
       setStoreSettingsSaving(true);
       const response = await api.patch('/api/admin/store-settings', {
-        prepaidDiscount,
+        codCharge,
       });
 
       setDashboard((current) => ({
         ...current,
         storeSettings: response.data.data || {
           ...(current?.storeSettings || {}),
-          prepaidDiscount,
+          codCharge,
         },
       }));
 
-      showSuccess('Prepaid offer updated.');
+      showSuccess('COD charges updated.');
     } catch (error) {
-      const message = getErrorMessage(error, 'Unable to update prepaid offer');
+      const message = getErrorMessage(error, 'Unable to update COD charges');
       showError(message);
     } finally {
       setStoreSettingsSaving(false);
@@ -310,10 +310,10 @@ const Dashboard = () => {
           saving={storeSettingsSaving}
           onToggle={toggleComingSoonMode}
         />
-        <PrepaidOfferCard
-          prepaidDiscount={dashboard.storeSettings?.prepaidDiscount}
+        <CodChargeCard
+          codCharge={dashboard.storeSettings?.codCharge}
           saving={storeSettingsSaving}
-          onSave={savePrepaidDiscount}
+          onSave={saveCodCharge}
         />
       </section>
 
@@ -463,27 +463,26 @@ function ComingSoonModeCard({ comingSoonMode, saving, onToggle }) {
   );
 }
 
-function PrepaidOfferCard({ prepaidDiscount, saving, onSave }) {
+function CodChargeCard({ codCharge, saving, onSave }) {
   const normalized = {
-    ...DEFAULT_PREPAID_DISCOUNT,
-    ...(prepaidDiscount || {}),
+    ...DEFAULT_COD_CHARGE,
+    ...(codCharge || {}),
   };
   const [draft, setDraft] = useState(normalized);
 
   useEffect(() => {
     setDraft({
-      ...DEFAULT_PREPAID_DISCOUNT,
-      ...(prepaidDiscount || {}),
+      ...DEFAULT_COD_CHARGE,
+      ...(codCharge || {}),
     });
-  }, [prepaidDiscount]);
+  }, [codCharge]);
 
   const submit = (event) => {
     event.preventDefault();
     onSave({
       enabled: Boolean(draft.enabled),
-      discountType: draft.discountType === 'fixed' ? 'fixed' : 'percentage',
-      discountValue: Number(draft.discountValue) || 0,
-      allowCouponStacking: Boolean(draft.allowCouponStacking),
+      chargeType: draft.chargeType === 'percentage' ? 'percentage' : 'fixed',
+      chargeValue: Number(draft.chargeValue) || 0,
     });
   };
 
@@ -493,12 +492,12 @@ function PrepaidOfferCard({ prepaidDiscount, saving, onSave }) {
         <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
           <div className='flex items-start gap-3'>
             <span className='flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-slate-100 text-slate-700'>
-              <TicketPercent size={19} strokeWidth={1.8} />
+              <Banknote size={19} strokeWidth={1.8} />
             </span>
             <div>
-              <p className='text-sm font-semibold text-slate-950'>Prepaid offer</p>
+              <p className='text-sm font-semibold text-slate-950'>COD charges</p>
               <p className='mt-1 text-xs text-slate-500'>
-                Controls the automatic online-payment discount used at checkout.
+                Adds the configured fee when Cash on Delivery is selected.
               </p>
             </div>
           </div>
@@ -515,8 +514,8 @@ function PrepaidOfferCard({ prepaidDiscount, saving, onSave }) {
 
         <div className='grid gap-3 sm:grid-cols-[1fr_120px]'>
           <select
-            value={draft.discountType}
-            onChange={(event) => setDraft((current) => ({ ...current, discountType: event.target.value }))}
+            value={draft.chargeType}
+            onChange={(event) => setDraft((current) => ({ ...current, chargeType: event.target.value }))}
             className='h-10 rounded-[8px] border border-slate-200 px-3 text-sm outline-none focus:border-slate-950'
           >
             <option value='percentage'>Percentage</option>
@@ -526,28 +525,19 @@ function PrepaidOfferCard({ prepaidDiscount, saving, onSave }) {
             type='number'
             min='0'
             step='0.01'
-            value={draft.discountValue}
-            onChange={(event) => setDraft((current) => ({ ...current, discountValue: event.target.value }))}
+            value={draft.chargeValue}
+            onChange={(event) => setDraft((current) => ({ ...current, chargeValue: event.target.value }))}
             className='h-10 rounded-[8px] border border-slate-200 px-3 text-sm outline-none focus:border-slate-950'
           />
         </div>
 
-        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-          <label className='inline-flex items-center gap-2 text-xs font-medium text-slate-600'>
-            <input
-              type='checkbox'
-              checked={draft.allowCouponStacking}
-              onChange={(event) => setDraft((current) => ({ ...current, allowCouponStacking: event.target.checked }))}
-            />
-            Allow coupon stacking
-          </label>
-
+        <div className='flex justify-end'>
           <button
             type='submit'
             disabled={saving}
             className='h-9 cursor-pointer rounded-[8px] bg-slate-950 px-4 text-xs font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60'
           >
-            {saving ? 'Saving...' : 'Save offer'}
+            {saving ? 'Saving...' : 'Save COD charges'}
           </button>
         </div>
       </form>

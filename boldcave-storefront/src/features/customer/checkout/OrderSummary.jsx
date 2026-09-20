@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, ShoppingCart } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Minus,
+  Plus,
+  ShoppingCart,
+  Trash2,
+} from "lucide-react";
 import { getVariantProductImageUrl } from "@/lib/clientApi";
 import CheckoutSheet from "@/features/customer/checkout/CheckoutSheet";
 
@@ -21,10 +28,12 @@ export default function OrderSummary({
   items,
   subtotal,
   discount,
-  prepaidDiscount = 0,
+  codCharge = 0,
   total,
   couponCode,
   shipping = null,
+  onUpdateQuantity,
+  onRemoveItem,
 }) {
   const [priceDetailsOpen, setPriceDetailsOpen] = useState(false);
 
@@ -45,9 +54,9 @@ export default function OrderSummary({
 
   const mrpDiscount = Math.max(0, mrpTotal - subtotal);
   const couponDiscount = Math.max(0, Number(discount) || 0);
-  const onlinePaymentDiscount = Math.max(
+  const appliedCodCharge = Math.max(
     0,
-    Number(prepaidDiscount) || 0
+    Number(codCharge) || 0
   );
   const shippingNumber =
     typeof shipping === "number" ? Math.max(0, shipping) : null;
@@ -89,6 +98,7 @@ export default function OrderSummary({
               const mrp = Number(variant.mrp) || selling;
               const lineSelling = selling * quantity;
               const lineMrp = mrp * quantity;
+              const stock = Math.max(0, Number(variant.stock) || 0);
               const isCombo = product.productType === "combo";
               const includesText = isCombo
                 ? (product.comboItems || []).map((entry) => entry.name).filter(Boolean).join(", ")
@@ -97,7 +107,7 @@ export default function OrderSummary({
               return (
                 <div
                   key={`${productId}-${size}`}
-                  className="grid grid-cols-[76px_minmax(0,1fr)_auto] gap-3 border-b border-[#e2e6ea] py-3.5"
+                  className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 border-b border-[#e2e6ea] py-3.5"
                 >
                   <div className="h-[76px] w-[76px] overflow-hidden rounded-[9px] border border-[#e0e4e8] bg-[#fafafa]">
                     <img
@@ -108,31 +118,80 @@ export default function OrderSummary({
                   </div>
 
                   <div className="min-w-0 pt-0.5">
-                    <p className="truncate text-[14px] font-medium">
-                      {product.name}{" "}
-                      <span className="font-normal text-[#65717e]">
-                        ({isCombo ? "Combo" : size})
-                      </span>
-                    </p>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="min-w-0 truncate text-[14px] font-medium">
+                        {product.name}{" "}
+                        <span className="font-normal text-[#65717e]">
+                          ({isCombo ? "Combo" : size})
+                        </span>
+                      </p>
+
+                      <div className="shrink-0 text-right">
+                        {lineMrp > lineSelling && (
+                          <p className="text-[11px] text-[#6d7781] line-through">
+                            {money(lineMrp)}
+                          </p>
+                        )}
+                        <p className="mt-0.5 text-[14px] font-medium">
+                          {money(lineSelling)}
+                        </p>
+                      </div>
+                    </div>
+
                     {includesText && (
                       <p className="mt-1 text-[11px] leading-4 text-[#65717e]">
                         Includes {includesText}
                       </p>
                     )}
-                    <p className="mt-1 text-[12px] text-[#526173]">
-                      Qty: {quantity}
-                    </p>
-                  </div>
 
-                  <div className="pt-0.5 text-right">
-                    {lineMrp > lineSelling && (
-                      <p className="text-[11px] text-[#6d7781] line-through">
-                        {money(lineMrp)}
-                      </p>
-                    )}
-                    <p className="mt-0.5 text-[14px] font-medium">
-                      {money(lineSelling)}
-                    </p>
+                    <div className="mt-2.5 flex items-center justify-between gap-3">
+                      <div className="inline-grid h-8 grid-cols-[30px_34px_30px] overflow-hidden rounded-[3px] border border-[#aeb7c1] bg-white">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onUpdateQuantity?.(
+                              productId,
+                              size,
+                              quantity - 1
+                            )
+                          }
+                          disabled={quantity <= 1}
+                          aria-label={`Decrease ${product.name} quantity`}
+                          className="flex cursor-pointer items-center justify-center border-r border-[#cbd1d7] transition-colors hover:bg-[#f5f6f7] disabled:cursor-not-allowed disabled:text-[#bcc2c8] disabled:hover:bg-white"
+                        >
+                          <Minus className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        </button>
+
+                        <span className="flex items-center justify-center text-[12px] font-medium">
+                          {quantity}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onUpdateQuantity?.(
+                              productId,
+                              size,
+                              quantity + 1
+                            )
+                          }
+                          disabled={quantity >= stock}
+                          aria-label={`Increase ${product.name} quantity`}
+                          className="flex cursor-pointer items-center justify-center border-l border-[#cbd1d7] transition-colors hover:bg-[#f5f6f7] disabled:cursor-not-allowed disabled:text-[#bcc2c8] disabled:hover:bg-white"
+                        >
+                          <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => onRemoveItem?.(productId, size)}
+                        aria-label={`Remove ${product.name} from order`}
+                        className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center text-[#65717e] transition-colors hover:text-[#b42318]"
+                      >
+                        <Trash2 className="h-4 w-4" strokeWidth={1.6} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -184,11 +243,10 @@ export default function OrderSummary({
                 />
               )}
 
-              {onlinePaymentDiscount > 0 && (
+              {appliedCodCharge > 0 && (
                 <SummaryRow
-                  label="Online payment discount"
-                  value={`-${money(onlinePaymentDiscount)}`}
-                  positive
+                  label="COD charges"
+                  value={`+${money(appliedCodCharge)}`}
                 />
               )}
 

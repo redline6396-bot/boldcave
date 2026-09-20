@@ -5,11 +5,10 @@ const GLOBAL_STORE_SETTINGS_KEY = "global";
 const STORE_SETTINGS_CACHE_TTL_MS =
   60 * 1000;
 
-const DEFAULT_PREPAID_DISCOUNT = {
-  enabled: true,
-  discountType: "percentage",
-  discountValue: 10,
-  allowCouponStacking: true,
+const DEFAULT_COD_CHARGE = {
+  enabled: false,
+  chargeType: "fixed",
+  chargeValue: 0,
 };
 
 const cacheStore =
@@ -38,9 +37,9 @@ export function serializeStoreSettings(
     comingSoonMode:
       settings?.comingSoonMode === true,
 
-    prepaidDiscount:
-      serializePrepaidDiscountSettings(
-        settings?.prepaidDiscount,
+    codCharge:
+      serializeCodChargeSettings(
+        settings?.codCharge,
       ),
 
     updatedAt:
@@ -48,19 +47,19 @@ export function serializeStoreSettings(
   };
 }
 
-export function serializePrepaidDiscountSettings(
-  prepaidDiscount = {},
+export function serializeCodChargeSettings(
+  codCharge = {},
 ) {
-  const discountType =
-    prepaidDiscount?.discountType === "fixed"
-      ? "fixed"
-      : "percentage";
+  const chargeType =
+    codCharge?.chargeType === "percentage"
+      ? "percentage"
+      : "fixed";
 
   const rawValue = Number(
-    prepaidDiscount?.discountValue,
+    codCharge?.chargeValue,
   );
 
-  const discountValue =
+  const chargeValue =
     Number.isFinite(rawValue) &&
     rawValue > 0
       ? rawValue
@@ -68,18 +67,14 @@ export function serializePrepaidDiscountSettings(
 
   return {
     enabled:
-      prepaidDiscount?.enabled !== false,
+      codCharge?.enabled === true,
 
-    discountType,
+    chargeType,
 
-    discountValue:
-      discountType === "percentage"
-        ? Math.min(100, discountValue)
-        : discountValue,
-
-    allowCouponStacking:
-      prepaidDiscount?.allowCouponStacking !==
-      false,
+    chargeValue:
+      chargeType === "percentage"
+        ? Math.min(100, chargeValue)
+        : chargeValue,
   };
 }
 
@@ -95,8 +90,8 @@ export async function getStoreSettings({
         key: GLOBAL_STORE_SETTINGS_KEY,
         acceptingOrders: true,
         comingSoonMode: false,
-        prepaidDiscount:
-          DEFAULT_PREPAID_DISCOUNT,
+        codCharge:
+          DEFAULT_COD_CHARGE,
       },
     },
     {
@@ -146,7 +141,7 @@ export async function getSerializedStoreSettings({
 export async function updateStoreSettings({
   acceptingOrders,
   comingSoonMode,
-  prepaidDiscount,
+  codCharge,
   StoreSettingsModel = StoreSettings,
 } = {}) {
   const updates = {};
@@ -162,16 +157,16 @@ export async function updateStoreSettings({
   }
 
   if (
-    prepaidDiscount &&
-    typeof prepaidDiscount === "object"
+    codCharge &&
+    typeof codCharge === "object"
   ) {
-    const normalizedPrepaidDiscount =
-      serializePrepaidDiscountSettings(
-        prepaidDiscount,
+    const normalizedCodCharge =
+      serializeCodChargeSettings(
+        codCharge,
       );
 
-    updates.prepaidDiscount =
-      normalizedPrepaidDiscount;
+    updates.codCharge =
+      normalizedCodCharge;
   }
 
   const update = {
@@ -179,8 +174,8 @@ export async function updateStoreSettings({
       key: GLOBAL_STORE_SETTINGS_KEY,
       acceptingOrders: true,
       comingSoonMode: false,
-      prepaidDiscount:
-        DEFAULT_PREPAID_DISCOUNT,
+      codCharge:
+        DEFAULT_COD_CHARGE,
     },
   };
 

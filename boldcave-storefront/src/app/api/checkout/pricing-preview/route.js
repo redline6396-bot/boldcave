@@ -16,10 +16,9 @@ function serializePricing(result) {
   return {
     subtotal: result.subtotal,
     couponDiscount: result.discount,
-    prepaidDiscount: result.prepaidDiscount,
+    codCharge: result.codCharge,
     shipping: result.shipping,
     finalAmount: result.finalAmount,
-    discountWinner: result.discountWinner,
     coupon: result.coupon,
   };
 }
@@ -60,10 +59,10 @@ async function previewCheckoutPricingRoute(request) {
 
     return success(
       {
-        base: serializePricing(codResult),
+        base: serializePricing(onlineResult),
         cod: serializePricing(codResult),
         online: serializePricing(onlineResult),
-        prepaidDiscountSettings: onlineResult.prepaidDiscountSettings,
+        codChargeSettings: codResult.codChargeSettings,
       },
       200,
       { headers: noStoreHeaders }

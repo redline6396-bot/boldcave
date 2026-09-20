@@ -502,6 +502,34 @@ export default function MainNavbar() {
     router.push("/orders");
   }, [router]);
 
+  const navigateFromCheckout = useCallback(
+    (href) => {
+      setIsCheckoutOpen(false);
+      setIsCartDrawerOpen(false);
+
+      if (
+        checkoutHistoryActiveRef.current &&
+        shouldUseMobileCheckoutHistory() &&
+        window.history.state?.[CHECKOUT_HISTORY_KEY]
+      ) {
+        ignoreCheckoutPopRef.current = true;
+        checkoutHistoryActiveRef.current = false;
+        window.addEventListener(
+          "popstate",
+          () => router.push(href),
+          { once: true }
+        );
+        window.history.back();
+        return;
+      }
+
+      checkoutHistoryActiveRef.current = false;
+      clearCheckoutHistoryMarker();
+      router.push(href);
+    },
+    [router]
+  );
+
   useEffect(() => {
     window.addEventListener(OPEN_CART_DRAWER_EVENT, openCartDrawer);
     window.addEventListener(OPEN_CHECKOUT_EVENT, openCheckout);
@@ -667,6 +695,7 @@ export default function MainNavbar() {
         <CheckoutPage
           onClose={closeCheckout}
           onSuccess={handleCheckoutSuccess}
+          onNavigate={navigateFromCheckout}
         />
       )}
     </div>

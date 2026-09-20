@@ -35,7 +35,7 @@ import {
   verifyPhoneOtp,
   verifyRazorpayCheckout,
 } from "@/lib/clientApi";
-import { calculateDiscountBreakdown } from "@/lib/orders/paymentDiscounts";
+import { calculatePricingBreakdown } from "@/lib/orders/codCharges";
 import CouponSection from "@/features/customer/checkout/CouponSection";
 import DeliveryAddress, {
   emptyAddress,
@@ -228,7 +228,11 @@ function useCheckoutViewportHeight() {
   return height;
 }
 
-export default function CheckoutPage({ onClose, onSuccess } = {}) {
+export default function CheckoutPage({
+  onClose,
+  onSuccess,
+  onNavigate,
+} = {}) {
   const router = useRouter();
   const checkoutViewportHeight = useCheckoutViewportHeight();
   const {
@@ -255,7 +259,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   } = useCoupon();
   const {
     acceptingOrders,
-    prepaidDiscount: prepaidDiscountSettings,
+    codCharge: codChargeSettings,
     loading: storeSettingsLoading,
     refreshStoreSettings,
   } = useStoreSettings();
@@ -324,24 +328,24 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
   );
   const fallbackBasePricing = useMemo(() => {
     const couponDiscount = Math.max(0, Number(discount) || 0);
-    const discountBreakdown = calculateDiscountBreakdown({
+    const pricingBreakdown = calculatePricingBreakdown({
       subtotal,
       couponDiscount,
-      paymentMethod: "cod",
+      paymentMethod: "razorpay",
+      codChargeSettings,
     });
 
     return {
       subtotal,
-      couponDiscount: discountBreakdown.couponDiscount,
-      prepaidDiscount: 0,
+      couponDiscount: pricingBreakdown.couponDiscount,
+      codCharge: 0,
       shipping: 0,
-      finalAmount: discountBreakdown.finalAmount,
-      discountWinner: discountBreakdown.discountWinner,
-      coupon: discountBreakdown.couponDiscount > 0 && previewCouponCode
-        ? { code: previewCouponCode, discount: discountBreakdown.couponDiscount }
+      finalAmount: pricingBreakdown.finalAmount,
+      coupon: pricingBreakdown.couponDiscount > 0 && previewCouponCode
+        ? { code: previewCouponCode, discount: pricingBreakdown.couponDiscount }
         : { code: null, discount: 0 },
     };
-  }, [discount, previewCouponCode, subtotal]);
+  }, [codChargeSettings, discount, previewCouponCode, subtotal]);
   const basePricing = pricingPreview?.base || fallbackBasePricing;
   const codPricing = pricingPreview?.cod || basePricing;
   const onlinePricing = pricingPreview?.online || basePricing;
@@ -352,15 +356,11 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
         ? codPricing
         : basePricing;
   const couponDiscount = Math.max(0, Number(activePricing.couponDiscount) || 0);
-  const prepaidDiscount = Math.max(0, Number(activePricing.prepaidDiscount) || 0);
+  const codCharge = Math.max(0, Number(activePricing.codCharge) || 0);
   const total = Math.max(0, Number(activePricing.finalAmount) || 0);
   const couponCode = previewCouponCode;
-  const onlinePaymentSavings = Math.max(
-    0,
-    Number(codPricing.finalAmount || 0) - Number(onlinePricing.finalAmount || 0)
-  );
   const codBelowMinimum = !isCodOrderAmountEligible(
-    codPricing.finalAmount
+    Number(codPricing.finalAmount || 0) - Number(codPricing.codCharge || 0)
   );
 
   useEffect(() => {
@@ -416,7 +416,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     return sum + mrp * Number(item.quantity || 0);
   }, 0);
 
-  const totalSaved = Math.max(0, mrpTotal - total);
+  const totalSaved = Math.max(0, mrpTotal - subtotal + couponDiscount);
   const hasUnresolvedCart = cart.length > 0 && items.length === 0;
   const isEmpty = !hasUnresolvedCart && items.length === 0;
 
@@ -447,10 +447,6 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     revalidateCoupon({ paymentMethod: "cod" });
   }, [
     appliedCoupon?.code,
-    prepaidDiscountSettings?.allowCouponStacking,
-    prepaidDiscountSettings?.discountType,
-    prepaidDiscountSettings?.discountValue,
-    prepaidDiscountSettings?.enabled,
     revalidateCoupon,
     subtotal,
   ]);
@@ -1078,6 +1074,16 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
     setExitConfirmOpen(true);
   }, [otpOpen, phoneVerified]);
 
+  const handleCheckoutLinkClick = useCallback(
+    (event) => {
+      if (!onNavigate) return;
+
+      event.preventDefault();
+      onNavigate(event.currentTarget.getAttribute("href"));
+    },
+    [onNavigate]
+  );
+
   const completeSuccess = useCallback(() => {
     clearCart();
     removeCoupon();
@@ -1466,13 +1472,24 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
               </span>
             </button>
 
-            <span className="flex items-center gap-1.5 text-[12px] text-[#405064]">
-              Secure Payment
-              <LockKeyhole
-                className="h-3.5 w-3.5"
-                strokeWidth={1.7}
-              />
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="hidden items-center gap-1.5 text-[12px] text-[#405064] min-[360px]:flex">
+                Secure Payment
+                <LockKeyhole
+                  className="h-3.5 w-3.5"
+                  strokeWidth={1.7}
+                />
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setExitConfirmOpen(true)}
+                aria-label="Leave checkout"
+                className="flex h-9 w-9 cursor-pointer items-center justify-center text-[#263443] transition-opacity hover:opacity-60 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#263443]"
+              >
+                <X className="h-5 w-5" strokeWidth={1.7} />
+              </button>
+            </div>
           </header>
 
           <div className="checkout-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3.5 py-4 sm:px-4">
@@ -1598,6 +1615,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                   payment, fulfilment and delivery.{" "}
                   <Link
                     href="/privacy"
+                    onClick={handleCheckoutLinkClick}
                     className="font-medium text-[#263443] underline underline-offset-2"
                   >
                     Privacy Policy
@@ -1636,14 +1654,6 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                     maxVisibleOffers={2}
                     collapsible
                     activeDiscount={couponDiscount}
-                    inactiveAppliedText={
-                      paymentMethod === "razorpay" &&
-                      appliedCoupon?.code &&
-                      couponDiscount <= 0 &&
-                      prepaidDiscount > 0
-                        ? "Better online offer applied"
-                        : ""
-                    }
                   />
                 </div>
 
@@ -1677,11 +1687,10 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
                             : undefined
                         }
                         disabled={submitting}
-                        prepaidDiscountSettings={prepaidDiscountSettings}
                         onlineAmount={onlinePricing.finalAmount}
                         codAmount={codPricing.finalAmount}
+                        codCharge={codPricing.codCharge}
                         codBelowMinimum={codBelowMinimum}
-                        onlineSavings={onlinePaymentSavings}
                         loading={pricingPreviewLoading && !pricingPreview}
                       />
                     )}
@@ -1764,6 +1773,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
               By proceeding, I agree to the{" "}
               <Link
                 href="/privacy"
+                onClick={handleCheckoutLinkClick}
                 className="text-[#263443] underline underline-offset-2"
               >
                 Privacy Policy
@@ -1771,6 +1781,7 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
               and{" "}
               <Link
                 href="/terms"
+                onClick={handleCheckoutLinkClick}
                 className="text-[#263443] underline underline-offset-2"
               >
                 T&amp;C
@@ -1786,10 +1797,12 @@ export default function CheckoutPage({ onClose, onSuccess } = {}) {
         items={items}
         subtotal={subtotal}
         discount={couponDiscount}
-        prepaidDiscount={prepaidDiscount}
+        codCharge={codCharge}
         total={total}
         couponCode={couponCode}
         shipping={0}
+        onUpdateQuantity={updateQuantity}
+        onRemoveItem={removeFromCart}
       />
 
       {otpOpen && (

@@ -13,11 +13,11 @@ import {
 } from "@/lib/validation";
 import { clearProductCache } from "@/lib/productCache";
 import {
-  calculateDiscountBreakdown,
-} from "@/lib/orders/paymentDiscounts";
+  calculatePricingBreakdown,
+} from "@/lib/orders/codCharges";
 import {
   getStoreSettings,
-  serializePrepaidDiscountSettings,
+  serializeCodChargeSettings,
 } from "@/lib/storeSettings";
 import {
   COMBO_VARIANT_SIZE,
@@ -680,30 +680,29 @@ export async function calculateCart({
 
   const shipping = SHIPPING_AMOUNT;
   const storeSettings = await getStoreSettings();
-  const prepaidDiscountSettings = serializePrepaidDiscountSettings(
-    storeSettings?.prepaidDiscount
+  const codChargeSettings = serializeCodChargeSettings(
+    storeSettings?.codCharge
   );
-  const discountBreakdown = calculateDiscountBreakdown({
+  const pricingBreakdown = calculatePricingBreakdown({
     subtotal,
     couponDiscount: couponResult.discount || 0,
     shipping,
     paymentMethod,
-    prepaidDiscountSettings,
+    codChargeSettings,
   });
-  const discount = discountBreakdown.couponDiscount;
-  const prepaidDiscount = discountBreakdown.prepaidDiscount;
-  const finalAmount = discountBreakdown.finalAmount;
+  const discount = pricingBreakdown.couponDiscount;
+  const codCharge = pricingBreakdown.codCharge;
+  const finalAmount = pricingBreakdown.finalAmount;
   const couponApplied = Boolean(couponResult.code && discount > 0);
 
   return {
     items: normalizedItems.map(({ lineTotal, ...item }) => item),
     subtotal,
     discount,
-    prepaidDiscount,
+    codCharge,
     shipping,
     finalAmount,
-    discountWinner: discountBreakdown.discountWinner,
-    prepaidDiscountSettings,
+    codChargeSettings,
     coupon: couponApplied
       ? {
           couponId: couponResult.couponId,

@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { fetchStoreSettings } from "@/lib/clientApi";
-import { DEFAULT_PREPAID_DISCOUNT_SETTINGS } from "@/lib/orders/paymentDiscounts";
+import { DEFAULT_COD_CHARGE_SETTINGS } from "@/lib/orders/codCharges";
 
 const StoreSettingsContext = createContext(null);
 const SETTINGS_STALE_AFTER_MS = 5 * 60 * 1000;
@@ -17,8 +17,8 @@ const SETTINGS_STALE_AFTER_MS = 5 * 60 * 1000;
 const normalizeStoreSettings = (settings) => ({
   acceptingOrders: settings?.acceptingOrders !== false,
   comingSoonMode: settings?.comingSoonMode === true,
-  prepaidDiscount:
-    settings?.prepaidDiscount || DEFAULT_PREPAID_DISCOUNT_SETTINGS,
+  codCharge:
+    settings?.codCharge || DEFAULT_COD_CHARGE_SETTINGS,
   updatedAt: settings?.updatedAt || null,
 });
 

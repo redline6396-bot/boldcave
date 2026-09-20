@@ -24,15 +24,14 @@ const storeSettingsSchema = new mongoose.Schema(
       enum: ["test", "live"],
       default: "live",
     },
-    prepaidDiscount: {
-      enabled: { type: Boolean, default: true },
-      discountType: {
+    codCharge: {
+      enabled: { type: Boolean, default: false },
+      chargeType: {
         type: String,
-        enum: ["percentage", "fixed"],
-        default: "percentage",
+        enum: ["fixed", "percentage"],
+        default: "fixed",
       },
-      discountValue: { type: Number, default: 10, min: 0 },
-      allowCouponStacking: { type: Boolean, default: true },
+      chargeValue: { type: Number, default: 0, min: 0 },
     },
     delhiveryPickup: {
       autoPickupEnabled: { type: Boolean, default: false },
@@ -62,7 +61,7 @@ const storeSettingsSchema = new mongoose.Schema(
 
 if (
   mongoose.models.StoreSettings &&
-  (!mongoose.models.StoreSettings.schema?.path("prepaidDiscount.enabled") ||
+  (!mongoose.models.StoreSettings.schema?.path("codCharge.enabled") ||
     !mongoose.models.StoreSettings.schema?.path("comingSoonMode") ||
     !mongoose.models.StoreSettings.schema?.path("delhiveryPickup.autoPickupEnabled") ||
     !mongoose.models.StoreSettings.schema?.path("delhiveryPickup.cancelledAt"))

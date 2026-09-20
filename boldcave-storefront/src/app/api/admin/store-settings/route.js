@@ -54,8 +54,8 @@ async function updateAdminStoreSettingsRoute(request) {
       ...(body.comingSoonMode !== undefined
         ? { comingSoonMode: body.comingSoonMode === true }
         : {}),
-      ...(body.prepaidDiscount !== undefined
-        ? { prepaidDiscount: body.prepaidDiscount }
+      ...(body.codCharge !== undefined
+        ? { codCharge: body.codCharge }
         : {}),
     });
 
