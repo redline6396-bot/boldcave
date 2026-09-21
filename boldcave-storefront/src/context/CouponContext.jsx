@@ -14,7 +14,26 @@ const cartPayload = (cart) =>
     quantity,
   }));
 
-function getCustomerCouponError(error) {
+const formatRupees = (value) =>
+  new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(Math.max(0, Number(value) || 0));
+
+function getCustomerCouponError(error, fallbackCode = "") {
+  if (error?.code === "COUPON_MINIMUM_ORDER") {
+    const couponName = String(
+      error?.details?.couponCode || fallbackCode || "this coupon"
+    ).trim().toUpperCase();
+    const amountRemaining = Number(error?.details?.amountRemaining);
+
+    if (Number.isFinite(amountRemaining) && amountRemaining > 0) {
+      return `Add items worth \u20B9${formatRupees(amountRemaining)} more to use ${couponName}.`;
+    }
+
+    return `Add more items to your cart to use ${couponName}.`;
+  }
+
   if (error?.code === "COUPON_FIRST_ORDER_ONLY") {
     return "This offer is only valid on your first order.";
   }
@@ -100,11 +119,13 @@ export default function CouponProvider({ children }) {
 
         return result;
       } catch (couponError) {
+        setCouponCode("");
         setAppliedCoupon(null);
         setDiscount(0);
         setServerSubtotal(0);
         setServerTotal(0);
-        setError(getCustomerCouponError(couponError));
+        setMessage("");
+        setError(getCustomerCouponError(couponError, code));
         return null;
       } finally {
         setValidating(false);

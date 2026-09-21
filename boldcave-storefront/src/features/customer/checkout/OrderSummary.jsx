@@ -11,6 +11,10 @@ import {
 } from "lucide-react";
 import { getVariantProductImageUrl } from "@/lib/clientApi";
 import CheckoutSheet from "@/features/customer/checkout/CheckoutSheet";
+import {
+  getCloudinaryImageUrl,
+  getCloudinarySrcSet,
+} from "@/lib/cloudinary/images";
 
 const FALLBACK_IMAGE =
   "https://upload.wikimedia.org/wikipedia/commons/a/a3/Image-not-found.png";
@@ -89,7 +93,7 @@ export default function OrderSummary({
 
         <div className="summary-scroll max-h-[36svh] min-h-0 overflow-y-auto px-4 sm:max-h-none sm:flex-1 sm:px-5">
           {items.map(
-            ({ productId, size, quantity, product, variant }) => {
+            ({ productId, size, quantity, product, variant }, index) => {
               const image =
                 getVariantProductImageUrl(product, variant) ||
                 FALLBACK_IMAGE;
@@ -111,9 +115,17 @@ export default function OrderSummary({
                 >
                   <div className="h-[76px] w-[76px] overflow-hidden rounded-[9px] border border-[#e0e4e8] bg-[#fafafa]">
                     <img
-                      src={image}
+                      src={getCloudinaryImageUrl(image, { width: 180 })}
+                      srcSet={
+                        getCloudinarySrcSet(image, [120, 180, 240]) ||
+                        undefined
+                      }
+                      sizes="76px"
                       alt={product.name}
                       className="h-full w-full object-contain"
+                      loading="eager"
+                      fetchPriority={index === 0 ? "high" : "auto"}
+                      decoding="async"
                     />
                   </div>
 

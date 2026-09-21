@@ -153,11 +153,19 @@ export async function calculateCouponDiscount(
   }
 
   if (subtotal < coupon.minimumOrder) {
+    const minimumOrder = Number(coupon.minimumOrder) || 0;
+
     return {
       error: {
         code: "COUPON_MINIMUM_ORDER",
-        message: `Minimum order amount of Rs ${coupon.minimumOrder} is required`,
+        message: `Minimum order amount of Rs ${minimumOrder} is required`,
         status: 422,
+        details: {
+          couponCode: coupon.code,
+          minimumOrder,
+          subtotal,
+          amountRemaining: Math.max(0, minimumOrder - subtotal),
+        },
       },
     };
   }

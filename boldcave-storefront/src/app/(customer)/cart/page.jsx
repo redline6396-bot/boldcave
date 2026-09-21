@@ -7,6 +7,10 @@ import { useCoupon } from "@/context/CouponContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { getVariantProductImageUrl } from "@/lib/clientApi";
 import { requestCheckoutOpen } from "@/lib/cartEvents";
+import {
+  getCloudinaryImageUrl,
+  getCloudinarySrcSet,
+} from "@/lib/cloudinary/images";
 
 const FALLBACK_IMAGE =
   "https://upload.wikimedia.org/wikipedia/commons/a/a3/Image-not-found.png";
@@ -83,7 +87,7 @@ export default function CartPage() {
         ) : (
           <div className="mt-7 grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
             <section className="space-y-4">
-              {items.map(({ productId, size, quantity, product, variant }) => {
+              {items.map(({ productId, size, quantity, product, variant }, index) => {
                 const image = getVariantProductImageUrl(product, variant) || FALLBACK_IMAGE;
                 const stock = Number(variant.stock) || 0;
 
@@ -96,7 +100,16 @@ export default function CartPage() {
                       href={`/product/${product.slug}`}
                       className="aspect-square border border-neutral-200 bg-neutral-50"
                     >
-                      <img src={image} alt={product.name} className="h-full w-full object-contain" />
+                      <img
+                        src={getCloudinaryImageUrl(image, { width: 224 })}
+                        srcSet={getCloudinarySrcSet(image, [168, 224, 336]) || undefined}
+                        sizes="(min-width: 640px) 112px, 84px"
+                        alt={product.name}
+                        className="h-full w-full object-contain"
+                        loading="eager"
+                        fetchPriority={index === 0 ? "high" : "auto"}
+                        decoding="async"
+                      />
                     </Link>
                     <div className="min-w-0">
                       <div className="flex items-start justify-between gap-4">

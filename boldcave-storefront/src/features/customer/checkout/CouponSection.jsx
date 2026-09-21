@@ -47,6 +47,13 @@ const getFriendlyCouponError = (value) => {
   const text = raw.toLowerCase();
 
   if (
+    text.startsWith("add items worth") ||
+    text.startsWith("add more items")
+  ) {
+    return raw;
+  }
+
+  if (
     text.includes("enter a coupon") ||
     text.includes("coupon code is required") ||
     text.includes("coupon code required")
@@ -198,6 +205,12 @@ export default function CouponSection({
   /* =====================================================
      FEEDBACK AUTO-HIDE
   ===================================================== */
+
+  useEffect(() => {
+    if (error) {
+      setShowLocalFeedback(true);
+    }
+  }, [error]);
 
   useEffect(() => {
     if (!showLocalFeedback) {
@@ -379,6 +392,7 @@ export default function CouponSection({
 
     if (
       !code ||
+      coupon.eligible === false ||
       disabled ||
       validating
     ) {
@@ -438,8 +452,7 @@ export default function CouponSection({
     }
 
     return `${money(
-      coupon.discount ??
-        coupon.discountValue,
+      coupon.discountValue,
     )} off on ${orderLabel}`;
   };
 
@@ -502,8 +515,22 @@ export default function CouponSection({
   const hasFeedbackError =
     Boolean(localActionError) ||
     Boolean(error);
+
+  const feedbackShownInOffer =
+    availableOffersExpanded &&
+    showEligibleOffers &&
+    visibleEligibleCoupons.some(
+      (coupon) =>
+        coupon.eligible === false &&
+        String(coupon.eligibilityMessage || "").trim() ===
+          String(feedbackText || "").trim(),
+    );
+
   const visibleFieldFeedback =
-    !applied && showLocalFeedback && feedbackText
+    !applied &&
+    showLocalFeedback &&
+    feedbackText &&
+    !feedbackShownInOffer
       ? feedbackText
       : "";
 
@@ -607,6 +634,13 @@ export default function CouponSection({
                                 Login to apply this offer
                               </p>
                             )}
+
+                          {coupon.eligible === false &&
+                            coupon.eligibilityMessage && (
+                              <p className="mt-0.5 text-[10px] font-medium leading-4 text-[#8b3a32]">
+                                {coupon.eligibilityMessage}
+                              </p>
+                            )}
                         </div>
 
                         {/* APPLY */}
@@ -619,6 +653,7 @@ export default function CouponSection({
                             )
                           }
                           disabled={
+                            coupon.eligible === false ||
                             disabled ||
                             validating
                           }
@@ -730,20 +765,6 @@ export default function CouponSection({
       ================================================= */}
 
       <div>
-        {visibleFieldFeedback && (
-          <p
-            className={[
-              "mb-2 px-1 text-left text-[10.5px] font-medium leading-4",
-              hasFeedbackError
-                ? "text-[#b42318]"
-                : "text-[#66717e]",
-            ].join(" ")}
-            aria-live="polite"
-          >
-            {visibleFieldFeedback}
-          </p>
-        )}
-
         <div
           className={[
             "flex h-11 min-w-0 max-w-full overflow-hidden rounded-[10px] border bg-white transition-[border-color,box-shadow] sm:h-12",
@@ -845,6 +866,20 @@ export default function CouponSection({
           </button>
         )}
         </div>
+
+        {visibleFieldFeedback && (
+          <p
+            className={[
+              "mt-2 px-1 text-left text-[10.5px] font-medium leading-4",
+              hasFeedbackError
+                ? "text-[#b42318]"
+                : "text-[#66717e]",
+            ].join(" ")}
+            aria-live="polite"
+          >
+            {visibleFieldFeedback}
+          </p>
+        )}
       </div>
 
     </section>

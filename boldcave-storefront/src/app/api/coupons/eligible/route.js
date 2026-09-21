@@ -35,7 +35,11 @@ function normalizeOptionalLimit(value) {
   return Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : null;
 }
 
-function serializeEligibleCoupon(coupon, discount) {
+function serializeEligibleCoupon(
+  coupon,
+  discount,
+  { eligible = true, eligibilityMessage = "" } = {}
+) {
   const usageLimit = normalizeOptionalLimit(coupon.usageLimit);
   const perCustomerLimit = normalizeOptionalLimit(coupon.perCustomerLimit);
 
@@ -57,6 +61,8 @@ function serializeEligibleCoupon(coupon, discount) {
     ),
     selectedCustomersOnly: false,
     discount,
+    eligible,
+    eligibilityMessage,
   };
 }
 
@@ -107,8 +113,7 @@ async function getEligibleCouponsRoute(request) {
       .sort({
         discountValue: -1,
         createdAt: -1,
-      })
-      .limit(50);
+      });
 
     const firstOrderEligible = userId
       ? !(await hasPreviousOrder(userId))
@@ -148,11 +153,17 @@ async function getEligibleCouponsRoute(request) {
           usageLimit !== null &&
           Number(coupon.usedCount || 0) >= usageLimit
         ) {
-          return null;
+          return serializeEligibleCoupon(coupon, 0, {
+            eligible: false,
+            eligibilityMessage: "This offer has reached its usage limit.",
+          });
         }
 
         if (userId && coupon.firstOrderOnly && !firstOrderEligible) {
-          return null;
+          return serializeEligibleCoupon(coupon, 0, {
+            eligible: false,
+            eligibilityMessage: "This offer is available on first orders only.",
+          });
         }
 
         if (
@@ -160,7 +171,10 @@ async function getEligibleCouponsRoute(request) {
           perCustomerLimit !== null &&
           (usageCounts.get(String(coupon._id)) || 0) >= perCustomerLimit
         ) {
-          return null;
+          return serializeEligibleCoupon(coupon, 0, {
+            eligible: false,
+            eligibilityMessage: "You have already used this offer.",
+          });
         }
 
         const discount = getDisplayDiscount(
@@ -168,13 +182,25 @@ async function getEligibleCouponsRoute(request) {
           subtotal
         );
 
+        const amountRemaining = Math.max(
+          0,
+          Number(coupon.minimumOrder) - subtotal
+        );
+
         return serializeEligibleCoupon(
           coupon,
-          discount
+          discount,
+          amountRemaining > 0
+            ? {
+                eligible: false,
+                eligibilityMessage: `Add items worth \u20B9${new Intl.NumberFormat(
+                  "en-IN",
+                  { maximumFractionDigits: 2 }
+                ).format(amountRemaining)} more to use ${coupon.code}.`,
+              }
+            : { eligible: true }
         );
-      })
-      .filter((coupon) => coupon?.discount > 0)
-      .slice(0, 12);
+      });
 
     return success(
       { coupons: visibleCoupons },

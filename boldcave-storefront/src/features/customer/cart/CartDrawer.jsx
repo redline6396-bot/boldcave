@@ -359,7 +359,8 @@ export default function CartDrawer({ isOpen, onClose }) {
                           sizes="88px"
                           alt={product.name}
                           className="h-full w-full object-contain"
-                          loading="lazy"
+                          loading="eager"
+                          fetchPriority={index === 0 ? "high" : "auto"}
                           decoding="async"
                         />
                       </Link>
