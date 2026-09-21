@@ -230,6 +230,7 @@ function useCheckoutViewportHeight() {
 
 export default function CheckoutPage({
   onClose,
+  onEmpty,
   onSuccess,
   onNavigate,
 } = {}) {
@@ -1084,6 +1085,12 @@ export default function CheckoutPage({
     [onNavigate]
   );
 
+  useEffect(() => {
+    if (isEmpty && onEmpty) {
+      onEmpty();
+    }
+  }, [isEmpty, onEmpty]);
+
   const completeSuccess = useCallback(() => {
     clearCart();
     removeCoupon();
@@ -1422,6 +1429,10 @@ export default function CheckoutPage({
         </div>
       </div>
     );
+  }
+
+  if (isEmpty && onEmpty) {
+    return null;
   }
 
   if (isEmpty) {

@@ -453,6 +453,13 @@ export default function MainNavbar() {
 
   const openCheckout = useCallback(() => {
     setIsDrawerOpen(false);
+
+    if (cartCount <= 0) {
+      setIsCheckoutOpen(false);
+      setIsCartDrawerOpen(true);
+      return;
+    }
+
     setIsCartDrawerOpen(false);
 
     if (
@@ -474,7 +481,7 @@ export default function MainNavbar() {
     }
 
     setIsCheckoutOpen(true);
-  }, []);
+  }, [cartCount]);
 
   const closeCheckout = useCallback(() => {
     setIsCheckoutOpen(false);
@@ -501,6 +508,25 @@ export default function MainNavbar() {
     clearCheckoutHistoryMarker();
     router.push("/orders");
   }, [router]);
+
+  const returnToCartFromCheckout = useCallback(() => {
+    setIsCheckoutOpen(false);
+    setIsCartDrawerOpen(true);
+
+    if (
+      checkoutHistoryActiveRef.current &&
+      shouldUseMobileCheckoutHistory() &&
+      window.history.state?.[CHECKOUT_HISTORY_KEY]
+    ) {
+      ignoreCheckoutPopRef.current = true;
+      checkoutHistoryActiveRef.current = false;
+      window.history.back();
+      return;
+    }
+
+    checkoutHistoryActiveRef.current = false;
+    clearCheckoutHistoryMarker();
+  }, []);
 
   const navigateFromCheckout = useCallback(
     (href) => {
@@ -694,6 +720,7 @@ export default function MainNavbar() {
       {isCheckoutOpen && (
         <CheckoutPage
           onClose={closeCheckout}
+          onEmpty={returnToCartFromCheckout}
           onSuccess={handleCheckoutSuccess}
           onNavigate={navigateFromCheckout}
         />
