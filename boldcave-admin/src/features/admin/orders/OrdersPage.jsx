@@ -433,10 +433,12 @@ export default function OrdersPage() {
       setBusyId('sync-all-tracking');
       let syncedCount = 0;
       for (const order of orders) {
-        if (!['shipped', 'in_transit', 'out_for_delivery'].includes(order.orderStatus)) continue;
+        if (['delivered', 'cancelled'].includes(order.orderStatus)) continue;
         
         const id = getId(order);
-        if (order.shippingProvider === 'delhivery' && order.delhivery?.waybill) {
+        const shipping = getShippingSummary(order);
+        
+        if (shipping.provider === 'delhivery' && shipping.awbCode) {
           try {
             const response = await api.post(`/api/admin/orders/${id}/delhivery/tracking`);
             setOrders((current) => current.map((entry) => (getId(entry) === id ? response.data.data.order : entry)));

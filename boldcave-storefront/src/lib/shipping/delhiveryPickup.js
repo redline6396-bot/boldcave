@@ -489,6 +489,32 @@ export async function getDelhiveryPickupHistory({ limit = 100, state = "" } = {}
       updatedAt: current.cancelledAt || current.requestedAt || null,
     });
   }
+
+  const allOrderIds = pickups.flatMap((p) => (p.orders || []).map((o) => o.order));
+  const uniqueOrderIds = [...new Set(allOrderIds)].filter(Boolean);
+
+  if (uniqueOrderIds.length > 0) {
+    const currentOrders = await Order.find(
+      { _id: { $in: uniqueOrderIds } },
+      { orderStatus: 1 }
+    ).lean();
+
+    const currentStatusMap = {};
+    for (const co of currentOrders) {
+      currentStatusMap[co._id.toString()] = co.orderStatus;
+    }
+
+    for (const p of pickups) {
+      for (const o of p.orders || []) {
+        if (currentStatusMap[o.order]) {
+          o.currentOrderStatus = currentStatusMap[o.order];
+        } else {
+          o.currentOrderStatus = o.orderStatus;
+        }
+      }
+    }
+  }
+
   return {
     pickups,
     total: storedTotal + (includeCurrent ? 1 : 0),

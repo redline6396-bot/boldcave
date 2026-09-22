@@ -21,7 +21,7 @@ const navItems = [
   { path: '/list', icon: PackageSearch, label: 'Products' },
   { path: '/add', icon: PackagePlus, label: 'Add Product' },
   { path: '/orders', icon: ShoppingCart, label: 'Orders' },
-  { path: '/pickups', icon: CalendarClock, label: 'Pickups' },
+  { path: '/pickups', icon: CalendarClock, label: 'Shipping' },
   { path: '/users', icon: Users, label: 'Users' },
   { path: '/reviews', icon: Star, label: 'Reviews' },
   { path: '/coupon', icon: TicketPercent, label: 'Coupons' },

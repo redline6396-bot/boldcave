@@ -3,27 +3,18 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  CalendarClock,
+  ExternalLink,
   ChevronDown,
   ChevronUp,
-  ExternalLink,
-  History,
-  PackageCheck,
-  RefreshCw,
-  Search,
+  Copy,
+  AlertCircle
 } from 'lucide-react';
 import { NotificationContext } from '@/context/NotificationContext';
-import { api, formatDateTime, getErrorMessage, money } from '@/lib/api';
+import { api, getErrorMessage, money } from '@/lib/api';
 
 const ACTIVE_STATES = ['requesting', 'scheduled', 'needs_reconciliation'];
 const DELHIVERY_READY_TO_SHIP_URL = 'https://one.delhivery.com/orders/forward/ready-to-ship';
-const HISTORY_STATES = [
-  'scheduled',
-  'cancelled',
-  'failed',
-  'needs_reconciliation',
-  'no_ready_shipments',
-];
+const WAITING_ORDER_STATUSES = ['shipping_pending', 'confirmed', 'processing'];
 
 function displayValue(value) {
   return String(value || '-')
@@ -31,10 +22,15 @@ function displayValue(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function formatIstDateTime(value) {
-  const formatted = formatDateTime(value);
-  if (formatted === '-') return '-';
-  return `${formatted.replace(/\b(am|pm)\b/gi, (period) => period.toUpperCase())} IST`;
+function getIstDateInputValue(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function formatPickupDate(value) {
@@ -48,17 +44,6 @@ function formatPickupDate(value) {
     month: 'short',
     year: 'numeric',
   }).format(date);
-}
-
-function formatPickupTime(value) {
-  const match = /^(\d{2}):(\d{2})/.exec(String(value || ''));
-  if (!match) return '-';
-  const hour = Number(match[1]);
-  const minute = match[2];
-  if (!Number.isInteger(hour) || hour > 23) return '-';
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 || 12;
-  return `${displayHour}:${minute} ${period}`;
 }
 
 function orderHref(order) {
@@ -82,47 +67,27 @@ function providerPickupUrl(pickupId) {
   return `https://one.delhivery.com/v2/pickup-requests/${encodeURIComponent(pickupId)}`;
 }
 
-function sourceLabel(source) {
-  if (source === 'automatic') return 'Automatic';
-  if (source === 'legacy_snapshot') return 'Existing pickup';
-  return 'Created from admin';
-}
-
-function timelineLabel(type) {
-  const labels = {
-    request_started: 'Booking started',
-    request_skipped: 'Booking skipped',
-    scheduled: 'Pickup booked',
-    cancellation_confirmed: 'Pickup cancelled',
-    existing_pickup: 'Existing pickup',
-    legacy_snapshot_archived: 'Pickup saved',
-    order_pickup_confirmed: 'Order added',
-    order_pickup_confirmation_reverted: 'Order marked not added',
-  };
-  return labels[type] || displayValue(type);
-}
-
 export default function PickupsPage() {
   const [settings, setSettings] = useState(null);
   const [pickups, setPickups] = useState([]);
   const [readyOrders, setReadyOrders] = useState([]);
   const [confirmedOrders, setConfirmedOrders] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [pickupDate, setPickupDate] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [search, setSearch] = useState('');
-  const [expanded, setExpanded] = useState({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [pageError, setPageError] = useState('');
   const { success, error: showError } = useContext(NotificationContext);
 
+  const [selectedOrders, setSelectedOrders] = useState(new Set());
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [pickupDate, setPickupDate] = useState('');
+  const [confirmModalOrder, setConfirmModalOrder] = useState(null);
+  const [confirmSelectedPickupId, setConfirmSelectedPickupId] = useState('');
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setPageError('');
-      const params = new URLSearchParams({ limit: '200' });
-      if (statusFilter) params.set('state', statusFilter);
+      const params = new URLSearchParams({ limit: '50' });
       const [settingsResponse, historyResponse] = await Promise.all([
         api.get('/api/admin/shipping/delhivery/pickup-settings'),
         api.get(`/api/admin/shipping/delhivery/pickups?${params.toString()}`),
@@ -133,7 +98,6 @@ export default function PickupsPage() {
       setPickups(historyResponse.data.data.pickups || []);
       setReadyOrders(historyResponse.data.data.readyOrders || []);
       setConfirmedOrders(historyResponse.data.data.confirmedOrders || []);
-      setTotal(Number(historyResponse.data.data.total) || 0);
     } catch (error) {
       const message = getErrorMessage(error, 'Unable to load Delhivery pickups');
       setPageError(message);
@@ -141,52 +105,35 @@ export default function PickupsPage() {
     } finally {
       setLoading(false);
     }
-  }, [showError, statusFilter]);
+  }, [showError]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const visiblePickups = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return pickups;
-    return pickups.filter((pickup) =>
-      [
-        pickup.pickupId,
-        pickup.requestDate,
-        pickup.pickupLocation,
-        pickup.state,
-        pickup.source,
-        pickup.lastError,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(needle))
-    );
-  }, [pickups, search]);
+  const allManifestedOrders = useMemo(() => {
+    const map = new Map();
+    readyOrders.forEach(o => map.set(o.orderId, { ...o, isAlreadyConfirmed: false }));
+    confirmedOrders.forEach(o => map.set(o.orderId, { ...o, isAlreadyConfirmed: true }));
+    return Array.from(map.values())
+      .filter((o) => WAITING_ORDER_STATUSES.includes(o.orderStatus))
+      .sort((a, b) => new Date(b.orderedAt) - new Date(a.orderedAt));
+  }, [readyOrders, confirmedOrders]);
 
-  const hasActivePickup = Boolean(
-    settings?.pickupId && ACTIVE_STATES.includes(settings?.state)
-  );
+  const todayIstStr = useMemo(() => getIstDateInputValue(), []);
+  const todayPickup = useMemo(() => {
+    return pickups.find(p => p.requestDate === todayIstStr);
+  }, [pickups, todayIstStr]);
+
+  const newAfterRequestCount = useMemo(() => {
+    if (!todayPickup || !todayPickup.requestedAt) return 0;
+    const requestedTime = new Date(todayPickup.requestedAt).getTime();
+    return allManifestedOrders.filter(o => new Date(o.orderedAt).getTime() > requestedTime).length;
+  }, [todayPickup, allManifestedOrders]);
 
   const applySettings = (nextSettings) => {
     setSettings(nextSettings);
     setPickupDate((current) => getPickupDateSelection(current, nextSettings));
-  };
-
-  const toggleAutomaticPickup = async () => {
-    if (!settings || busy) return;
-    try {
-      setBusy('toggle');
-      const response = await api.patch('/api/admin/shipping/delhivery/pickup-settings', {
-        autoPickupEnabled: !settings.autoPickupEnabled,
-      });
-      applySettings(response.data.data.delhiveryPickup);
-      success('Automatic pickup setting updated');
-    } catch (error) {
-      showError(getErrorMessage(error, 'Unable to update pickup setting'));
-    } finally {
-      setBusy('');
-    }
   };
 
   const requestPickup = async () => {
@@ -201,634 +148,643 @@ export default function PickupsPage() {
         pickupDate,
       });
       applySettings(response.data.data.delhiveryPickup);
-      success(response.data.data.message || 'Pickup booked');
+      success(response.data.data.message || 'Pickup requested successfully.');
+      setIsModalOpen(false);
       await loadData();
     } catch (error) {
       const updated = error?.response?.data?.error?.details?.delhiveryPickup;
       if (updated) applySettings(updated);
-      showError(getErrorMessage(error, 'Unable to book the pickup'));
+      
+      const errMsg = getErrorMessage(error, 'Pickup request could not be completed right now. Please retry.');
+      if (errMsg.toLowerCase().includes('already exist')) {
+        showError("Today's pickup is already scheduled.");
+      } else {
+        showError(errMsg);
+      }
       await loadData();
     } finally {
       setBusy('');
     }
   };
 
-  const openCurrentPickup = () => {
-    const pickupId = String(settings?.pickupId || '').trim();
-    if (!pickupId) {
-      showError('Pickup ID is unavailable');
-      return;
-    }
-    globalThis.open(providerPickupUrl(pickupId), '_blank', 'noopener,noreferrer');
-  };
-
-  const confirmPickupCancellation = async () => {
-    const pickupId = String(settings?.pickupId || '').trim();
-    if (!pickupId || busy) return;
-    const confirmed = globalThis.confirm(
-      `Confirm only after Pickup ${pickupId} shows Cancelled in Delhivery One. This updates pickup history only and does not cancel orders, shipments, stock, or refunds.`
-    );
-    if (!confirmed) return;
-
+  const toggleAutomaticPickup = async () => {
+    if (!settings || busy) return;
     try {
-      setBusy('cancel-confirm');
-      const response = await api.post(
-        '/api/admin/shipping/delhivery/pickup-cancellation',
-        { pickupId, confirmedProviderCancellation: true }
-      );
+      setBusy('toggle');
+      const response = await api.patch('/api/admin/shipping/delhivery/pickup-settings', {
+        autoPickupEnabled: !settings.autoPickupEnabled,
+      });
       applySettings(response.data.data.delhiveryPickup);
-      success(response.data.data.message || 'Pickup cancellation confirmed');
-      await loadData();
+      success(`Automatic pickup request ${response.data.data.delhiveryPickup.autoPickupEnabled ? 'enabled' : 'disabled'}.`);
     } catch (error) {
-      showError(getErrorMessage(error, 'Unable to confirm pickup cancellation'));
+      showError(getErrorMessage(error, 'Unable to update automatic pickup setting'));
     } finally {
       setBusy('');
     }
   };
 
-  const confirmOrderAdded = async (order) => {
-    const pickupId = String(settings?.pickupId || '').trim();
-    if (!pickupId || busy) return;
-    const confirmed = globalThis.confirm(
-      `Confirm only if ${order.orderNumber || 'this order'} is visible under Ready For Pickup in Delhivery One. A processing message is not confirmation.`
+  const confirmOrderAddedToPickup = async () => {
+    if (!confirmModalOrder || !confirmSelectedPickupId || busy) return;
+    try {
+      setBusy('confirm_order');
+      const response = await api.post('/api/admin/shipping/delhivery/pickup-order-confirmation', {
+        orderId: confirmModalOrder.orderId,
+        pickupId: confirmSelectedPickupId,
+        action: 'confirm'
+      });
+      success(response.data?.data?.message || 'Order marked as added to pickup.');
+      setConfirmModalOrder(null);
+      await loadData();
+    } catch (error) {
+      showError(getErrorMessage(error, 'Unable to confirm order added to pickup.'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const copyAWBs = (awbs) => {
+    const validAWBs = awbs.filter(Boolean);
+    if (validAWBs.length === 0) return;
+    globalThis.navigator.clipboard.writeText(validAWBs.join('\n'));
+    success(`${validAWBs.length} AWB${validAWBs.length === 1 ? '' : 's'} copied`);
+  };
+
+  const copySelectedAWBs = () => {
+    const awbs = allManifestedOrders
+      .filter(o => selectedOrders.has(o.orderId))
+      .map(o => o.waybill);
+    copyAWBs(awbs);
+  };
+
+  const toggleOrderSelection = (orderId) => {
+    const next = new Set(selectedOrders);
+    if (next.has(orderId)) {
+      next.delete(orderId);
+    } else {
+      next.add(orderId);
+    }
+    setSelectedOrders(next);
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedOrders.size === allManifestedOrders.length && allManifestedOrders.length > 0) {
+      setSelectedOrders(new Set());
+    } else {
+      setSelectedOrders(new Set(allManifestedOrders.map(o => o.orderId)));
+    }
+  };
+
+  if (pageError && !settings && allManifestedOrders.length === 0) {
+    return (
+      <div className='rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700'>
+        <p>{pageError}</p>
+        <button type='button' onClick={loadData} className='mt-3 rounded border border-red-300 px-3 py-2 font-semibold'>Retry</button>
+      </div>
     );
-    if (!confirmed) return;
-
-    try {
-      setBusy(`confirm-order:${order.orderId}`);
-      const response = await api.post(
-        '/api/admin/shipping/delhivery/pickup-order-confirmation',
-        { orderId: order.orderId, pickupId }
-      );
-      success(response.data.data.message || 'Order marked as added');
-      await loadData();
-    } catch (error) {
-      showError(getErrorMessage(error, 'Unable to mark the order as added'));
-    } finally {
-      setBusy('');
-    }
-  };
-
-  const revokeOrderConfirmation = async (order) => {
-    const pickupId = String(settings?.pickupId || '').trim();
-    if (!pickupId || busy) return;
-    if (!globalThis.confirm(`Mark ${order.orderNumber || 'this order'} as not added to the pickup?`)) return;
-    try {
-      setBusy(`revoke-order:${order.orderId}`);
-      const response = await api.post(
-        '/api/admin/shipping/delhivery/pickup-order-confirmation',
-        { orderId: order.orderId, pickupId, action: 'revoke' }
-      );
-      success(response.data.data.message || 'Order marked as not added');
-      await loadData();
-    } catch (error) {
-      showError(getErrorMessage(error, 'Unable to update the order'));
-    } finally {
-      setBusy('');
-    }
-  };
+  }
 
   return (
-    <div className='space-y-6'>
-      <header className='flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
+    <div className='space-y-6 pb-20'>
+      <header className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
         <div>
-          <h1 className='text-3xl font-bold text-gray-950'>Pickup Management</h1>
-          <p className='mt-1 text-sm text-gray-500'>Schedule Delhivery pickups and see exactly which orders are ready or included.</p>
+          <h1 className='text-3xl font-bold text-gray-950'>Shipping</h1>
+          <p className='mt-1 text-sm text-gray-500'>Manage pickup requests and orders waiting for Delhivery pickup.</p>
         </div>
-        <a
-          href={DELHIVERY_READY_TO_SHIP_URL}
-          target='_blank'
-          rel='noreferrer'
-          className='inline-flex h-10 w-fit items-center gap-2 rounded border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50'
-        >
-          Open Ready to Ship <ExternalLink size={15} />
-        </a>
+        <div className='flex flex-wrap items-center gap-3'>
+          <a
+            href='https://one.delhivery.com'
+            target='_blank'
+            rel='noreferrer'
+            className='inline-flex h-10 items-center justify-center rounded border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50'
+          >
+            Open Delhivery <ExternalLink size={15} className='ml-2' />
+          </a>
+          <button
+            type='button'
+            onClick={() => setIsModalOpen(true)}
+            className='inline-flex h-10 items-center justify-center rounded bg-gray-950 px-4 text-sm font-semibold text-white hover:bg-gray-800'
+          >
+            Request Pickup
+          </button>
+        </div>
       </header>
 
-      {pageError ? (
-        <div className='rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700'>
-          <p>{pageError}</p>
-          <button type='button' onClick={loadData} className='mt-3 rounded border border-red-300 px-3 py-2 font-semibold'>Retry</button>
+      {/* TOP SUMMARY STRIP */}
+      <section className='grid grid-cols-1 divide-y divide-gray-200 overflow-hidden rounded border border-gray-200 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
+        <div className='flex flex-col justify-center p-5'>
+          <p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Orders Waiting</p>
+          <p className='mt-1 text-lg font-semibold text-gray-900'>
+            {allManifestedOrders.length} order{allManifestedOrders.length === 1 ? '' : 's'}
+          </p>
         </div>
-      ) : null}
 
-      {loading && !settings ? (
-        <section className='rounded border border-gray-200 bg-white p-5 text-sm text-gray-500'>Loading pickup controls...</section>
-      ) : settings ? (
-        <>
-          <section className='grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]'>
-            <div className='rounded border border-gray-200 bg-white p-5'>
-              <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                <div>
-                  <p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>
-                    {hasActivePickup ? 'Active pickup' : 'Latest pickup'}
-                  </p>
-                  <div className='mt-2 flex flex-wrap items-center gap-2'>
-                    <h2 className='text-xl font-semibold text-gray-950'>
-                      {settings.pickupId ? `Pickup ${settings.pickupId}` : 'No active pickup'}
-                    </h2>
-                    <StatusBadge state={settings.state} />
-                  </div>
-                </div>
-                {settings.pickupId ? (
-                  <button
-                    type='button'
-                    onClick={openCurrentPickup}
-                    className='inline-flex h-9 w-fit items-center gap-2 rounded border border-gray-300 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50'
-                  >
-                    View in Delhivery <ExternalLink size={14} />
-                  </button>
+        <div className='flex flex-col justify-center p-5'>
+          <p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Today's Pickup</p>
+          {todayPickup ? (
+            <div>
+              <p className='mt-1 text-lg font-semibold text-gray-900'>
+                {displayValue(todayPickup.state)}
+              </p>
+              <div className='mt-0.5 text-sm text-gray-500'>
+                {todayPickup.pickupId ? (
+                  <span className='block font-semibold'>Pickup #{todayPickup.pickupId}</span>
                 ) : null}
+                <span>2:00 PM – 6:00 PM</span>
               </div>
-
-              <dl className='mt-5 divide-y divide-gray-100 rounded border border-gray-200'>
-                <DataRow label='Pickup date' value={formatPickupDate(settings.requestDate)} />
-                <DataRow label='Pickup window' value='2:00 PM – 6:00 PM' />
-                <DataRow label='Pickup location' value={settings.pickupLocation || '-'} />
-                <DataRow label='Orders planned' value={Number(settings.expectedPackageCount) || 0} />
-                <DataRow label='Booked on' value={formatIstDateTime(settings.requestedAt)} />
-                {settings.cancelledAt ? <DataRow label='Cancelled' value={formatIstDateTime(settings.cancelledAt)} /> : null}
-                {settings.lastError ? <DataRow label='Last error' value={settings.lastError} /> : null}
-              </dl>
-
-              {hasActivePickup ? (
-                <details className='mt-5 rounded border border-gray-200 bg-gray-50 p-4'>
-                  <summary className='cursor-pointer text-sm font-semibold text-gray-700'>Cancel this pickup</summary>
-                  <p className='mt-2 text-xs leading-5 text-gray-600'>Cancel it in Delhivery first, then confirm here so both systems show the same status.</p>
-                  <div className='mt-3 flex flex-wrap gap-2'>
-                    <button
-                      type='button'
-                      onClick={openCurrentPickup}
-                      disabled={Boolean(busy)}
-                      className='inline-flex h-9 items-center gap-2 rounded border border-red-300 bg-white px-3 text-sm font-semibold text-red-700 disabled:opacity-50'
-                    >
-                      Cancel in Delhivery <ExternalLink size={14} />
-                    </button>
-                    <button
-                      type='button'
-                      onClick={confirmPickupCancellation}
-                      disabled={Boolean(busy)}
-                      className='inline-flex h-9 items-center rounded border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 disabled:opacity-50'
-                    >
-                      {busy === 'cancel-confirm' ? 'Updating...' : 'Confirm cancellation'}
-                    </button>
-                  </div>
-                </details>
-              ) : null}
             </div>
+          ) : (
+            <p className='mt-1 text-lg font-semibold text-gray-900'>Not requested</p>
+          )}
+        </div>
 
-            <div className='rounded border border-gray-200 bg-white p-5'>
-              {hasActivePickup ? (
-                <>
-                  <p className='text-xs font-semibold uppercase tracking-wide text-emerald-700'>Pickup booked</p>
-                  <h2 className='mt-2 text-lg font-semibold text-gray-950'>Add waiting orders to this pickup</h2>
-                  <p className='mt-2 text-sm leading-6 text-gray-600'>
-                    {readyOrders.length
-                      ? `${readyOrders.length} order${readyOrders.length === 1 ? ' is' : 's are'} still waiting to be added.`
-                      : 'No orders are waiting to be added.'}
-                  </p>
-                  {readyOrders.length ? (
-                    <div className='mt-5 rounded border border-amber-200 bg-amber-50 p-4'>
-                      <p className='text-xs font-semibold uppercase tracking-wide text-amber-800'>Manual Delhivery step</p>
-                      <p className='mt-2 text-xs leading-5 text-amber-900'>Open Ready to Ship and add the order to Pickup <span className='font-mono font-semibold'>{settings.pickupId}</span>. Confirm below only after it appears under Ready For Pickup.</p>
-                    </div>
-                  ) : null}
-                  <a
-                    href={readyOrders.length ? DELHIVERY_READY_TO_SHIP_URL : providerPickupUrl(settings.pickupId)}
-                    target='_blank'
-                    rel='noreferrer'
-                    className='mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded bg-black px-4 text-sm font-semibold text-white hover:bg-gray-800'
-                  >
-                    {readyOrders.length ? 'Add orders in Delhivery One' : 'Open Delhivery pickup'} <ExternalLink size={15} />
-                  </a>
-                </>
-              ) : (
-                <>
-                  <div className='flex items-center gap-2'>
-                    <CalendarClock size={20} className='text-gray-500' />
-                    <h2 className='text-lg font-semibold text-gray-950'>Book a pickup</h2>
-                  </div>
-                  <p className='mt-1 text-sm leading-5 text-gray-500'>Book one pickup for all ready orders.</p>
-                  <label className='mt-5 block text-xs font-semibold uppercase tracking-wide text-gray-500'>
-                    Pickup date
-                    <input
-                      type='date'
-                      value={pickupDate}
-                      min={settings.pickupDateMin || undefined}
-                      max={settings.pickupDateMax || undefined}
-                      onChange={(event) => setPickupDate(event.target.value)}
-                      disabled={Boolean(busy)}
-                      className='mt-2 block h-11 w-full px-3 text-sm font-normal text-gray-950 disabled:bg-gray-100'
-                    />
-                  </label>
-                  <p className='mt-2 text-xs text-gray-500'>Selected: {formatPickupDate(pickupDate)} · 2:00 PM – 6:00 PM</p>
-                  {readyOrders.length ? (
-                    <button
-                      type='button'
-                      onClick={requestPickup}
-                      disabled={Boolean(busy) || !pickupDate}
-                      className='mt-4 inline-flex h-11 w-full items-center justify-center rounded bg-black px-4 text-sm font-semibold text-white disabled:opacity-50'
-                    >
-                      {busy === 'request' ? 'Booking...' : `Book pickup for ${readyOrders.length} order${readyOrders.length === 1 ? '' : 's'}`}
-                    </button>
-                  ) : (
-                    <p className='mt-4 rounded border border-dashed border-gray-300 p-4 text-center text-sm text-gray-500'>No orders are waiting, so there is nothing to schedule.</p>
-                  )}
-                </>
-              )}
+        <div className='flex flex-col justify-center p-5'>
+          <p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Auto Request</p>
+          <p className='mt-1 text-lg font-semibold text-gray-900'>
+            {settings?.autoPickupEnabled ? 'Enabled' : 'Disabled'}
+          </p>
+          {settings?.autoPickupEnabled && (
+            <p className='mt-0.5 text-sm text-gray-500'>Request at 1:00 PM</p>
+          )}
+        </div>
+      </section>
 
-              <div className='mt-5 border-t border-gray-100 pt-4'>
-                <div className='flex items-center justify-between gap-4'>
-                  <div>
-                    <p className='text-sm font-semibold text-gray-800'>Automatic scheduling</p>
-                    <p className='mt-1 text-xs text-gray-500'>{settings.autoPickupEnabled ? 'Enabled' : 'Disabled'}</p>
-                    <p className='mt-1 max-w-xs text-xs leading-5 text-gray-500'>Books a pickup automatically when orders are ready.</p>
-                  </div>
-                  <button
-                    type='button'
-                    onClick={toggleAutomaticPickup}
-                    disabled={loading || Boolean(busy) || !settings}
-                    role='switch'
-                    aria-checked={settings.autoPickupEnabled === true}
-                    className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${settings.autoPickupEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`}
-                    aria-label='Toggle automatic pickup scheduling'
-                  >
-                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${settings.autoPickupEnabled ? 'left-5' : 'left-0.5'}`} />
-                  </button>
-                </div>
+      {/* MAIN CONTENT LAYOUT */}
+      <div className='grid grid-cols-1 gap-6 lg:grid-cols-3'>
+        {/* LEFT CARD: ORDERS WAITING FOR PICKUP */}
+        <section className='flex flex-col rounded border border-gray-200 bg-white lg:col-span-2 h-fit'>
+          <div className='flex flex-col gap-3 border-b border-gray-200 p-5 sm:flex-row sm:items-start sm:justify-between'>
+            <div>
+              <h2 className='text-base font-semibold uppercase tracking-wide text-gray-900'>Orders Waiting For Pickup</h2>
+              <p className='mt-1 text-sm text-gray-500'>
+                AWB-generated orders that still need pickup handling in Delhivery.
+              </p>
+            </div>
+            <div className='shrink-0 text-right'>
+              <span className='font-semibold text-gray-900'>{allManifestedOrders.length}</span> <span className='text-sm text-gray-500'>order{allManifestedOrders.length === 1 ? '' : 's'}</span>
+            </div>
+          </div>
+          
+          {newAfterRequestCount > 0 && todayPickup && (
+            <div className='m-4 rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start justify-between'>
+              <div>
+                <p className='font-semibold'>
+                  {newAfterRequestCount} order{newAfterRequestCount === 1 ? '' : 's'} became ready after today's pickup request.
+                </p>
+                <span className='mt-1 inline-block rounded bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-900'>
+                  Manual add required
+                </span>
               </div>
+              <a
+                href={DELHIVERY_READY_TO_SHIP_URL}
+                target='_blank'
+                rel='noreferrer'
+                className='inline-flex h-8 items-center rounded bg-amber-900 px-3 text-xs font-semibold text-white hover:bg-amber-950'
+              >
+                Open Delhivery & Add Orders <ExternalLink size={12} className='ml-1' />
+              </a>
+            </div>
+          )}
+
+          <div className='overflow-x-auto'>
+            {loading && allManifestedOrders.length === 0 ? (
+              <div className='p-8 text-center text-sm text-gray-500'>Loading...</div>
+            ) : allManifestedOrders.length === 0 ? (
+              <div className='p-10 text-center'>
+                <p className='text-sm font-semibold text-gray-900'>No manifested orders are currently waiting for pickup.</p>
+              </div>
+            ) : (
+              <table className='min-w-full divide-y divide-gray-200 text-left text-sm'>
+                <thead className='bg-gray-50 text-xs uppercase tracking-wider text-gray-500'>
+                  <tr>
+                    <th className='px-4 py-3'>
+                      <input
+                        type='checkbox'
+                        checked={selectedOrders.size > 0 && selectedOrders.size === allManifestedOrders.length}
+                        ref={(input) => {
+                          if (input) {
+                            input.indeterminate = selectedOrders.size > 0 && selectedOrders.size < allManifestedOrders.length;
+                          }
+                        }}
+                        onChange={toggleAllSelection}
+                        className='rounded border-gray-300 text-gray-900 focus:ring-gray-900'
+                      />
+                    </th>
+                    <th className='px-4 py-3 font-semibold'>Order</th>
+                    <th className='px-4 py-3 font-semibold'>AWB</th>
+                    <th className='px-4 py-3 font-semibold'>Customer</th>
+                    <th className='px-4 py-3 font-semibold'>Payment</th>
+                    <th className='px-4 py-3 font-semibold'>Current Status</th>
+                    <th className='px-4 py-3 font-semibold text-right'>Actions</th>
+                  </tr>
+                </thead>
+                <tbody className='divide-y divide-gray-100 bg-white'>
+                  {allManifestedOrders.map((order) => {
+                    return (
+                      <tr key={order.orderId} className='align-middle hover:bg-gray-50'>
+                        <td className='px-4 py-3'>
+                          <input
+                            type='checkbox'
+                            checked={selectedOrders.has(order.orderId)}
+                            onChange={() => toggleOrderSelection(order.orderId)}
+                            className='rounded border-gray-300 text-gray-900 focus:ring-gray-900'
+                          />
+                        </td>
+                        <td className='px-4 py-3'>
+                          <Link href={orderHref(order)} className='font-semibold text-blue-700 hover:underline'>
+                            {order.orderNumber || '-'}
+                          </Link>
+                        </td>
+                        <td className='px-4 py-3 font-mono text-xs text-gray-700'>{order.waybill || '-'}</td>
+                        <td className='px-4 py-3 text-gray-700'>{order.customerName || '-'}</td>
+                        <td className='px-4 py-3'>
+                          <span className={`inline-flex rounded px-2 py-0.5 text-xs font-semibold ${order.paymentMethod === 'cod' ? 'bg-orange-50 text-orange-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                            {order.paymentMethod === 'cod' ? 'COD' : 'Razorpay / Paid'}
+                          </span>
+                        </td>
+                        <td className='px-4 py-3'>
+                          <span className='inline-flex rounded bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700'>
+                            {displayValue(order.orderStatus)}
+                          </span>
+                        </td>
+                        <td className='px-4 py-3 text-right'>
+                          <div className='flex items-center justify-end gap-2'>
+                            {!order.isAlreadyConfirmed && (
+                              <button
+                                type='button'
+                                onClick={() => {
+                                  setConfirmModalOrder(order);
+                                  const eligible = pickups.filter(p => p.pickupId);
+                                  if (eligible.length > 0) setConfirmSelectedPickupId(eligible[0].pickupId);
+                                }}
+                                className='inline-flex h-8 items-center rounded border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50'
+                              >
+                                Confirm Added
+                              </button>
+                            )}
+                            <Link
+                              href={orderHref(order)}
+                              className='inline-flex h-8 items-center rounded border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50'
+                            >
+                              View Order
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div className='flex flex-col items-center justify-between gap-4 border-t border-gray-200 bg-gray-50 p-4 sm:flex-row'>
+            <p className='text-xs text-gray-500'>
+              Pickup requests can be created here, but AWBs must still be assigned to the pickup in Delhivery.
+            </p>
+            <div className='flex flex-wrap items-center gap-2'>
+              <button
+                type='button'
+                onClick={copySelectedAWBs}
+                disabled={selectedOrders.size === 0}
+                className='inline-flex h-9 items-center justify-center gap-2 rounded border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50'
+              >
+                <Copy size={14} /> Copy Selected AWBs
+              </button>
+              <a
+                href={DELHIVERY_READY_TO_SHIP_URL}
+                target='_blank'
+                rel='noreferrer'
+                className='inline-flex h-9 items-center justify-center gap-2 rounded border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50'
+              >
+                Open Delhivery & Add Orders <ExternalLink size={14} />
+              </a>
+            </div>
+          </div>
+        </section>
+
+        {/* RIGHT CARDS */}
+        <div className='flex flex-col gap-6 lg:col-span-1'>
+          
+          {/* DAILY PICKUP REQUEST */}
+          <section className='rounded border border-gray-200 bg-white p-5'>
+            <div className='flex items-start justify-between gap-4'>
+              <div>
+                <h2 className='text-sm font-semibold uppercase tracking-wide text-gray-900'>Automatic Daily Pickup Request</h2>
+              </div>
+              <button
+                type='button'
+                onClick={toggleAutomaticPickup}
+                disabled={loading || Boolean(busy) || !settings}
+                role='switch'
+                aria-checked={settings?.autoPickupEnabled === true}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${settings?.autoPickupEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                aria-label='Toggle automatic pickup scheduling'
+              >
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${settings?.autoPickupEnabled ? 'left-5' : 'left-0.5'}`} />
+              </button>
+            </div>
+            
+            <div className='mt-5 space-y-3'>
+              <div className='flex justify-between text-sm'>
+                <span className='font-medium text-gray-900'>{settings?.autoPickupEnabled ? 'Enabled' : 'Disabled'}</span>
+              </div>
+              <div className='flex justify-between text-sm'>
+                <span className='text-gray-500'>Request time</span>
+                <span className='font-medium text-gray-900'>1:00 PM</span>
+              </div>
+              <div className='flex justify-between text-sm'>
+                <span className='text-gray-500'>Default pickup window</span>
+                <span className='font-medium text-gray-900'>2:00 PM – 6:00 PM</span>
+              </div>
+              <div className='pt-2 text-xs leading-5 text-gray-600'>
+                <p>Automatically creates today's pickup request when eligible orders are waiting.</p>
+              </div>
+            </div>
+            <div className='mt-5 rounded bg-gray-50 border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700'>
+              AWBs are not automatically assigned to the pickup. Add them manually in Delhivery.
             </div>
           </section>
 
-          {settings.state === 'cancelled' && readyOrders.length > 0 ? (
-            <div className='rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800'>
-              The previous pickup is closed. {readyOrders.length} order{readyOrders.length === 1 ? ' is' : 's are'} ready for a new pickup.
-            </div>
-          ) : null}
-        </>
-      ) : null}
-
-      <section className='rounded border border-gray-200 bg-white p-5'>
-        <div className='flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between'>
-          <div>
-            <div className='flex items-center gap-2'>
-              <PackageCheck size={20} className='text-gray-500' />
-              <h2 className='font-semibold text-gray-950'>Ready-to-Ship orders</h2>
-            </div>
-            <p className='mt-1 text-sm text-gray-500'>
-              {hasActivePickup
-                ? `These orders have not been added to Pickup ${settings.pickupId} yet.`
-                : 'These orders are ready for the next pickup.'}
-            </p>
-          </div>
-          <p className='text-sm font-semibold text-gray-700'>{readyOrders.length} ready</p>
         </div>
-        <ReadyOrdersTable
-          orders={readyOrders}
-          loading={loading}
-          pickupId={hasActivePickup ? settings.pickupId : ''}
-          busy={busy}
-          onConfirm={confirmOrderAdded}
-        />
-      </section>
+      </div>
 
-      {hasActivePickup ? (
-        <section className='rounded border border-gray-200 bg-white p-5'>
-          <div className='flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between'>
-            <div>
-              <div className='flex items-center gap-2'>
-                <PackageCheck size={20} className='text-emerald-600' />
-                <h2 className='font-semibold text-gray-950'>Added to active pickup</h2>
-              </div>
-              <p className='mt-1 text-sm text-gray-500'>Orders added to Pickup {settings.pickupId}.</p>
-            </div>
-            <p className='text-sm font-semibold text-gray-700'>{confirmedOrders.length} added</p>
-          </div>
-          <ConfirmedOrdersTable
-            orders={confirmedOrders}
-            loading={loading}
-            busy={busy}
-            onRevoke={revokeOrderConfirmation}
-          />
-        </section>
-      ) : null}
-
-      <section className='rounded border border-gray-200 bg-white p-5'>
-        <div className='flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
-          <div>
-            <div className='flex items-center gap-2'>
-              <History size={20} className='text-gray-500' />
-              <h2 className='font-semibold text-gray-950'>Pickup history</h2>
-            </div>
-            <p className='mt-1 text-sm text-gray-500'>{total} pickup{total === 1 ? '' : 's'}.</p>
-          </div>
-          <div className='grid gap-2 sm:grid-cols-[260px_190px_auto]'>
-            <label className='relative block'>
-              <Search className='absolute left-3 top-2.5 text-gray-400' size={18} />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder='Search pickup ID, date, status'
-                className='h-10 w-full py-2 pl-10 pr-3'
-              />
-            </label>
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className='h-10 px-3'
-            >
-              <option value=''>All statuses</option>
-              {HISTORY_STATES.map((state) => (
-                <option key={state} value={state}>{displayValue(state)}</option>
-              ))}
-            </select>
-            <button
-              type='button'
-              onClick={loadData}
-              disabled={loading}
-              className='inline-flex h-10 items-center justify-center gap-2 rounded border border-gray-300 px-3 text-sm font-semibold text-gray-700 disabled:opacity-50'
-            >
-              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
-            </button>
-          </div>
+      {/* PICKUP HISTORY */}
+      <section className='mt-8'>
+        <div className='mb-4'>
+          <h2 className='text-lg font-semibold uppercase tracking-wide text-gray-900'>Pickup History</h2>
         </div>
 
-        <div className='mt-5 space-y-3'>
+        <div className='space-y-3'>
           {loading && pickups.length === 0 ? (
-            <p className='text-sm text-gray-500'>Loading pickup history...</p>
-          ) : visiblePickups.length === 0 ? (
-            <p className='rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500'>No pickup history matches these filters.</p>
-          ) : visiblePickups.map((pickup) => {
-            const isOpen = Boolean(expanded[pickup.id]);
-            return (
-              <article key={pickup.id} className='overflow-hidden rounded border border-gray-200'>
-                <div className='flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between'>
-                  <div className='min-w-0'>
-                    <div className='flex flex-wrap items-center gap-2'>
-                      <p className='font-semibold text-gray-950'>{pickup.pickupId || `Attempt ${pickup.id.slice(-6)}`}</p>
-                      <StatusBadge state={pickup.state} />
-                      <span className='rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600'>{sourceLabel(pickup.source)}</span>
-                    </div>
-                    <p className='mt-1 text-sm text-gray-600'>
-                      {formatPickupDate(pickup.requestDate)} · {formatPickupTime(pickup.pickupTime)} IST · {pickup.pickupLocation || '-'}
-                    </p>
-                    <p className='mt-1 text-xs text-gray-400'>Created {formatIstDateTime(pickup.createdAt)}</p>
-                  </div>
-                  <div className='flex flex-wrap items-center gap-2'>
-                    {pickup.pickupId ? (
-                      <a
-                        href={providerPickupUrl(pickup.pickupId)}
-                        target='_blank'
-                        rel='noreferrer'
-                        className='inline-flex h-9 items-center gap-2 rounded border border-gray-300 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50'
-                      >
-                        View in Delhivery <ExternalLink size={14} />
-                      </a>
-                    ) : null}
-                    <button
-                      type='button'
-                      onClick={() => setExpanded((current) => ({ ...current, [pickup.id]: !isOpen }))}
-                      className='inline-flex h-9 items-center gap-2 rounded border border-gray-300 px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50'
-                    >
-                      {isOpen ? 'Hide details' : 'View details'}
-                      {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                    </button>
-                  </div>
-                </div>
-                {isOpen ? <PickupDetails pickup={pickup} /> : null}
-              </article>
-            );
-          })}
+            <p className='text-sm text-gray-500'>Loading history...</p>
+          ) : pickups.length === 0 ? (
+            <div className='rounded border border-dashed border-gray-300 p-8 text-center'>
+              <p className='text-sm text-gray-500'>No pickup requests yet.</p>
+            </div>
+          ) : (
+            pickups.map((pickup) => (
+              <PickupHistoryRow key={pickup.id} pickup={pickup} />
+            ))
+          )}
         </div>
       </section>
-    </div>
-  );
-}
 
-function DataRow({ label, value }) {
-  return (
-    <div className='grid gap-1 px-4 py-3 sm:grid-cols-[150px_1fr] sm:items-start'>
-      <dt className='text-xs font-semibold uppercase tracking-wide text-gray-500'>{label}</dt>
-      <dd className='break-words text-sm font-medium text-gray-900'>{value}</dd>
-    </div>
-  );
-}
-
-function ReadyOrdersTable({ orders, loading, pickupId, busy, onConfirm }) {
-  if (loading && orders.length === 0) {
-    return <p className='mt-5 text-sm text-gray-500'>Loading ready orders...</p>;
-  }
-  if (orders.length === 0) {
-    return (
-      <div className='mt-5 rounded border border-dashed border-gray-300 p-6 text-center'>
-        <p className='font-semibold text-gray-800'>No orders are waiting</p>
-        <p className='mt-1 text-sm text-gray-500'>New manifested Delhivery orders will appear here automatically.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className='mt-5 overflow-x-auto rounded border border-gray-200'>
-      <table className='min-w-full divide-y divide-gray-200 text-left text-sm'>
-        <thead className='bg-gray-50 text-xs uppercase text-gray-500'>
-          <tr>
-            <th className='px-4 py-3 font-semibold'>Order</th>
-            <th className='px-4 py-3 font-semibold'>AWB</th>
-            <th className='px-4 py-3 font-semibold'>Customer</th>
-            <th className='px-4 py-3 font-semibold'>Payment</th>
-            <th className='px-4 py-3 font-semibold'>Amount</th>
-            <th className='px-4 py-3 font-semibold'>Order status</th>
-            <th className='px-4 py-3 font-semibold'>Next action</th>
-          </tr>
-        </thead>
-        <tbody className='divide-y divide-gray-100 bg-white'>
-          {orders.map((order) => (
-            <tr key={order.orderId} className='align-top hover:bg-gray-50'>
-              <td className='px-4 py-3'>
-                <Link href={orderHref(order)} className='font-semibold text-blue-700 hover:underline'>
-                  {order.orderNumber || '-'}
-                </Link>
-                <p className='mt-1 text-xs text-gray-400'>{formatIstDateTime(order.orderedAt)}</p>
-              </td>
-              <td className='px-4 py-3 font-mono text-xs text-gray-700'>{order.waybill || '-'}</td>
-              <td className='px-4 py-3 text-gray-700'>{order.customerName || '-'}</td>
-              <td className='px-4 py-3 text-gray-700'>{displayValue(order.paymentMethod)}</td>
-              <td className='px-4 py-3 font-semibold text-gray-800'>{money(order.finalAmount)}</td>
-              <td className='px-4 py-3'><StatusBadge state={order.orderStatus} /></td>
-              <td className='px-4 py-3'>
-                {pickupId ? (
-                  <div className='flex min-w-44 flex-col gap-2'>
-                    <span className='w-fit rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800'>Not added yet</span>
-                    <button
-                      type='button'
-                      onClick={() => onConfirm(order)}
-                      disabled={Boolean(busy)}
-                      className='inline-flex h-8 w-fit items-center rounded border border-gray-300 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50'
-                    >
-                      {busy === `confirm-order:${order.orderId}` ? 'Saving...' : 'Mark as added'}
-                    </button>
-                  </div>
-                ) : (
-                  <span className='rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700'>Include in next pickup</span>
-                )}
-                {order.pickupId && order.pickupState === 'cancelled' ? (
-                  <p className='mt-1 text-xs text-gray-400'>Previous {order.pickupId} cancelled</p>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ConfirmedOrdersTable({ orders, loading, busy, onRevoke }) {
-  if (loading && orders.length === 0) {
-    return <p className='mt-5 text-sm text-gray-500'>Loading added orders...</p>;
-  }
-  if (orders.length === 0) {
-    return <p className='mt-5 rounded border border-dashed border-gray-300 p-5 text-center text-sm text-gray-500'>No orders have been added yet.</p>;
-  }
-  return (
-    <div className='mt-5 overflow-x-auto rounded border border-gray-200'>
-      <table className='min-w-full divide-y divide-gray-200 text-left text-sm'>
-        <thead className='bg-gray-50 text-xs uppercase text-gray-500'>
-          <tr>
-            <th className='px-4 py-3 font-semibold'>Order</th>
-            <th className='px-4 py-3 font-semibold'>AWB</th>
-            <th className='px-4 py-3 font-semibold'>Customer</th>
-            <th className='px-4 py-3 font-semibold'>Amount</th>
-            <th className='px-4 py-3 font-semibold'>Pickup status</th>
-          </tr>
-        </thead>
-        <tbody className='divide-y divide-gray-100 bg-white'>
-          {orders.map((order) => (
-            <tr key={order.orderId} className='align-top'>
-              <td className='px-4 py-3'><Link href={orderHref(order)} className='font-semibold text-blue-700 hover:underline'>{order.orderNumber || '-'}</Link></td>
-              <td className='px-4 py-3 font-mono text-xs text-gray-700'>{order.waybill || '-'}</td>
-              <td className='px-4 py-3 text-gray-700'>{order.customerName || '-'}</td>
-              <td className='px-4 py-3 font-semibold text-gray-800'>{money(order.finalAmount)}</td>
-              <td className='px-4 py-3'>
-                <span className='rounded bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700'>Added to pickup</span>
-                <p className='mt-1 text-xs text-gray-400'>{formatIstDateTime(order.pickupConfirmedAt)}</p>
-                {order.pickupStateSource === 'admin_confirmed_delhivery_one' ? (
-                  <button
-                    type='button'
-                    onClick={() => onRevoke(order)}
-                    disabled={Boolean(busy)}
-                    className='mt-2 text-xs font-semibold text-gray-500 underline underline-offset-2 disabled:opacity-50'
-                  >
-                    {busy === `revoke-order:${order.orderId}` ? 'Updating...' : 'Mark as not added'}
-                  </button>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function StatusBadge({ state }) {
-  const tones = {
-    scheduled: 'bg-blue-50 text-blue-700',
-    cancelled: 'bg-gray-100 text-gray-700',
-    failed: 'bg-red-50 text-red-700',
-    needs_reconciliation: 'bg-amber-50 text-amber-800',
-    no_ready_shipments: 'bg-gray-100 text-gray-600',
-    requesting: 'bg-violet-50 text-violet-700',
-  };
-  const labels = {
-    scheduled: 'Booked',
-    cancelled: 'Cancelled',
-    failed: 'Failed',
-    needs_reconciliation: 'Check required',
-    no_ready_shipments: 'No orders',
-    requesting: 'Booking',
-  };
-  return <span className={`rounded px-2 py-1 text-xs font-semibold ${tones[state] || 'bg-gray-100 text-gray-700'}`}>{labels[state] || displayValue(state)}</span>;
-}
-
-function PickupDetails({ pickup }) {
-  return (
-    <div className='border-t border-gray-200 bg-gray-50 p-4'>
-      <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-        <Detail label='Pickup ID' value={pickup.pickupId || '-'} />
-        <Detail label='Orders planned' value={pickup.expectedPackageCount} />
-        <Detail label='Booked on' value={formatIstDateTime(pickup.requestedAt)} />
-        <Detail label='Last updated' value={formatIstDateTime(pickup.updatedAt)} />
-        {pickup.cancelledAt ? <Detail label='Cancelled at' value={formatIstDateTime(pickup.cancelledAt)} /> : null}
-        {pickup.lastError ? <Detail label='Last error' value={pickup.lastError} /> : null}
-      </div>
-      <div className='mt-4'>
-        <p className='text-xs font-semibold uppercase text-gray-500'>Orders listed when booked ({pickup.orders?.length || 0})</p>
-        <p className='mt-1 text-xs text-gray-500'>This was the order list when the pickup was booked. Orders actually added are marked below.</p>
-        {pickup.orders?.length ? (
-          <div className='mt-2 overflow-x-auto rounded border border-gray-200 bg-white'>
-            <table className='min-w-full divide-y divide-gray-200 text-left text-sm'>
-              <thead className='bg-gray-50 text-xs uppercase text-gray-500'>
-                <tr>
-                  <th className='px-3 py-2 font-semibold'>Order</th>
-                  <th className='px-3 py-2 font-semibold'>AWB</th>
-                  <th className='px-3 py-2 font-semibold'>Customer</th>
-                  <th className='px-3 py-2 font-semibold'>Payment</th>
-                  <th className='px-3 py-2 font-semibold'>Amount</th>
-                  <th className='px-3 py-2 font-semibold'>Pickup status</th>
-                </tr>
-              </thead>
-              <tbody className='divide-y divide-gray-100'>
-                {pickup.orders.map((order) => (
-                  <tr key={order.orderId || order.orderNumber}>
-                    <td className='px-3 py-2'>
-                      <Link href={orderHref(order)} className='font-semibold text-blue-700 hover:underline'>
-                        {order.orderNumber || '-'}
-                      </Link>
-                    </td>
-                    <td className='px-3 py-2 font-mono text-xs text-gray-700'>{order.waybill || '-'}</td>
-                    <td className='px-3 py-2 text-gray-700'>{order.customerName || '-'}</td>
-                    <td className='px-3 py-2 text-gray-700'>{displayValue(order.paymentMethod)}</td>
-                    <td className='px-3 py-2 font-semibold text-gray-800'>{money(order.finalAmount)}</td>
-                    <td className='px-3 py-2 text-gray-700'>
-                      {order.pickupState === 'confirmed' ? (
-                        <span className='rounded bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700'>Added</span>
-                      ) : (
-                        <span className='rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600'>Not verified</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className='mt-2 text-sm text-gray-500'>Order-level details were not stored for this older pickup.</p>
-        )}
-      </div>
-      <div className='mt-4'>
-        <p className='text-xs font-semibold uppercase text-gray-500'>Timeline</p>
-        {pickup.events?.length ? (
-          <div className='mt-2 space-y-2'>
-            {[...pickup.events].reverse().map((event, index) => (
-              <div key={`${event.type}-${event.at}-${index}`} className='rounded border border-gray-200 bg-white p-3 text-sm'>
-                <p className='font-semibold text-gray-900'>{timelineLabel(event.type)}</p>
-                <p className='text-gray-600'>{event.message || '-'}</p>
-                <p className='mt-1 text-xs text-gray-400'>{formatIstDateTime(event.at)}</p>
+      {/* REQUEST PICKUP MODAL */}
+      {isModalOpen && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4 backdrop-blur-sm'>
+          <div className='w-full max-w-md rounded-lg bg-white p-6 shadow-xl'>
+            <h2 className='text-xl font-bold text-gray-900'>Request Pickup</h2>
+            <p className='mt-1 text-sm text-gray-500'>Create a pickup request in Delhivery.</p>
+            
+            <div className='mt-6 space-y-4'>
+              <label className='block'>
+                <span className='text-sm font-semibold text-gray-700'>Pickup Date</span>
+                <input
+                  type='date'
+                  value={pickupDate}
+                  min={settings?.pickupDateMin || undefined}
+                  max={settings?.pickupDateMax || undefined}
+                  onChange={(event) => setPickupDate(event.target.value)}
+                  disabled={Boolean(busy)}
+                  className='mt-1 block h-10 w-full rounded border-gray-300 px-3 text-sm focus:border-gray-900 focus:ring-gray-900 disabled:bg-gray-100'
+                />
+              </label>
+              
+              <div className='grid grid-cols-2 gap-4'>
+                <div>
+                  <span className='block text-sm font-semibold text-gray-700'>Pickup Window</span>
+                  <p className='mt-1 text-sm text-gray-900'>2:00 PM – 6:00 PM</p>
+                </div>
+                <div>
+                  <span className='block text-sm font-semibold text-gray-700'>Expected Packages</span>
+                  <p className='mt-1 text-sm text-gray-900'>
+                    {Math.max(1, allManifestedOrders.length)} package{Math.max(1, allManifestedOrders.length) === 1 ? '' : 's'}
+                  </p>
+                </div>
               </div>
-            ))}
+              
+              <div>
+                <span className='block text-sm font-semibold text-gray-700'>Pickup Location</span>
+                <p className='mt-1 text-sm text-gray-900'>{settings?.pickupLocation || 'Default location'}</p>
+              </div>
+            </div>
+
+            <div className='mt-8 flex items-center justify-end gap-3'>
+              <button
+                type='button'
+                onClick={() => setIsModalOpen(false)}
+                disabled={Boolean(busy)}
+                className='h-10 rounded px-4 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-50'
+              >
+                Cancel
+              </button>
+              <button
+                type='button'
+                onClick={requestPickup}
+                disabled={Boolean(busy) || !pickupDate}
+                className='inline-flex h-10 items-center justify-center rounded bg-gray-950 px-4 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50'
+              >
+                {busy === 'request' ? 'Requesting...' : 'Request Pickup'}
+              </button>
+            </div>
           </div>
-        ) : <p className='mt-2 text-sm text-gray-500'>No timeline events stored.</p>}
-      </div>
+        </div>
+      )}
+
+      {/* CONFIRM ORDER ADDED MODAL */}
+      {confirmModalOrder && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4 backdrop-blur-sm'>
+          <div className='w-full max-w-md rounded-lg bg-white p-6 shadow-xl'>
+            <h2 className='text-xl font-bold text-gray-900'>Confirm Order Added</h2>
+            <p className='mt-1 text-sm text-gray-500'>Record that this order was manually assigned to an existing pickup in Delhivery.</p>
+            
+            <div className='mt-6 space-y-4'>
+              <div className='rounded bg-gray-50 p-3 border border-gray-200'>
+                <div className='flex justify-between'>
+                  <span className='text-xs font-semibold text-gray-500'>Order</span>
+                  <span className='text-xs font-semibold text-gray-900'>{confirmModalOrder.orderNumber || '-'}</span>
+                </div>
+                <div className='flex justify-between mt-1'>
+                  <span className='text-xs font-semibold text-gray-500'>AWB</span>
+                  <span className='text-xs font-semibold text-gray-900'>{confirmModalOrder.waybill || '-'}</span>
+                </div>
+              </div>
+              
+              <label className='block'>
+                <span className='text-sm font-semibold text-gray-700'>Select Delhivery Pickup</span>
+                <select
+                  value={confirmSelectedPickupId}
+                  onChange={(e) => setConfirmSelectedPickupId(e.target.value)}
+                  disabled={Boolean(busy) || pickups.filter(p => p.pickupId).length === 0}
+                  className='mt-1 block h-10 w-full rounded border-gray-300 px-3 text-sm focus:border-gray-900 focus:ring-gray-900 disabled:bg-gray-100'
+                >
+                  {pickups.filter(p => p.pickupId).map(p => (
+                    <option key={p.pickupId} value={p.pickupId}>
+                      Pickup #{p.pickupId} · {formatPickupDate(p.requestDate)}
+                    </option>
+                  ))}
+                </select>
+                {pickups.filter(p => p.pickupId).length === 0 && (
+                  <p className='mt-1 text-xs text-red-600'>No eligible pickups found with a confirmed Delhivery Pickup ID.</p>
+                )}
+              </label>
+
+              <div className='rounded border border-blue-200 bg-blue-50 p-3'>
+                <p className='text-sm font-semibold text-blue-900'>Have you already added this order to the selected pickup in Delhivery?</p>
+                <p className='mt-1 text-xs text-blue-700'>This action does not create an assignment in Delhivery, it only records it here.</p>
+              </div>
+            </div>
+
+            <div className='mt-8 flex items-center justify-end gap-3'>
+              <button
+                type='button'
+                onClick={() => setConfirmModalOrder(null)}
+                disabled={Boolean(busy)}
+                className='h-10 rounded px-4 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-50'
+              >
+                Cancel
+              </button>
+              <button
+                type='button'
+                onClick={confirmOrderAddedToPickup}
+                disabled={Boolean(busy) || !confirmSelectedPickupId}
+                className='inline-flex h-10 items-center justify-center rounded bg-gray-950 px-4 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50'
+              >
+                {busy === 'confirm_order' ? 'Confirming...' : 'Confirm Added'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
 
-function Detail({ label, value }) {
+function PickupHistoryRow({ pickup }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const getStatusLabel = (state) => {
+    switch (state) {
+      case 'needs_reconciliation': return 'Needs attention';
+      default: return displayValue(state);
+    }
+  };
+
+  const getStatusColor = (state) => {
+    switch (state) {
+      case 'scheduled': return 'bg-emerald-50 text-emerald-700';
+      case 'cancelled': return 'bg-gray-100 text-gray-600';
+      case 'failed': return 'bg-red-50 text-red-700';
+      case 'needs_reconciliation': return 'bg-amber-50 text-amber-700';
+      default: return 'bg-blue-50 text-blue-700';
+    }
+  };
+
+  const title = pickup.pickupId 
+    ? `Pickup #${pickup.pickupId}`
+    : `Pickup Request · ${formatPickupDate(pickup.requestDate)}`;
+
   return (
-    <div className='rounded border border-gray-200 bg-white p-3'>
-      <p className='text-xs uppercase text-gray-500'>{label}</p>
-      <p className='mt-1 break-words text-sm font-semibold text-gray-800'>{value}</p>
+    <div className='overflow-hidden rounded border border-gray-200 bg-white'>
+      <div 
+        className='flex cursor-pointer flex-col gap-3 p-4 hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between'
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div className='flex items-start gap-3 sm:items-center'>
+          <button type='button' className='mt-1 text-gray-400 sm:mt-0'>
+            {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </button>
+          <div>
+            <div className='flex items-center gap-2'>
+              <h3 className='font-semibold text-gray-900'>{title}</h3>
+              <span className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${getStatusColor(pickup.state)}`}>
+                {getStatusLabel(pickup.state)}
+              </span>
+            </div>
+            <div className='mt-1 text-xs text-gray-500'>
+              {formatPickupDate(pickup.requestDate)} · 2:00 PM – 6:00 PM
+            </div>
+          </div>
+        </div>
+        
+        <div className='flex flex-col items-end gap-2 pl-8 sm:pl-0'>
+          <p className='text-xs text-gray-500'>
+            Requested for {pickup.expectedPackageCount} package{pickup.expectedPackageCount === 1 ? '' : 's'}
+          </p>
+          <div className='flex items-center gap-2'>
+            {pickup.pickupId && (
+              <a
+                href={providerPickupUrl(pickup.pickupId)}
+                target='_blank'
+                rel='noreferrer'
+                onClick={(e) => e.stopPropagation()}
+                className='inline-flex h-8 items-center gap-2 rounded border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 hover:bg-gray-100'
+              >
+                Open in Delhivery <ExternalLink size={12} className='ml-1' />
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className='border-t border-gray-200 bg-gray-50 p-4'>
+          <div className='flex justify-between items-center mb-3'>
+            <div>
+              <h4 className='text-xs font-semibold uppercase text-gray-900'>Orders prepared when request was made</h4>
+              {pickup.state === 'needs_reconciliation' && (
+                <p className='mt-1 text-xs text-amber-700 flex items-center gap-1'>
+                  <AlertCircle size={14} /> We could not confirm a Delhivery pickup ID for this request. Check the request in Delhivery.
+                </p>
+              )}
+            </div>
+          </div>
+          {pickup.orders && pickup.orders.length > 0 ? (
+            <div className='overflow-x-auto rounded border border-gray-200 bg-white'>
+              <table className='min-w-full divide-y divide-gray-200 text-left text-sm'>
+                <thead className='bg-gray-50 text-xs uppercase text-gray-500'>
+                  <tr>
+                    <th className='px-4 py-2 font-semibold'>Order</th>
+                    <th className='px-4 py-2 font-semibold'>AWB</th>
+                    <th className='px-4 py-2 font-semibold'>Customer</th>
+                    <th className='px-4 py-2 font-semibold'>Payment</th>
+                    <th className='px-4 py-2 font-semibold'>Amount</th>
+                    <th className='px-4 py-2 font-semibold'>Current Status</th>
+                  </tr>
+                </thead>
+                <tbody className='divide-y divide-gray-100'>
+                  {pickup.orders.map((order) => (
+                    <tr key={order.orderId || order.orderNumber}>
+                      <td className='px-4 py-2'>
+                        <Link href={orderHref(order)} className='font-semibold text-blue-700 hover:underline'>
+                          {order.orderNumber || '-'}
+                        </Link>
+                      </td>
+                      <td className='px-4 py-2 font-mono text-xs text-gray-700'>{order.waybill || '-'}</td>
+                      <td className='px-4 py-2 text-gray-700'>{order.customerName || '-'}</td>
+                      <td className='px-4 py-2 text-gray-700'>
+                        {order.paymentMethod === 'cod' ? 'COD' : 'Razorpay / Paid'}
+                      </td>
+                      <td className='px-4 py-2 font-semibold text-gray-800'>{money(order.finalAmount)}</td>
+                      <td className='px-4 py-2'>
+                        {order.currentOrderStatus ? (
+                          <span className='rounded bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700'>
+                            {displayValue(order.currentOrderStatus)}
+                          </span>
+                        ) : (
+                          <span className='text-xs text-gray-500'>Status unavailable</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className='text-sm text-gray-500'>No order details were saved for this pickup request.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
