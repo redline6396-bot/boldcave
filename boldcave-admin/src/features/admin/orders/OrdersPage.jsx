@@ -1,14 +1,56 @@
 'use client';
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, Copy, ExternalLink, Package, Search } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, ExternalLink, Package, RefreshCw, RotateCcw, Search } from 'lucide-react';
 import { NotificationContext } from '@/context/NotificationContext';
 import { api, formatDate, formatDateTime, getErrorMessage, getId, money } from '@/lib/api';
 
-const ORDER_STATUSES = ['confirmed', 'processing', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'cancelled'];
+const ORDER_STATUSES = ['shipping_pending', 'confirmed', 'processing', 'shipped', 'in_transit', 'out_for_delivery', 'delivered', 'cancelled'];
 const ADMIN_MANUAL_ORDER_STATUSES = ['confirmed'];
 const PAYMENT_STATUSES = ['pending', 'paid', 'failed', 'cod'];
+const PAYMENT_METHODS = ['razorpay', 'cod'];
+const SHIPPING_PROVIDERS = ['delhivery', 'shadowfax', 'shiprocket'];
 const CANCELLABLE_ORDER_STATUSES = ['confirmed', 'processing'];
+const DEFAULT_SUMMARY = { revenue: 0, averageOrderValue: 0, openOrders: 0, cancelledOrders: 0 };
+const SORT_OPTIONS = [
+  { value: 'createdAt-desc', label: 'Newest first' },
+  { value: 'createdAt-asc', label: 'Oldest first' },
+  { value: 'amount-desc', label: 'Amount: high to low' },
+  { value: 'amount-asc', label: 'Amount: low to high' },
+  { value: 'updatedAt-desc', label: 'Recently updated' },
+  { value: 'orderNumber-asc', label: 'Order ID: A to Z' },
+];
+
+function getIstDateInputValue(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function shiftInputDate(value, days) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function getPresetDates(preset) {
+  const today = getIstDateInputValue();
+  if (preset === 'today') return { from: today, to: today };
+  if (preset === 'last7') return { from: shiftInputDate(today, -6), to: today };
+  if (preset === 'last30') return { from: shiftInputDate(today, -29), to: today };
+  if (preset === 'thisMonth') return { from: `${today.slice(0, 7)}-01`, to: today };
+  return { from: '', to: '' };
+}
+
+function dateBoundary(value, endOfDay = false) {
+  if (!value) return '';
+  return `${value}T${endOfDay ? '23:59:59.999' : '00:00:00'}+05:30`;
+}
 
 function getDelhiveryTrackingUrl(waybill) {
   const value = String(waybill || '').trim();
@@ -168,37 +210,75 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState(DEFAULT_SUMMARY);
   const [status, setStatus] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [shippingProvider, setShippingProvider] = useState('');
+  const [datePreset, setDatePreset] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [sort, setSort] = useState('createdAt-desc');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState({});
   const [busyId, setBusyId] = useState('');
   const [cancelReasons, setCancelReasons] = useState({});
   const [copiedOrderId, setCopiedOrderId] = useState('');
   const openedOrderFromLink = useRef('');
+  const loadRequestRef = useRef(0);
   const { success, error: showError } = useContext(NotificationContext);
 
   const loadOrders = useCallback(async () => {
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
     try {
       setLoading(true);
       setError('');
-      const params = new URLSearchParams({ limit: '100' });
+      const [sortBy, sortOrder] = sort.split('-');
+      const params = new URLSearchParams({
+        limit: String(pageSize),
+        skip: String((page - 1) * pageSize),
+        sortBy,
+        sortOrder,
+      });
       if (status) params.set('status', status);
       if (paymentStatus) params.set('paymentStatus', paymentStatus);
+      if (paymentMethod) params.set('paymentMethod', paymentMethod);
+      if (shippingProvider) params.set('shippingProvider', shippingProvider);
+      if (search) params.set('search', search);
+      if (dateFrom) params.set('dateFrom', dateBoundary(dateFrom));
+      if (dateTo) params.set('dateTo', dateBoundary(dateTo, true));
       const response = await api.get(`/api/admin/orders?${params.toString()}`);
-      setOrders(response.data.data.orders || []);
+      if (loadRequestRef.current !== requestId) return;
+      const data = response.data.data;
+      setOrders(data.orders || []);
+      setTotal(Number(data.total || 0));
+      setSummary({ ...DEFAULT_SUMMARY, ...(data.summary || {}) });
     } catch (err) {
+      if (loadRequestRef.current !== requestId) return;
       const message = getErrorMessage(err, 'Unable to load orders');
       setError(message);
       showError(message);
     } finally {
-      setLoading(false);
+      if (loadRequestRef.current === requestId) setLoading(false);
     }
-  }, [paymentStatus, showError, status]);
+  }, [dateFrom, dateTo, page, pageSize, paymentMethod, paymentStatus, search, shippingProvider, showError, sort, status]);
 
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
+  useEffect(() => {
+    const timer = globalThis.setTimeout(() => {
+      setPage(1);
+      setSearch(searchInput.trim());
+    }, 350);
+    return () => globalThis.clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     if (!orders.length || typeof window === 'undefined') return undefined;
@@ -218,22 +298,42 @@ export default function OrdersPage() {
     return () => globalThis.clearTimeout(timer);
   }, [orders]);
 
-  const visibleOrders = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return orders;
-    return orders.filter((order) =>
-      [
-        order.orderNumber,
-        order.customer?.phone,
-        order.customer?.email,
-        order.customer?.firstName,
-        order.customer?.lastName,
-        order.deliveryAddress?.fullName,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(needle))
-    );
-  }, [orders, search]);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const activeFilterCount = useMemo(
+    () => [status, paymentStatus, paymentMethod, shippingProvider, dateFrom || dateTo].filter(Boolean).length,
+    [dateFrom, dateTo, paymentMethod, paymentStatus, shippingProvider, status]
+  );
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const updateFilter = (setter, value) => {
+    setPage(1);
+    setter(value);
+  };
+
+  const applyDatePreset = (value) => {
+    const range = getPresetDates(value);
+    setDatePreset(value);
+    setDateFrom(range.from);
+    setDateTo(range.to);
+    setPage(1);
+  };
+
+  const resetFilters = () => {
+    setStatus('');
+    setPaymentStatus('');
+    setPaymentMethod('');
+    setShippingProvider('');
+    setDatePreset('all');
+    setDateFrom('');
+    setDateTo('');
+    setSearchInput('');
+    setSearch('');
+    setSort('createdAt-desc');
+    setPage(1);
+  };
 
   const updateStatus = async (order, nextStatus) => {
     const id = getId(order);
@@ -416,25 +516,73 @@ export default function OrdersPage() {
         <p className='mt-1 text-sm text-gray-500'>Inspect orders and update fulfillment status.</p>
       </header>
 
-      <section className='rounded border border-gray-200 bg-white p-4'>
-        <div className='grid gap-3 md:grid-cols-[1fr_180px_180px]'>
+      <section className='rounded border border-gray-200 bg-white p-4 space-y-4'>
+        <div className='grid gap-3 md:grid-cols-[1fr_180px_180px_180px]'>
           <label className='relative block'>
             <Search className='absolute left-3 top-2.5 text-gray-400' size={18} />
             <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               placeholder='Search order, phone, email'
               className='w-full rounded border border-gray-300 py-2 pl-10 pr-3 outline-none focus:border-black'
             />
           </label>
-          <select value={status} onChange={(event) => setStatus(event.target.value)} className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'>
+          <select value={status} onChange={(event) => updateFilter(setStatus, event.target.value)} className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'>
             <option value=''>All statuses</option>
             {ORDER_STATUSES.map((entry) => <option key={entry} value={entry}>{displayValue(entry)}</option>)}
           </select>
-          <select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)} className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'>
+          <select value={paymentStatus} onChange={(event) => updateFilter(setPaymentStatus, event.target.value)} className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'>
             <option value=''>All payments</option>
-            {PAYMENT_STATUSES.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
+            {PAYMENT_STATUSES.map((entry) => <option key={entry} value={entry}>{displayValue(entry)}</option>)}
           </select>
+          <select value={sort} onChange={(event) => updateFilter(setSort, event.target.value)} className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'>
+            {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </div>
+        
+        <div className='flex flex-wrap items-center gap-3'>
+          <select value={datePreset} onChange={(e) => applyDatePreset(e.target.value)} className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'>
+            <option value='all'>All time</option>
+            <option value='today'>Today</option>
+            <option value='last7'>Last 7 days</option>
+            <option value='last30'>Last 30 days</option>
+            <option value='thisMonth'>This month</option>
+            <option value='custom'>Custom</option>
+          </select>
+
+          <div className='flex items-center gap-2'>
+            <input 
+              type='date' 
+              value={dateFrom} 
+              onChange={(e) => { setDatePreset('custom'); updateFilter(setDateFrom, e.target.value); }} 
+              className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black' 
+              title='Select start date'
+            />
+            <span className='text-gray-500'>to</span>
+            <input 
+              type='date' 
+              value={dateTo} 
+              onChange={(e) => { setDatePreset('custom'); updateFilter(setDateTo, e.target.value); }} 
+              className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black' 
+              title='Select end date'
+            />
+          </div>
+
+          <select value={paymentMethod} onChange={(event) => updateFilter(setPaymentMethod, event.target.value)} className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'>
+            <option value=''>All methods</option>
+            {PAYMENT_METHODS.map((entry) => <option key={entry} value={entry}>{displayValue(entry)}</option>)}
+          </select>
+
+          <select value={shippingProvider} onChange={(event) => updateFilter(setShippingProvider, event.target.value)} className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'>
+            <option value=''>All providers</option>
+            {SHIPPING_PROVIDERS.map((entry) => <option key={entry} value={entry}>{displayValue(entry)}</option>)}
+          </select>
+
+          {activeFilterCount > 0 && (
+            <button type='button' onClick={resetFilters} className='inline-flex items-center gap-2 text-sm text-gray-500 hover:text-black'>
+              <RotateCcw size={14} /> Clear filters
+            </button>
+          )}
         </div>
       </section>
 
@@ -442,11 +590,11 @@ export default function OrdersPage() {
         <StateMessage message='Loading orders...' />
       ) : error ? (
         <StateMessage tone='error' message={error} onRetry={loadOrders} />
-      ) : visibleOrders.length === 0 ? (
+      ) : orders.length === 0 ? (
         <StateMessage message='No orders found.' />
       ) : (
         <div className='space-y-4'>
-          {visibleOrders.map((order) => {
+          {orders.map((order) => {
             const id = getId(order);
             const isOpen = Boolean(expanded[id]);
             const displayOrderId = order.orderNumber || id;
@@ -697,6 +845,30 @@ export default function OrdersPage() {
               </section>
             );
           })}
+        </div>
+      )}
+
+      {totalPages > 1 && !loading && (
+        <div className='flex items-center justify-between border-t border-gray-200 pt-4'>
+          <p className='text-sm text-gray-500'>
+            Showing {Math.min(1 + (page - 1) * pageSize, total)} to {Math.min(page * pageSize, total)} of {total} orders
+          </p>
+          <div className='flex items-center gap-2'>
+            <button
+              disabled={page === 1}
+              onClick={() => setPage(p => p - 1)}
+              className='inline-flex h-9 items-center justify-center gap-1 rounded border border-gray-300 px-3 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50'
+            >
+              <ChevronLeft size={16} /> Previous
+            </button>
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage(p => p + 1)}
+              className='inline-flex h-9 items-center justify-center gap-1 rounded border border-gray-300 px-3 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50'
+            >
+              Next <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       )}
     </div>
