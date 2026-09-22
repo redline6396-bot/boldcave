@@ -984,6 +984,7 @@ export async function trackShipment(order) {
     };
 
     applyStatusToOrder(order, fields.shipmentStatus);
+    order.markModified("shadowfax");
     await order.save();
 
     return setCached(trackingCache, awbNumber, {
@@ -1041,6 +1042,7 @@ export async function cancelShipment(order) {
     cancelError: "",
     cancelledAt: cancelStatus === "cancelled" ? new Date() : undefined,
   };
+  order.markModified("shadowfax");
   await order.save();
 
   return {

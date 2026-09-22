@@ -578,6 +578,7 @@ export async function confirmDelhiveryPickupAssociation(
   if (!order.delhivery.pickupRequestedAt && activePickup?.requestedAt) {
     order.delhivery.pickupRequestedAt = activePickup.requestedAt;
   }
+  order.markModified("delhivery");
   await order.save();
   await persistConfirmedOrderInPickupRecord({
     order,
@@ -657,6 +658,7 @@ export async function revokeDelhiveryOrderPickupConfirmation({ orderId, pickupId
   order.delhivery.pickupState = "requested";
   order.delhivery.pickupStateSource = "admin_reverted_confirmation";
   order.delhivery.pickupConfirmedAt = undefined;
+  order.markModified("delhivery");
   await order.save();
 
   const record = await DelhiveryPickupRecord.findOne({ pickupId: normalizedPickupId }).sort({ createdAt: -1 });

@@ -32,6 +32,7 @@ async function trackShipment(order) {
   order.shiprocket.shipmentStatus = status;
   order.shiprocket.lastSyncedAt = new Date();
   applyShiprocketStatusToOrder(order, status);
+  order.markModified("shiprocket");
   await order.save();
 
   return {

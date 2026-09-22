@@ -428,6 +428,34 @@ export default function OrdersPage() {
     }
   };
 
+  const syncActiveOrdersTracking = async () => {
+    try {
+      setBusyId('sync-all-tracking');
+      let syncedCount = 0;
+      for (const order of orders) {
+        if (!['shipped', 'in_transit', 'out_for_delivery'].includes(order.orderStatus)) continue;
+        
+        const id = getId(order);
+        if (order.shippingProvider === 'delhivery' && order.delhivery?.waybill) {
+          try {
+            const response = await api.post(`/api/admin/orders/${id}/delhivery/tracking`);
+            setOrders((current) => current.map((entry) => (getId(entry) === id ? response.data.data.order : entry)));
+            syncedCount++;
+          } catch (err) {
+            console.error(`Failed to sync Delhivery tracking for order ${id}`, err);
+          }
+        }
+      }
+      if (syncedCount > 0) {
+        success(`Synced tracking for ${syncedCount} active Delhivery orders`);
+      } else {
+        success('No active Delhivery orders to sync on this page');
+      }
+    } finally {
+      setBusyId('');
+    }
+  };
+
   const reconcileDelhiveryCancellation = async (order) => {
     const id = getId(order);
     const confirmed = globalThis.confirm(
@@ -511,9 +539,20 @@ export default function OrdersPage() {
 
   return (
     <div className='space-y-6'>
-      <header>
-        <h1 className='text-3xl font-bold text-gray-950'>Orders</h1>
-        <p className='mt-1 text-sm text-gray-500'>Inspect orders and update fulfillment status.</p>
+      <header className='flex flex-wrap items-center justify-between gap-4'>
+        <div>
+          <h1 className='text-3xl font-bold text-gray-950'>Orders</h1>
+          <p className='mt-1 text-sm text-gray-500'>Inspect orders and update fulfillment status.</p>
+        </div>
+        <button
+          type='button'
+          onClick={syncActiveOrdersTracking}
+          disabled={Boolean(busyId)}
+          className='inline-flex items-center gap-2 rounded bg-black px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50'
+        >
+          <RefreshCw size={16} className={busyId === 'sync-all-tracking' ? 'animate-spin' : ''} />
+          {busyId === 'sync-all-tracking' ? 'Syncing...' : 'Sync Active Tracking'}
+        </button>
       </header>
 
       <section className='rounded border border-gray-200 bg-white p-4 space-y-4'>

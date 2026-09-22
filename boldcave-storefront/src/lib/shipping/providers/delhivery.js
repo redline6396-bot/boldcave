@@ -1058,6 +1058,7 @@ export async function trackShipment(order, { forceRefresh = false } = {}) {
         : {}),
     };
     applyStatusToOrder(order, fields.shipmentStatus);
+    order.markModified("delhivery");
     await order.save();
     if (pickupScheduled) {
       const { confirmDelhiveryPickupAssociation } = await import(
@@ -1130,6 +1131,7 @@ export async function cancelShipment(order) {
       cancelError: "",
       cancelledAt: order.delhivery?.cancelledAt || new Date(),
     };
+    order.markModified("delhivery");
     await order.save();
     return {
       provider: DELHIVERY_PROVIDER_ID,
@@ -1186,6 +1188,7 @@ export async function cancelShipment(order) {
       cancelError: "",
       cancelledAt: new Date(),
     };
+    order.markModified("delhivery");
     await order.save();
     return {
       provider: DELHIVERY_PROVIDER_ID,
@@ -1198,6 +1201,7 @@ export async function cancelShipment(order) {
       cancelStatus: "failed",
       cancelError: sanitizeDelhiveryError(error),
     };
+    order.markModified("delhivery");
     await order.save();
     throw error;
   }
