@@ -41,13 +41,20 @@ async function updateReviewRoute(request, { params }) {
     }
 
     if (body.title !== undefined) review.title = cleanString(body.title, 100);
+    if (body.displayName !== undefined) review.displayName = cleanString(body.displayName, 100) || [auth.user.firstName, auth.user.lastName].filter(Boolean).join(" ");
+    if (body.email !== undefined) review.email = cleanString(body.email, 255) || auth.user.email;
     if (body.text !== undefined || body.reviewText !== undefined) {
       const text = cleanString(body.text || body.reviewText, 2000);
       if (!text) return failure("INVALID_REVIEW", "Review text is required", 400);
       review.text = text;
     }
     if (Array.isArray(body.photos)) review.photos = body.photos.slice(0, 2);
-    review.approved = false;
+    
+    const StoreSettings = (await import("@/models/StoreSettings")).default;
+    const settings = await StoreSettings.findOne({ key: "global" });
+    const autoApprove = settings?.autoApproveReviews || false;
+    
+    review.approved = autoApprove;
 
     await review.save();
     return success({ review });

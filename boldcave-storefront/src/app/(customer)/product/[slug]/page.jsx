@@ -31,7 +31,7 @@ function getProductLoadErrorType(error) {
 }
 
 const getPublishedProduct = cache((slug) =>
-  withRuntimeDatabase(() => getProductBySlug(slug))
+  withRuntimeDatabase(() => getProductBySlug(slug, { includeRating: true }))
 );
 
 export async function generateMetadata({ params }) {
@@ -120,7 +120,7 @@ export default async function ProductPage({ params }) {
       {product && <script {...jsonLdScriptProps(getProductJsonLd(product))} />}
       <ProductDetailClient
         initialProduct={product}
-        initialReviewSummary={null}
+        initialReviewSummary={product?.rating || null}
         initialLoadError={loadError}
         initialLoadErrorType={loadErrorType}
       />

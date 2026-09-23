@@ -57,6 +57,9 @@ async function updateAdminStoreSettingsRoute(request) {
       ...(body.codCharge !== undefined
         ? { codCharge: body.codCharge }
         : {}),
+      ...(body.autoApproveReviews !== undefined
+        ? { autoApproveReviews: body.autoApproveReviews === true }
+        : {}),
     });
 
     return applyAdminCors(

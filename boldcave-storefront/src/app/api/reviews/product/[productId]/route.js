@@ -40,6 +40,7 @@ async function getProductReviewsRoute(_request, { params }) {
           text: review.text,
           photos: review.photos || [],
           verifiedPurchase: review.verifiedPurchase,
+          displayName: review.displayName || "",
           user: {
             firstName: review.user?.firstName || "Customer",
             lastName: review.user?.lastName || "",

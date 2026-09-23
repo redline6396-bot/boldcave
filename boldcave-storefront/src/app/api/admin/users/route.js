@@ -29,6 +29,14 @@ async function getAdminUsersRoute(request) {
 
     const filter = {};
     if (status) filter.status = status;
+    
+    let userIdsFromOrders = [];
+    if (search.toLowerCase().startsWith('ord-')) {
+      await connectDB();
+      const matchingOrders = await Order.find({ orderNumber: { $regex: search, $options: "i" } }).select("user");
+      userIdsFromOrders = matchingOrders.map(o => o.user).filter(Boolean);
+    }
+    
     if (search) {
       filter.$or = [
         { phone: { $regex: search, $options: "i" } },
@@ -36,6 +44,15 @@ async function getAdminUsersRoute(request) {
         { firstName: { $regex: search, $options: "i" } },
         { lastName: { $regex: search, $options: "i" } },
       ];
+      
+      const { isObjectId } = await import("@/lib/validation");
+      if (isObjectId(search)) {
+        filter.$or.push({ _id: search });
+      }
+      
+      if (userIdsFromOrders.length > 0) {
+        filter.$or.push({ _id: { $in: userIdsFromOrders } });
+      }
     }
 
     await connectDB();

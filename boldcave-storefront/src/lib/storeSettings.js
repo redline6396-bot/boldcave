@@ -42,6 +42,9 @@ export function serializeStoreSettings(
         settings?.codCharge,
       ),
 
+    autoApproveReviews:
+      settings?.autoApproveReviews === true,
+
     updatedAt:
       settings?.updatedAt || null,
   };
@@ -154,6 +157,11 @@ export async function updateStoreSettings({
   if (comingSoonMode !== undefined) {
     updates.comingSoonMode =
       comingSoonMode === true;
+  }
+
+  if (arguments[0].autoApproveReviews !== undefined) {
+    updates.autoApproveReviews =
+      arguments[0].autoApproveReviews === true;
   }
 
   if (

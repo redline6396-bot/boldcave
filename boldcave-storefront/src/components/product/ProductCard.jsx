@@ -288,7 +288,13 @@ export default function ProductCard({ product, priority = false }) {
         <button
           type="button"
           onClick={handleNavigate}
-          className="inline-block cursor-pointer text-[18px] font-semibold uppercase leading-none tracking-[0.08em] text-neutral-950 max-[450px]:text-[14px] max-[450px]:tracking-[0.05em] sm:text-[21px] sm:tracking-[0.09em]"
+          className={[
+            "block w-full cursor-pointer truncate font-semibold uppercase leading-none text-neutral-950",
+            isCombo
+              ? "text-[14px] tracking-[0.04em] max-[450px]:text-[12px] max-[450px]:tracking-[0.02em] sm:text-[18px] sm:tracking-[0.06em]"
+              : "text-[18px] tracking-[0.08em] max-[450px]:text-[14px] max-[450px]:tracking-[0.05em] sm:text-[21px] sm:tracking-[0.09em]",
+          ].join(" ")}
+          title={product.name}
         >
           <span className="decoration-neutral-500 decoration-[0.75px] underline-offset-[5px] group-hover:underline">
             {product.name}

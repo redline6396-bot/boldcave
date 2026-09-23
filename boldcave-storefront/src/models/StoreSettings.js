@@ -55,6 +55,10 @@ const storeSettingsSchema = new mongoose.Schema(
       requestStartedAt: { type: Date },
       cancelledAt: { type: Date },
     },
+    autoApproveReviews: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
@@ -64,7 +68,8 @@ if (
   (!mongoose.models.StoreSettings.schema?.path("codCharge.enabled") ||
     !mongoose.models.StoreSettings.schema?.path("comingSoonMode") ||
     !mongoose.models.StoreSettings.schema?.path("delhiveryPickup.autoPickupEnabled") ||
-    !mongoose.models.StoreSettings.schema?.path("delhiveryPickup.cancelledAt"))
+    !mongoose.models.StoreSettings.schema?.path("delhiveryPickup.cancelledAt") ||
+    !mongoose.models.StoreSettings.schema?.path("autoApproveReviews"))
 ) {
   delete mongoose.models.StoreSettings;
 }

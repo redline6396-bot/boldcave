@@ -1,6 +1,6 @@
 import connectDB from "@/lib/db";
 import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
-import { handleRouteError, success } from "@/lib/api/response";
+import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { serializeAdminReview } from "@/lib/api/reviews";
 import { requireAdmin } from "@/lib/auth/session";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
@@ -15,6 +15,10 @@ export function OPTIONS(request) {
 
 export async function GET(request) {
   return withRuntimeDatabase(() => getAdminReviewsRoute(request));
+}
+
+export async function PATCH(request) {
+  return withRuntimeDatabase(() => patchAdminReviewsRoute(request));
 }
 
 async function getAdminReviewsRoute(request) {
@@ -35,7 +39,20 @@ async function getAdminReviewsRoute(request) {
     if (rating >= 1 && rating <= 5) filter.rating = rating;
     if (approved === "true") filter.approved = true;
     if (approved === "false") filter.approved = false;
-    if (search) filter.$or = [{ title: { $regex: search, $options: "i" } }, { text: { $regex: search, $options: "i" } }];
+    
+    let userIdsFromOrders = [];
+    if (search.toLowerCase().startsWith('ord-')) {
+      await connectDB();
+      const Order = (await import("@/models/Order")).default;
+      const matchingOrders = await Order.find({ orderNumber: { $regex: search, $options: "i" } }).select("user");
+      userIdsFromOrders = matchingOrders.map(o => o.user).filter(Boolean);
+    }
+
+    if (search) {
+      filter.$or = [{ title: { $regex: search, $options: "i" } }, { text: { $regex: search, $options: "i" } }];
+      if (isObjectId(search)) filter.$or.push({ _id: search }, { user: search });
+      if (userIdsFromOrders.length > 0) filter.$or.push({ user: { $in: userIdsFromOrders } });
+    }
 
     await connectDB();
     const [reviews, total] = await Promise.all([
@@ -52,6 +69,24 @@ async function getAdminReviewsRoute(request) {
       request,
       success({ reviews: reviews.map(serializeAdminReview), total, limit, skip })
     );
+  } catch (error) {
+    return applyAdminCors(request, handleRouteError(error));
+  }
+}
+
+async function patchAdminReviewsRoute(request) {
+  try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return applyAdminCors(request, auth.response);
+
+    const body = await readJson(request);
+    if (body.action === "approveAllPending") {
+      await connectDB();
+      const result = await Review.updateMany({ approved: false }, { $set: { approved: true } });
+      return applyAdminCors(request, success({ modifiedCount: result.modifiedCount }, 200));
+    }
+
+    return applyAdminCors(request, failure("INVALID_ACTION", "Invalid action", 400));
   } catch (error) {
     return applyAdminCors(request, handleRouteError(error));
   }

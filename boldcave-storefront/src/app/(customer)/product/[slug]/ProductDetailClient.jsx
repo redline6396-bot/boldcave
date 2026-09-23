@@ -926,9 +926,9 @@ export default function ProductDetailClient({
                 <ProductRatingStars value={reviewSummary.average} />
                 <span className="leading-none">
                   {reviewSummary.count
-                    ? `${reviewSummary.average.toFixed(1)} · ${reviewSummary.count} ${
+                    ? `${reviewSummary.average.toFixed(1)} (${reviewSummary.count} ${
                         reviewSummary.count === 1 ? "review" : "reviews"
-                      }`
+                      })`
                     : "No reviews yet"}
                 </span>
               </button>

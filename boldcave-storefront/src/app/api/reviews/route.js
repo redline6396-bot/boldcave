@@ -33,6 +33,8 @@ async function getReviewRoute(request) {
         ? {
             id: String(review._id),
             product: String(review.product),
+            displayName: review.displayName || "",
+            email: review.email || "",
             rating: review.rating,
             title: review.title || "",
             text: review.text,
@@ -64,6 +66,8 @@ async function createReviewRoute(request) {
     const rating = toPositiveInteger(body.rating, 0);
     const text = cleanString(body.text || body.reviewText, 2000);
     const title = cleanString(body.title, 100);
+    const displayName = cleanString(body.displayName, 100) || [auth.user.firstName, auth.user.lastName].filter(Boolean).join(" ");
+    const email = cleanString(body.email, 255) || auth.user.email;
 
     if (!isObjectId(productId)) {
       return failure("INVALID_PRODUCT_ID", "Invalid product id", 400);
@@ -87,15 +91,21 @@ async function createReviewRoute(request) {
       return failure("REVIEW_EXISTS", "You have already reviewed this product", 409);
     }
 
+    const StoreSettings = (await import("@/models/StoreSettings")).default;
+    const settings = await StoreSettings.findOne({ key: "global" });
+    const autoApprove = settings?.autoApproveReviews || false;
+
     const review = await Review.create({
       product: productId,
       user: auth.user._id,
+      displayName,
+      email,
       rating,
       title,
       text,
       photos: Array.isArray(body.photos) ? body.photos.slice(0, 2) : [],
       verifiedPurchase: await hasVerifiedPurchase(auth.user._id, productId),
-      approved: false,
+      approved: autoApprove,
     });
 
     return success({ review }, 201);

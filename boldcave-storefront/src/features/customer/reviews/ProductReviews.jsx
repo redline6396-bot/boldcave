@@ -376,6 +376,8 @@ export default function ProductReviews({ productId }) {
         rating: Number(form.rating),
         title: form.title.trim(),
         text: form.text.trim(),
+        displayName: form.displayName.trim(),
+        email: form.email.trim(),
         photos,
       };
 
@@ -465,7 +467,7 @@ export default function ProductReviews({ productId }) {
                 <div className="flex items-center gap-2.5 sm:gap-3.5">
                   <Stars value={averageRating} size={18} gap={3.5} smSize={24} smGap={5} />
                   <span className="text-[13px] leading-none text-neutral-950 sm:text-[15px]">
-                    {averageRating.toFixed(2)} out of 5
+                    {averageRating.toFixed(1)} out of 5
                   </span>
                 </div>
                 <p className="mt-3 text-[13px] leading-none text-neutral-700 sm:mt-4 sm:text-[15px]">
@@ -935,6 +937,7 @@ function InteractiveStars({ value, onChange }) {
 function ReviewRow({ review, saving, onEdit, onDelete, onPhotoClick }) {
   const [brokenPhotos, setBrokenPhotos] = useState({});
   const name =
+    review.displayName ||
     [review.user?.firstName, review.user?.lastName].filter(Boolean).join(" ") ||
     "Customer";
   const showOwnerActions = Boolean(onEdit || onDelete);

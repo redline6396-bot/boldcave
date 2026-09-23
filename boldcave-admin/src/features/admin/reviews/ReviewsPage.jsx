@@ -14,7 +14,46 @@ export default function ReviewsPage() {
   const [productId, setProductId] = useState('');
   const [search, setSearch] = useState('');
   const [busyAction, setBusyAction] = useState('');
+  const [autoApprove, setAutoApprove] = useState(false);
   const { success, error: showError } = useContext(NotificationContext);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      const response = await api.get('/api/admin/store-settings');
+      setAutoApprove(response.data.data.autoApproveReviews || false);
+    } catch {
+      // fail silently
+    }
+  }, []);
+
+  const toggleAutoApprove = async () => {
+    try {
+      setBusyAction('toggle_auto_approve');
+      const nextValue = !autoApprove;
+      const response = await api.patch('/api/admin/store-settings', { autoApproveReviews: nextValue });
+      setAutoApprove(response.data.data.autoApproveReviews || false);
+      success(nextValue ? 'Auto-approve enabled' : 'Auto-approve disabled');
+    } catch {
+      showError('Could not update auto-approve setting.');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const approveAllPending = async () => {
+    if (!window.confirm('Approve all currently pending reviews?')) return;
+    try {
+      setBusyAction('approve_all');
+      const response = await api.patch('/api/admin/reviews', { action: 'approveAllPending' });
+      const { modifiedCount } = response.data.data;
+      success(`Approved ${modifiedCount} review(s)`);
+      if (modifiedCount > 0) loadReviews();
+    } catch {
+      showError('Could not approve all reviews.');
+    } finally {
+      setBusyAction('');
+    }
+  };
 
   const loadReviews = useCallback(async () => {
     try {
@@ -35,6 +74,10 @@ export default function ReviewsPage() {
       setLoading(false);
     }
   }, [approved, productId, rating, search, showError]);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   useEffect(() => {
     const timer = setTimeout(loadReviews, search ? 250 : 0);
@@ -76,16 +119,41 @@ export default function ReviewsPage() {
 
   return (
     <div className='space-y-6'>
-      <header>
-        <h1 className='text-3xl font-bold text-gray-950'>Reviews</h1>
-        <p className='mt-1 text-sm text-gray-500'>Moderate customer reviews and verified purchase labels.</p>
+      <header className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
+        <div>
+          <h1 className='text-3xl font-bold text-gray-950'>Reviews</h1>
+          <p className='mt-1 text-sm text-gray-500'>Moderate customer reviews and verified purchase labels.</p>
+        </div>
+        <div className='flex flex-wrap items-center gap-3'>
+          <button
+            onClick={toggleAutoApprove}
+            disabled={busyAction === 'toggle_auto_approve'}
+            className={`inline-flex items-center gap-2 rounded border px-4 py-2 text-sm font-semibold transition-colors ${
+              autoApprove 
+                ? 'border-black bg-black text-white hover:bg-gray-800' 
+                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            {autoApprove ? <Check size={16} /> : <X size={16} />}
+            {autoApprove ? 'Auto-Approve: ON' : 'Auto-Approve: OFF'}
+          </button>
+          
+          <button
+            onClick={approveAllPending}
+            disabled={busyAction === 'approve_all'}
+            className='inline-flex items-center gap-2 rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50'
+          >
+            <Check size={16} />
+            Approve All Pending
+          </button>
+        </div>
       </header>
 
       <section className='rounded border border-gray-200 bg-white p-4'>
         <div className='grid gap-3 lg:grid-cols-[1fr_150px_170px_1fr]'>
           <label className='relative block'>
             <Search className='absolute left-3 top-2.5 text-gray-400' size={18} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder='Search title or text' className='w-full rounded border border-gray-300 py-2 pl-10 pr-3 outline-none focus:border-black' />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder='Search text, user, order...' className='w-full rounded border border-gray-300 py-2 pl-10 pr-3 outline-none focus:border-black' />
           </label>
           <select value={rating} onChange={(event) => setRating(event.target.value)} className='rounded border border-gray-300 px-3 py-2 outline-none focus:border-black'>
             <option value=''>All ratings</option>
@@ -131,10 +199,11 @@ function ReviewCard({ review, busyAction, onPatch, onDelete }) {
   const deleteBusy = busyAction === `${reviewId}:delete`;
   const productName = review.product?.name || 'Deleted product';
   const customerName =
+    review.displayName ||
     [review.user?.firstName, review.user?.lastName].filter(Boolean).join(' ') ||
     review.user?.phone ||
     'Customer';
-  const customerEmail = review.user?.email || '-';
+  const customerEmail = review.email || review.user?.email || '-';
 
   return (
     <section className='rounded border border-gray-200 bg-white p-5'>
@@ -151,7 +220,7 @@ function ReviewCard({ review, busyAction, onPatch, onDelete }) {
                     <p className='mt-1 whitespace-pre-line text-sm text-gray-600'>{review.text}</p>
                   </div>
                   <p className='text-xs text-gray-500'>
-                    {customerName} | {customerEmail} | {formatDate(review.createdAt)}
+                    {customerName} | {customerEmail} | User ID: {getId(review.user) || '-'} | {formatDate(review.createdAt)}
                   </p>
                   {review.photos?.length > 0 && (
                     <div className='flex flex-wrap gap-2'>

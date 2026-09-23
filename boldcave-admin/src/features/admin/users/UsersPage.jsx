@@ -19,7 +19,9 @@ export default function UsersPage() {
     try {
       setLoading(true);
       setError('');
-      const response = await api.get('/api/admin/users?limit=100');
+      const params = new URLSearchParams({ limit: '100' });
+      if (search.trim()) params.set('search', search.trim());
+      const response = await api.get(`/api/admin/users?${params.toString()}`);
       setUsers(response.data.data.users || []);
     } catch (err) {
       const message = getErrorMessage(err, 'Unable to load users');
@@ -28,21 +30,14 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [showError]);
+  }, [search, showError]);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    const timer = setTimeout(loadUsers, search ? 250 : 0);
+    return () => clearTimeout(timer);
+  }, [loadUsers, search]);
 
-  const visibleUsers = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return users;
-    return users.filter((user) =>
-      [user.phone, user.email, user.firstName, user.lastName]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(needle))
-    );
-  }, [search, users]);
+  const visibleUsers = users;
 
   const loadDetails = async (user) => {
     const id = getId(user);
@@ -96,7 +91,7 @@ export default function UsersPage() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder='Search phone, name, email'
+            placeholder='Search ID, order, phone, name...'
             className='w-full rounded border border-gray-300 py-2 pl-10 pr-3 outline-none focus:border-black'
           />
         </label>
@@ -139,6 +134,7 @@ export default function UsersPage() {
                       <>
                         <div className='flex flex-wrap items-center justify-between gap-3'>
                           <div className='text-sm text-gray-600'>
+                            <p>User ID: {id}</p>
                             <p>Verified phone: {activeUser.phoneVerified ? 'Yes' : 'No'}</p>
                             <p>Status: {activeUser.status || 'active'}</p>
                           </div>
@@ -195,7 +191,10 @@ export default function UsersPage() {
 }
 
 function fullName(user) {
-  return [user.firstName, user.lastName].filter(Boolean).join(' ');
+  const name = [user.firstName, user.lastName].filter(Boolean).join(' ');
+  if (name) return name;
+  const lastAddress = user.addresses?.[user.addresses.length - 1];
+  return lastAddress?.fullName || '';
 }
 
 function Badge({ children, tone = 'default' }) {
