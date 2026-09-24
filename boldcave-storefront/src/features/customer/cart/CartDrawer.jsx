@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -34,54 +34,88 @@ const formatPrice = (value) =>
 
 const formatRupees = (value) => `₹${formatPrice(value)}`;
 
-function getVisualViewportBottom() {
-  if (typeof window === "undefined") return null;
+const CART_KEYBOARD_BREAKPOINT = "(max-width: 1023px)";
+const KEYBOARD_HEIGHT_THRESHOLD = 80;
+
+function getCartViewport() {
+  if (typeof window === "undefined") {
+    return {
+      bottom: null,
+      height: null,
+      isCompact: false,
+      isKeyboardOpen: false,
+      top: 0,
+    };
+  }
 
   const viewport = window.visualViewport;
+  const isCompact = window.matchMedia(CART_KEYBOARD_BREAKPOINT).matches;
   const bottom = viewport
     ? viewport.offsetTop + viewport.height
     : window.innerHeight;
+  const isKeyboardOpen = Boolean(
+    viewport &&
+      isCompact &&
+      viewport.height < window.innerHeight - KEYBOARD_HEIGHT_THRESHOLD,
+  );
 
-  return Number.isFinite(bottom) && bottom > 0
-    ? Math.floor(bottom)
-    : null;
+  return {
+    bottom:
+      Number.isFinite(bottom) && bottom > 0
+        ? Math.floor(bottom)
+        : null,
+    height: viewport ? Math.floor(viewport.height) : null,
+    isCompact,
+    isKeyboardOpen,
+    top: viewport ? Math.floor(viewport.offsetTop) : 0,
+  };
 }
 
-function useVisualViewportBottom(isOpen) {
-  const [bottom, setBottom] = useState(null);
+function useCartViewport(isOpen) {
+  const [cartViewport, setCartViewport] = useState({
+    bottom: null,
+    height: null,
+    isCompact: false,
+    isKeyboardOpen: false,
+    top: 0,
+  });
 
   useEffect(() => {
     if (!isOpen) return undefined;
 
-    const updateBottom = () => {
-      const nextBottom = getVisualViewportBottom();
-      if (nextBottom) setBottom(nextBottom);
+    const updateViewport = () => {
+      setCartViewport(getCartViewport());
     };
 
-    updateBottom();
+    updateViewport();
 
     const viewport = window.visualViewport;
-    viewport?.addEventListener("resize", updateBottom);
-    viewport?.addEventListener("scroll", updateBottom);
-    window.addEventListener("resize", updateBottom);
-    window.addEventListener("orientationchange", updateBottom);
+    viewport?.addEventListener("resize", updateViewport);
+    viewport?.addEventListener("scroll", updateViewport);
+    window.addEventListener("resize", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
 
     return () => {
-      viewport?.removeEventListener("resize", updateBottom);
-      viewport?.removeEventListener("scroll", updateBottom);
-      window.removeEventListener("resize", updateBottom);
-      window.removeEventListener("orientationchange", updateBottom);
+      viewport?.removeEventListener("resize", updateViewport);
+      viewport?.removeEventListener("scroll", updateViewport);
+      window.removeEventListener("resize", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
     };
   }, [isOpen]);
 
-  return bottom;
+  return cartViewport;
 }
 
 export default function CartDrawer({ isOpen, onClose }) {
   const router = useRouter();
-  const visualViewportBottom = useVisualViewportBottom(isOpen);
+  const cartViewport = useCartViewport(isOpen);
+  const scrollAreaRef = useRef(null);
+  const couponAreaRef = useRef(null);
+  const focusGuardTimerRef = useRef(null);
 
   const [isSummaryOpen, setIsSummaryOpen] =
+    useState(false);
+  const [isCouponInputFocused, setIsCouponInputFocused] =
     useState(false);
 
   const {
@@ -138,6 +172,83 @@ export default function CartDrawer({ isOpen, onClose }) {
     cart.length > 0 &&
     items.length === 0;
 
+  const isKeyboardMode =
+    cartViewport.isKeyboardOpen ||
+    (cartViewport.isCompact && isCouponInputFocused);
+
+  const keepCouponInputVisible = useCallback(() => {
+    const scrollArea = scrollAreaRef.current;
+    const couponArea = couponAreaRef.current;
+    const focusedElement = document.activeElement;
+
+    if (
+      !scrollArea ||
+      !couponArea ||
+      !focusedElement ||
+      !couponArea.contains(focusedElement) ||
+      !focusedElement.matches("input, textarea, select")
+    ) {
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    const scrollRect = scrollArea.getBoundingClientRect();
+    const fieldRect = focusedElement.getBoundingClientRect();
+    const visibleTop = Math.max(
+      scrollRect.top,
+      viewport?.offsetTop || 0,
+    ) + 16;
+    const visibleBottom = Math.min(
+      scrollRect.bottom,
+      viewport
+        ? viewport.offsetTop + viewport.height
+        : window.innerHeight,
+    ) - 16;
+
+    if (fieldRect.bottom > visibleBottom) {
+      scrollArea.scrollBy({
+        top: fieldRect.bottom - visibleBottom,
+        behavior: "smooth",
+      });
+    } else if (fieldRect.top < visibleTop) {
+      scrollArea.scrollBy({
+        top: fieldRect.top - visibleTop,
+        behavior: "smooth",
+      });
+    }
+  }, []);
+
+  const handleCouponFocus = useCallback(
+    (event) => {
+      if (!event.target.matches("input, textarea, select")) {
+        return;
+      }
+
+      setIsCouponInputFocused(true);
+      window.clearTimeout(focusGuardTimerRef.current);
+      focusGuardTimerRef.current = window.setTimeout(
+        () => setIsCouponInputFocused(false),
+        700,
+      );
+      window.requestAnimationFrame(keepCouponInputVisible);
+      window.setTimeout(keepCouponInputVisible, 180);
+      window.setTimeout(keepCouponInputVisible, 360);
+    },
+    [keepCouponInputVisible],
+  );
+
+  const handleCouponBlur = useCallback((event) => {
+    if (event.target.matches("input, textarea, select")) {
+      window.clearTimeout(focusGuardTimerRef.current);
+      setIsCouponInputFocused(false);
+    }
+  }, []);
+
+  useEffect(
+    () => () => window.clearTimeout(focusGuardTimerRef.current),
+    [],
+  );
+
   useEffect(() => {
     if (!isOpen) {
       return undefined;
@@ -174,8 +285,20 @@ export default function CartDrawer({ isOpen, onClose }) {
   useEffect(() => {
     if (!isOpen) {
       setIsSummaryOpen(false);
+      setIsCouponInputFocused(false);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && cartViewport.isKeyboardOpen) {
+      window.requestAnimationFrame(keepCouponInputVisible);
+    }
+  }, [
+    cartViewport.height,
+    cartViewport.isKeyboardOpen,
+    isOpen,
+    keepCouponInputVisible,
+  ]);
 
   useEffect(() => {
     if (isOpen) {
@@ -221,6 +344,13 @@ export default function CartDrawer({ isOpen, onClose }) {
         style={{
           fontFamily:
             '"Helvetica Neue", Arial, sans-serif',
+          ...(cartViewport.isKeyboardOpen && cartViewport.height
+            ? {
+                bottom: "auto",
+                height: `${cartViewport.height}px`,
+                top: `${cartViewport.top}px`,
+              }
+            : {}),
         }}
       >
         {/* Compact header */}
@@ -249,6 +379,7 @@ export default function CartDrawer({ isOpen, onClose }) {
         {/* Products + coupon scroll together. Scrollbar stays hidden visually. */}
 
         <div
+          ref={scrollAreaRef}
           className="cart-drawer-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
           style={{
             scrollbarWidth: "none",
@@ -496,7 +627,12 @@ export default function CartDrawer({ isOpen, onClose }) {
               {/* Keep coupons directly after the products. Anchoring this block to
                   the bottom makes it jump upward when the pricing panel expands. */}
 
-              <div className="border-t border-neutral-200 pb-4 pt-3 sm:pb-5 sm:pt-4">
+              <div
+                ref={couponAreaRef}
+                onFocusCapture={handleCouponFocus}
+                onBlurCapture={handleCouponBlur}
+                className="border-t border-neutral-200 pb-4 pt-3 sm:pb-5 sm:pt-4"
+              >
                 <CouponSection
                   subtotal={
                     sellingSubtotal
@@ -535,7 +671,7 @@ export default function CartDrawer({ isOpen, onClose }) {
           )}
         </div>
 
-        {items.length > 0 && (
+        {items.length > 0 && !isKeyboardMode && (
           <div
             className="cart-drawer-scroll mb-[78px] min-h-0 max-h-[min(42svh,320px)] shrink overflow-y-auto bg-white"
             style={{
@@ -684,7 +820,7 @@ export default function CartDrawer({ isOpen, onClose }) {
 
       </aside>
 
-      {items.length > 0 && (
+      {items.length > 0 && !isKeyboardMode && (
           <div
             className={[
               "fixed bottom-auto right-0 z-[122] w-full max-w-[420px] transition-transform duration-300 ease-out sm:max-w-[430px]",
@@ -693,8 +829,8 @@ export default function CartDrawer({ isOpen, onClose }) {
                 : "translate-x-[calc(100%+2px)]",
             ].join(" ")}
             style={{
-              top: visualViewportBottom
-                ? `${visualViewportBottom}px`
+              top: cartViewport.bottom
+                ? `${cartViewport.bottom}px`
                 : "100svh",
             }}
           >
