@@ -117,6 +117,8 @@ export default function CartDrawer({ isOpen, onClose }) {
     useState(false);
   const [isCouponInputFocused, setIsCouponInputFocused] =
     useState(false);
+  const [areCartActionsVisible, setAreCartActionsVisible] =
+    useState(false);
 
   const {
     cart,
@@ -288,6 +290,25 @@ export default function CartDrawer({ isOpen, onClose }) {
       setIsCouponInputFocused(false);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      isKeyboardMode ||
+      isResolving ||
+      items.length === 0
+    ) {
+      setAreCartActionsVisible(false);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(
+      () => setAreCartActionsVisible(true),
+      100,
+    );
+
+    return () => window.clearTimeout(timer);
+  }, [isKeyboardMode, isOpen, isResolving, items.length]);
 
   useEffect(() => {
     if (isOpen && cartViewport.isKeyboardOpen) {
@@ -673,7 +694,12 @@ export default function CartDrawer({ isOpen, onClose }) {
 
         {items.length > 0 && !isKeyboardMode && (
           <div
-            className="cart-drawer-scroll mb-[78px] min-h-0 max-h-[min(42svh,320px)] shrink overflow-y-auto bg-white"
+            className={[
+              "cart-drawer-scroll mb-[78px] min-h-0 max-h-[min(42svh,320px)] shrink overflow-y-auto bg-white transition-opacity duration-200",
+              areCartActionsVisible
+                ? "opacity-100"
+                : "pointer-events-none opacity-0",
+            ].join(" ")}
             style={{
               scrollbarWidth: "none",
               msOverflowStyle: "none",
@@ -823,10 +849,13 @@ export default function CartDrawer({ isOpen, onClose }) {
       {items.length > 0 && !isKeyboardMode && (
           <div
             className={[
-              "fixed bottom-auto right-0 z-[122] w-full max-w-[420px] transition-transform duration-300 ease-out sm:max-w-[430px]",
+              "fixed bottom-auto right-0 z-[122] w-full max-w-[420px] transition-[transform,opacity] duration-300 ease-out sm:max-w-[430px]",
               isOpen
                 ? "translate-x-0"
-                : "translate-x-[calc(100%+2px)]",
+                : "translate-x-[calc(100%+2px)] opacity-0",
+              areCartActionsVisible
+                ? "opacity-100"
+                : "pointer-events-none opacity-0",
             ].join(" ")}
             style={{
               top: cartViewport.bottom

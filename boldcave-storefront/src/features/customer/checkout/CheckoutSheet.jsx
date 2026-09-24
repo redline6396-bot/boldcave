@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 const CHECKOUT_SHEET_HISTORY_KEY = "__boldcaveCheckoutSheet";
 const MOBILE_SHEET_QUERY = "(max-width: 639px)";
+const KEYBOARD_SHEET_QUERY = "(max-width: 1023px)";
 
 let sheetId = 0;
 let checkoutSheetStack = [];
@@ -17,6 +18,70 @@ function isMobileSheetViewport() {
   if (typeof window === "undefined") return false;
 
   return window.matchMedia?.(MOBILE_SHEET_QUERY).matches ?? false;
+}
+
+export function useMobileKeyboardOffset() {
+  const [offset, setOffset] = useState(0);
+  const layoutHeightRef = useRef(0);
+  const stableOffsetRef = useRef(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const updateOffset = () => {
+      const mobile =
+        window.matchMedia?.(KEYBOARD_SHEET_QUERY).matches ?? false;
+      const viewport = window.visualViewport;
+
+      if (!mobile || !viewport) {
+        layoutHeightRef.current = 0;
+        stableOffsetRef.current = 0;
+        setOffset(0);
+        return;
+      }
+
+      layoutHeightRef.current = Math.max(
+        layoutHeightRef.current,
+        window.innerHeight || 0,
+        document.documentElement.clientHeight || 0,
+      );
+
+      const viewportBottom = viewport.offsetTop + viewport.height;
+      const nextOffset = Math.max(
+        0,
+        Math.ceil(layoutHeightRef.current - viewportBottom),
+      );
+
+      if (nextOffset < 80) {
+        stableOffsetRef.current = 0;
+        setOffset(0);
+        return;
+      }
+
+      // Opening the keyboard may emit several resize/scroll events. Keep the
+      // largest occluded area so the sheet never bounces down between digits.
+      stableOffsetRef.current = Math.max(
+        stableOffsetRef.current,
+        nextOffset,
+      );
+      setOffset(stableOffsetRef.current);
+    };
+
+    updateOffset();
+
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", updateOffset);
+    viewport?.addEventListener("scroll", updateOffset);
+    window.addEventListener("orientationchange", updateOffset);
+
+    return () => {
+      viewport?.removeEventListener("resize", updateOffset);
+      viewport?.removeEventListener("scroll", updateOffset);
+      window.removeEventListener("orientationchange", updateOffset);
+    };
+  }, []);
+
+  return offset;
 }
 
 function getTopCheckoutSheet() {
@@ -166,6 +231,9 @@ export default function CheckoutSheet({
         className={[
           "checkout-sheet-panel relative z-10 w-full max-w-[100dvw] overflow-visible",
           mobileFullPage ? "checkout-sheet-mobile-full" : "",
+          mobileBottomOffset > 0
+            ? "checkout-sheet-keyboard-open"
+            : "",
         ].join(" ")}
         style={{
           "--sheet-desktop-height": resolvedHeight,
@@ -282,6 +350,15 @@ export default function CheckoutSheet({
               opacity: 1;
               transform: translate(-50%, 0);
             }
+          }
+        }
+
+        @media (min-width: 640px) and (max-width: 1023px) {
+          .checkout-sheet-keyboard-open {
+            bottom: calc(var(--sheet-mobile-bottom-offset) + 12px);
+            max-height: calc(
+              100vh - var(--sheet-mobile-bottom-offset) - 24px
+            );
           }
         }
       `}</style>

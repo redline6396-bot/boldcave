@@ -7,7 +7,9 @@ import {
   Pencil,
   Plus,
 } from "lucide-react";
-import CheckoutSheet from "@/features/customer/checkout/CheckoutSheet";
+import CheckoutSheet, {
+  useMobileKeyboardOffset,
+} from "@/features/customer/checkout/CheckoutSheet";
 
 export const emptyAddress = {
   fullName: "",
@@ -502,7 +504,15 @@ export default function DeliveryAddress({
             </h3>
           </div>
 
-          <div className="px-4 pb-4 sm:px-5">
+          <form
+            className="px-4 pb-4 sm:px-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!saving && serviceability.status !== "checking") {
+                handlePincodeContinue();
+              }
+            }}
+          >
             {localError && (
               <div className="mb-3 rounded-[9px] bg-red-50 px-3 py-2 text-[10px] leading-4 text-red-600">
                 {localError}
@@ -517,6 +527,7 @@ export default function DeliveryAddress({
               label="Pincode *"
               value={editorDraft.pincode}
               inputMode="numeric"
+              enterKeyHint="go"
               error={
                 localError === "Enter a valid 6 digit pincode."
                   ? localError
@@ -536,8 +547,7 @@ export default function DeliveryAddress({
             />
 
             <button
-              type="button"
-              onClick={handlePincodeContinue}
+              type="submit"
               disabled={
                 saving ||
                 serviceability.status === "checking" ||
@@ -549,7 +559,7 @@ export default function DeliveryAddress({
                 ? "Checking pincode..."
                 : "Continue"}
             </button>
-          </div>
+          </form>
         </SheetShell>
       )}
 
@@ -813,6 +823,7 @@ function SheetShell({
 }) {
   const desktopHeight = compact ? 205 : tall ? 620 : 370;
   const desktopMaxHeight = compact ? "42vh" : tall ? "82vh" : "64vh";
+  const mobileBottomOffset = useMobileKeyboardOffset();
 
   return (
     <CheckoutSheet
@@ -820,6 +831,7 @@ function SheetShell({
       zIndex={250}
       desktopHeight={desktopHeight}
       desktopMaxHeight={desktopMaxHeight}
+      mobileBottomOffset={mobileBottomOffset}
       ariaLabel="Close address sheet"
       showClose={!hideClose}
     >
@@ -835,6 +847,7 @@ function FloatingInput({
   onChange,
   type = "text",
   inputMode,
+  enterKeyHint,
   disabled = false,
   autoFocus = false,
   error = "",
@@ -849,6 +862,7 @@ function FloatingInput({
         <input
           type={type}
           inputMode={inputMode}
+          enterKeyHint={enterKeyHint}
           value={value}
           disabled={disabled}
           autoFocus={autoFocus}

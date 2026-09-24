@@ -254,6 +254,12 @@ export default function PhoneOtpForm({
   const handleOtpKeyDown = (index, event) => {
     if (event.key === "Enter" && !loading) {
       event.preventDefault();
+
+      if (index < OTP_LENGTH - 1) {
+        otpRefs.current[index + 1]?.focus();
+        return;
+      }
+
       event.currentTarget.form?.requestSubmit();
       return;
     }
@@ -344,6 +350,7 @@ export default function PhoneOtpForm({
                   ref={phoneRef}
                   type="tel"
                   inputMode="numeric"
+                  enterKeyHint="go"
                   autoComplete="tel"
                   maxLength={10}
                   value={phone}
@@ -355,6 +362,14 @@ export default function PhoneOtpForm({
                     if (error) setError("");
                   }}
                   placeholder="Enter Mobile Number"
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+
+                    event.preventDefault();
+                    if (!loading && phoneReady) {
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
                   className="h-full min-w-0 flex-1 bg-white px-3.5 text-[16px] text-neutral-950 outline-none placeholder:text-neutral-400 md:text-[14px]"
                 />
               </div>
@@ -422,6 +437,9 @@ export default function PhoneOtpForm({
                     }}
                     type="text"
                     inputMode="numeric"
+                    enterKeyHint={
+                      index === OTP_LENGTH - 1 ? "done" : "next"
+                    }
                     autoComplete={index === 0 ? "one-time-code" : "off"}
                     maxLength={1}
                     value={digit}

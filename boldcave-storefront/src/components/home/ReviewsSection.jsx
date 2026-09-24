@@ -261,10 +261,10 @@ function ReviewItem({
         className={[
           "w-full overflow-hidden bg-neutral-100",
           mobile
-            ? "aspect-[4/5]"
+            ? "aspect-[3/4]"
             : tablet
               ? "mx-auto"
-              : "h-[460px] xl:h-[500px] 2xl:h-[535px]",
+              : "h-[480px] xl:h-[520px] 2xl:h-[555px]",
         ].join(" ")}
       >
         <img
@@ -290,12 +290,12 @@ function ReviewItem({
 
       <p
         className={[
-          "text-neutral-700",
+          "font-light text-neutral-600",
           mobile
             ? "mt-4 text-[15px] leading-[1.65]"
             : tablet
               ? "mt-5 max-w-[650px] text-[17px] leading-[1.65]"
-              : "mt-5 max-w-[420px] text-[16px] leading-[1.65] text-neutral-700 xl:text-[17px]",
+              : "mt-5 max-w-[420px] text-[16px] leading-[1.65] xl:text-[17px]",
         ].join(" ")}
       >
         {review.text}
@@ -304,10 +304,10 @@ function ReviewItem({
       <p
         className={[
           "font-semibold text-neutral-950",
-          mobile ? "mt-2 text-[14px]" : "mt-2.5 text-[15px]",
+          mobile ? "mt-2 text-[15px]" : "mt-2.5 text-[16px]",
         ].join(" ")}
       >
-        {review.name}
+        - {review.name}
       </p>
     </article>
   );

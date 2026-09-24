@@ -48,7 +48,9 @@ import {
   COD_MINIMUM_AMOUNT_MESSAGE,
   isCodOrderAmountEligible,
 } from "@/lib/orders/paymentRules";
-import CheckoutSheet from "@/features/customer/checkout/CheckoutSheet";
+import CheckoutSheet, {
+  useMobileKeyboardOffset,
+} from "@/features/customer/checkout/CheckoutSheet";
 
 const RAZORPAY_SCRIPT_URL =
   "https://checkout.razorpay.com/v1/checkout.js";
@@ -163,6 +165,7 @@ function getCheckoutViewportHeight() {
   if (typeof window === "undefined") return null;
 
   const height =
+    window.visualViewport?.height ||
     document.documentElement.clientHeight ||
     window.innerHeight;
 
@@ -179,33 +182,11 @@ function shouldUseMobileCheckoutHistory() {
 
 function useCheckoutViewportHeight() {
   const [height, setHeight] = useState(null);
-  const stableHeightRef = useRef(null);
 
   useEffect(() => {
     const updateHeight = () => {
       const nextHeight = getCheckoutViewportHeight();
       if (!nextHeight) return;
-
-      const activeElement = document.activeElement;
-      const inputFocused =
-        activeElement &&
-        (["INPUT", "TEXTAREA", "SELECT"].includes(
-          activeElement.tagName
-        ) ||
-          activeElement.isContentEditable);
-
-      const stableHeight = stableHeightRef.current;
-
-      if (
-        inputFocused &&
-        stableHeight &&
-        nextHeight < stableHeight - 120
-      ) {
-        setHeight(stableHeight);
-        return;
-      }
-
-      stableHeightRef.current = nextHeight;
       setHeight(nextHeight);
     };
 
@@ -1008,6 +989,12 @@ export default function CheckoutPage({
   const handleOtpKeyDown = (index, event) => {
     if (event.key === "Enter") {
       event.preventDefault();
+
+      if (index < OTP_LENGTH - 1) {
+        otpRefs.current[index + 1]?.focus();
+        return;
+      }
+
       if (!otpLoading) {
         handleVerifyOtp();
       }
@@ -1463,7 +1450,7 @@ export default function CheckoutPage({
       style={checkoutViewportStyle}
     >
       <div className="flex h-full min-h-0 w-full max-w-[100dvw] items-stretch justify-center overflow-x-hidden sm:items-center">
-        <section className="relative flex h-full min-h-0 w-full max-w-[100dvw] flex-col overflow-hidden bg-[#f7f8f9] text-[#111b28] sm:h-[760px] sm:max-h-[90svh] sm:max-w-[450px] sm:rounded-[18px] sm:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+        <section className="checkout-panel relative flex h-full min-h-0 w-full max-w-[100dvw] flex-col overflow-hidden bg-[#f7f8f9] text-[#111b28] sm:h-[760px] sm:max-h-[90svh] sm:max-w-[450px] sm:rounded-[18px] sm:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
           <header className="flex h-[62px] shrink-0 items-center justify-between border-b border-[#e0e4e8] bg-white px-4 sm:px-5">
             <button
               type="button"
@@ -1602,6 +1589,7 @@ export default function CheckoutPage({
                       ref={checkoutPhoneRef}
                       type="tel"
                       inputMode="numeric"
+                      enterKeyHint="go"
                       autoComplete="tel"
                       autoFocus
                       maxLength={10}
@@ -1615,6 +1603,17 @@ export default function CheckoutPage({
                         setPhoneVerified(false);
                         setPhoneVerificationToken("");
                         setError("");
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+
+                        event.preventDefault();
+                        if (
+                          !otpLoading &&
+                          isValidPhone(checkoutPhone)
+                        ) {
+                          handlePhoneContinue();
+                        }
                       }}
                       className="min-w-0 flex-1 bg-white px-3 text-[16px] outline-none sm:text-[14px]"
                     />
@@ -1865,6 +1864,16 @@ export default function CheckoutPage({
           width: 0;
           height: 0;
         }
+
+        @media (min-width: 640px) {
+          .checkout-panel {
+            height: min(
+              760px,
+              calc(var(--checkout-viewport-height) - 40px)
+            );
+            max-height: calc(var(--checkout-viewport-height) - 40px);
+          }
+        }
       `}</style>
     </div>
   );
@@ -1886,32 +1895,7 @@ function OtpSheet({
   demoOtp,
   onVerify,
 }) {
-  const actionRef = useRef(null);
   const mobileBottomOffset = useMobileKeyboardOffset();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-
-    const keepActionVisible = () => {
-      window.requestAnimationFrame(() => {
-        actionRef.current?.scrollIntoView({
-          block: "nearest",
-          inline: "nearest",
-        });
-      });
-    };
-
-    keepActionVisible();
-
-    const viewport = window.visualViewport;
-    viewport?.addEventListener("resize", keepActionVisible);
-    viewport?.addEventListener("scroll", keepActionVisible);
-
-    return () => {
-      viewport?.removeEventListener("resize", keepActionVisible);
-      viewport?.removeEventListener("scroll", keepActionVisible);
-    };
-  }, [digits, error, loading, mobileBottomOffset]);
 
   return (
     <CheckoutSheet
@@ -1958,6 +1942,9 @@ function OtpSheet({
               }}
               type="text"
               inputMode="numeric"
+              enterKeyHint={
+                index === OTP_LENGTH - 1 ? "done" : "next"
+              }
               autoComplete={index === 0 ? "one-time-code" : "off"}
               maxLength={1}
               value={digit}
@@ -1999,7 +1986,7 @@ function OtpSheet({
           </p>
         )}
 
-        <div ref={actionRef} className="mt-5">
+        <div className="mt-5">
           <button
             type="button"
             onClick={onVerify}
@@ -2014,44 +2001,6 @@ function OtpSheet({
       </div>
     </CheckoutSheet>
   );
-}
-
-function useMobileKeyboardOffset() {
-  const [offset, setOffset] = useState(0);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-
-    const updateOffset = () => {
-      const mobile =
-        window.matchMedia?.("(max-width: 639px)").matches ?? false;
-      const viewport = window.visualViewport;
-
-      if (!mobile || !viewport) {
-        setOffset(0);
-        return;
-      }
-
-      const layoutHeight = window.innerHeight || viewport.height;
-      const viewportBottom = viewport.offsetTop + viewport.height;
-      setOffset(Math.max(0, Math.ceil(layoutHeight - viewportBottom)));
-    };
-
-    updateOffset();
-
-    const viewport = window.visualViewport;
-    viewport?.addEventListener("resize", updateOffset);
-    viewport?.addEventListener("scroll", updateOffset);
-    window.addEventListener("orientationchange", updateOffset);
-
-    return () => {
-      viewport?.removeEventListener("resize", updateOffset);
-      viewport?.removeEventListener("scroll", updateOffset);
-      window.removeEventListener("orientationchange", updateOffset);
-    };
-  }, []);
-
-  return offset;
 }
 
 function ExitConfirm({ onStay, onLeave }) {
