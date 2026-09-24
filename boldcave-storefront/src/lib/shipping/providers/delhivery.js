@@ -227,7 +227,26 @@ export async function checkServiceability({ deliveryPincode, cod = false }) {
 export async function validateCheckoutServiceability({
   deliveryPincode,
   cod = false,
+  items = [],
 }) {
+  try {
+    const checkoutOrder = { items };
+    getShipmentWeightGrams(checkoutOrder);
+    getShipmentDimensionsCm(checkoutOrder);
+    getHsnCodes(checkoutOrder);
+    getProductsDescription(checkoutOrder);
+  } catch (error) {
+    return {
+      ok: false,
+      code: error?.code || "DELHIVERY_SHIPPING_METADATA_INVALID",
+      message:
+        "One or more cart items have incomplete shipping details. Please contact support.",
+      status: 409,
+      retryable: false,
+      detail: sanitizeDelhiveryError(error),
+    };
+  }
+
   try {
     const result = await checkServiceability({ deliveryPincode, cod });
     if (!result.serviceable) {
@@ -327,13 +346,16 @@ function getShipmentDimensionsCm(order) {
       const length = Number(item?.lengthCm);
       const width = Number(item?.breadthCm);
       const height = Number(item?.heightCm);
+      const quantity = Number(item?.quantity);
       if (
         !Number.isFinite(length) ||
         length <= 0 ||
         !Number.isFinite(width) ||
         width <= 0 ||
         !Number.isFinite(height) ||
-        height <= 0
+        height <= 0 ||
+        !Number.isFinite(quantity) ||
+        quantity <= 0
       ) {
         throw createDelhiveryError(
           "DELHIVERY_DIMENSIONS_REQUIRED",
@@ -345,7 +367,7 @@ function getShipmentDimensionsCm(order) {
       return {
         shipment_length: Math.max(packageDimensions.shipment_length, length),
         shipment_width: Math.max(packageDimensions.shipment_width, width),
-        shipment_height: Math.max(packageDimensions.shipment_height, height),
+        shipment_height: packageDimensions.shipment_height + height * quantity,
       };
     },
     { shipment_length: 0, shipment_width: 0, shipment_height: 0 }

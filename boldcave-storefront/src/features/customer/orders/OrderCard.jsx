@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Check, Copy } from "lucide-react";
 import { getOrderShippingSummary } from "@/lib/shipping/summary";
+import {
+  getCloudinaryImageUrl,
+  getCloudinarySrcSet,
+} from "@/lib/cloudinary/images";
 
 const formatDate = (value) =>
   value
@@ -180,9 +184,17 @@ export default function OrderCard({ order }) {
               <div className="h-[58px] w-[58px] overflow-hidden border border-neutral-200 bg-neutral-50 sm:h-16 sm:w-16">
                 {item.image ? (
                   <img
-                    src={item.image}
+                    src={getCloudinaryImageUrl(item.image, { width: 128 })}
+                    srcSet={
+                      getCloudinarySrcSet(item.image, [64, 128, 192]) ||
+                      undefined
+                    }
+                    sizes="(min-width: 640px) 64px, 58px"
                     alt={item.name}
                     className="h-full w-full object-contain"
+                    loading={index === 0 ? "eager" : "lazy"}
+                    fetchPriority={index === 0 ? "high" : "low"}
+                    decoding="async"
                   />
                 ) : null}
               </div>

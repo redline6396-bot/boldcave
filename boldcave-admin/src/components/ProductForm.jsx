@@ -108,8 +108,8 @@ function hasShippingMetadata(item) {
   );
 }
 
-function isNumericString(value) {
-  return /^\d+$/.test(String(value || '').trim());
+function isValidHsnCode(value) {
+  return /^(?:\d{4}|\d{6}|\d{8})$/.test(String(value || '').trim());
 }
 
 function imageUrlsFromImages(images = []) {
@@ -545,8 +545,8 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
       ].some((value) => value < 0)) {
         throw new Error('Combo shipping weight and dimensions cannot be negative');
       }
-      if (form.hsnCode && !isNumericString(form.hsnCode)) {
-        throw new Error('HSN Code must contain numbers only');
+      if (form.hsnCode && !isValidHsnCode(form.hsnCode)) {
+        throw new Error('HSN Code must contain exactly 4, 6 or 8 digits');
       }
       if (form.status === 'published' && (!hasShippingMetadata(comboShipping) || !String(form.hsnCode || '').trim())) {
         throw new Error('Published combos need Combo SKU, HSN Code, weight and dimensions');
@@ -626,8 +626,8 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
     ) {
       throw new Error('Shipping weight and dimensions cannot be negative');
     }
-    if (form.hsnCode && !isNumericString(form.hsnCode)) {
-      throw new Error('HSN Code must contain numbers only');
+    if (form.hsnCode && !isValidHsnCode(form.hsnCode)) {
+      throw new Error('HSN Code must contain exactly 4, 6 or 8 digits');
     }
     if (
       form.status === 'published' &&
@@ -891,10 +891,10 @@ export default function ProductForm({ product, submitLabel = 'Save Product', onS
               onChange={(value) => setField('comboSku', value)}
               placeholder='DISCOVERY-COMBO'
             />
-            <Field label='Weight (kg)' type='number' value={form.comboWeightKg} onChange={(value) => setField('comboWeightKg', value)} placeholder='0.5' />
-            <Field label='Length (cm)' type='number' value={form.comboLengthCm} onChange={(value) => setField('comboLengthCm', value)} placeholder='12' />
-            <Field label='Breadth (cm)' type='number' value={form.comboBreadthCm} onChange={(value) => setField('comboBreadthCm', value)} placeholder='10' />
-            <Field label='Height (cm)' type='number' value={form.comboHeightCm} onChange={(value) => setField('comboHeightCm', value)} placeholder='8' />
+            <Field label='Packed combo weight (kg)' helper='Final weight of one complete combo after packing.' type='number' value={form.comboWeightKg} onChange={(value) => setField('comboWeightKg', value)} placeholder='0.5' />
+            <Field label='Outer box length (cm)' type='number' value={form.comboLengthCm} onChange={(value) => setField('comboLengthCm', value)} placeholder='12' />
+            <Field label='Outer box breadth (cm)' type='number' value={form.comboBreadthCm} onChange={(value) => setField('comboBreadthCm', value)} placeholder='10' />
+            <Field label='Outer box height (cm)' type='number' value={form.comboHeightCm} onChange={(value) => setField('comboHeightCm', value)} placeholder='8' />
           </div>
         </section>
       )}

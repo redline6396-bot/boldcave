@@ -19,6 +19,10 @@ import {
 } from "@/lib/clientApi";
 import { isOrderCancellable } from "@/lib/orders/cancellationEligibility";
 import { getOrderShippingSummary } from "@/lib/shipping/summary";
+import {
+  getCloudinaryImageUrl,
+  getCloudinarySrcSet,
+} from "@/lib/cloudinary/images";
 
 const ordersHref = "/profile?section=orders";
 const CANCELLATION_REASONS = [
@@ -748,9 +752,17 @@ export default function OrderDetails() {
                   <div className="h-[60px] w-[60px] overflow-hidden border border-neutral-200 bg-neutral-50 sm:h-[68px] sm:w-[68px]">
                     {item.image ? (
                       <img
-                        src={item.image}
+                        src={getCloudinaryImageUrl(item.image, { width: 136 })}
+                        srcSet={
+                          getCloudinarySrcSet(item.image, [68, 136, 204]) ||
+                          undefined
+                        }
+                        sizes="(min-width: 640px) 68px, 60px"
                         alt={item.name}
                         className="h-full w-full object-contain"
+                        loading={index === 0 ? "eager" : "lazy"}
+                        fetchPriority={index === 0 ? "high" : "low"}
+                        decoding="async"
                       />
                     ) : null}
                   </div>

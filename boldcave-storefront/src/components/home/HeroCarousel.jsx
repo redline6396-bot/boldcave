@@ -9,8 +9,8 @@ import { getCloudinaryImageUrl, getCloudinarySrcSet } from "@/lib/cloudinary/ima
 const AUTOPLAY_DELAY = 3000;
 const SWIPE_THRESHOLD = 48;
 const TAP_THRESHOLD = 10;
-const HERO_MOBILE_WIDTHS = [640, 960, 1280];
-const HERO_DESKTOP_WIDTHS = [1280, 1920, 2560, 3200];
+const HERO_MOBILE_WIDTHS = [480, 750, 1080, 1280];
+const HERO_DESKTOP_WIDTHS = [960, 1440, 1920, 2560];
 
 const fallbackSlides = [
   {

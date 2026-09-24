@@ -51,8 +51,8 @@ function hasShippingMetadata(variant) {
 function normalizeHsnCode(value) {
   const hsnCode = cleanString(value, 20);
   if (!hsnCode) return { hsnCode: "" };
-  if (!/^\d+$/.test(hsnCode)) {
-    return { error: "HSN Code must contain numbers only" };
+  if (!/^(?:\d{4}|\d{6}|\d{8})$/.test(hsnCode)) {
+    return { error: "HSN Code must contain exactly 4, 6 or 8 digits" };
   }
   return { hsnCode };
 }

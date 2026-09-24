@@ -20,6 +20,10 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { checkShippingServiceability, fetchMyOrders, updateCurrentUser } from "@/lib/clientApi";
 import OrderCard from "@/features/customer/orders/OrderCard";
+import {
+  getCloudinaryImageUrl,
+  getCloudinarySrcSet,
+} from "@/lib/cloudinary/images";
 
 const emptyAddress = {
   fullName: "",
@@ -1056,9 +1060,20 @@ function OverviewDashboard({
                 <div className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden bg-neutral-50">
                   {firstItem?.image ? (
                     <img
-                      src={firstItem.image}
+                      src={getCloudinaryImageUrl(firstItem.image, {
+                        width: 144,
+                      })}
+                      srcSet={
+                        getCloudinarySrcSet(
+                          firstItem.image,
+                          [72, 144, 216],
+                        ) || undefined
+                      }
+                      sizes="72px"
                       alt={firstItem.name || "Order item"}
                       className="h-full w-full object-contain"
+                      loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <Package className="h-7 w-7 text-neutral-400" strokeWidth={1.4} />

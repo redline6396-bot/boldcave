@@ -102,12 +102,12 @@ export default function CartPage() {
                     >
                       <img
                         src={getCloudinaryImageUrl(image, { width: 224 })}
-                        srcSet={getCloudinarySrcSet(image, [168, 224, 336]) || undefined}
+                        srcSet={getCloudinarySrcSet(image, [112, 224, 336]) || undefined}
                         sizes="(min-width: 640px) 112px, 84px"
                         alt={product.name}
                         className="h-full w-full object-contain"
-                        loading="eager"
-                        fetchPriority={index === 0 ? "high" : "auto"}
+                        loading={index === 0 ? "eager" : "lazy"}
+                        fetchPriority={index === 0 ? "high" : "low"}
                         decoding="async"
                       />
                     </Link>

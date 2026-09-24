@@ -115,16 +115,16 @@ export default function OrderSummary({
                 >
                   <div className="h-[76px] w-[76px] overflow-hidden rounded-[9px] border border-[#e0e4e8] bg-[#fafafa]">
                     <img
-                      src={getCloudinaryImageUrl(image, { width: 180 })}
+                      src={getCloudinaryImageUrl(image, { width: 152 })}
                       srcSet={
-                        getCloudinarySrcSet(image, [120, 180, 240]) ||
+                        getCloudinarySrcSet(image, [76, 152, 228]) ||
                         undefined
                       }
                       sizes="76px"
                       alt={product.name}
                       className="h-full w-full object-contain"
-                      loading="eager"
-                      fetchPriority={index === 0 ? "high" : "auto"}
+                      loading={index === 0 ? "eager" : "lazy"}
+                      fetchPriority={index === 0 ? "high" : "low"}
                       decoding="async"
                     />
                   </div>

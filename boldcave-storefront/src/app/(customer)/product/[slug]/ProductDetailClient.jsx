@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { preload } from "react-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -24,10 +25,11 @@ import { getCloudinaryImageUrl, getCloudinarySrcSet } from "@/lib/cloudinary/ima
 
 const FALLBACK_IMAGE =
   "https://upload.wikimedia.org/wikipedia/commons/a/a3/Image-not-found.png";
-const MAIN_GALLERY_IMAGE_WIDTH = 1800;
-const MAIN_GALLERY_IMAGE_WIDTHS = [1000, 1400, 1800, 2200];
+const MAIN_GALLERY_IMAGE_WIDTH = 1200;
+const MAIN_GALLERY_IMAGE_WIDTHS = [480, 720, 960, 1200, 1600];
 const MAIN_GALLERY_IMAGE_SIZES =
   "(min-width: 1024px) 600px, (min-width: 820px) 50vw, 100vw";
+const GALLERY_THUMBNAIL_WIDTH = 264;
 
 const formatPrice = (value) =>
   new Intl.NumberFormat("en-IN", {
@@ -190,6 +192,7 @@ export default function ProductDetailClient({
   const imagePreloadRequestRef = useRef(0);
   const preloadedPrimaryImagesRef = useRef(new Set());
   const pendingPrimaryPreloadsRef = useRef(new Map());
+  const preloadedThumbnailImagesRef = useRef(new Set());
 
   useEffect(() => {
     rememberProducts([product].filter(Boolean));
@@ -223,18 +226,84 @@ export default function ProductDetailClient({
     setDesktopThumbStart(0);
   }, [selectedSize]);
 
-  const galleryImages = product ? getProductImages(product, selectedVariant) : [FALLBACK_IMAGE];
+  const galleryImages = useMemo(
+    () =>
+      product
+        ? getProductImages(product, selectedVariant)
+        : [FALLBACK_IMAGE],
+    [product, selectedVariant]
+  );
   const selectedGalleryImage = galleryImages[selectedImage] || FALLBACK_IMAGE;
+  const selectedPrimaryImage = getCloudinaryImageUrl(selectedGalleryImage, {
+    width: MAIN_GALLERY_IMAGE_WIDTH,
+  });
+  const selectedPrimaryImageSrcSet = getCloudinarySrcSet(
+    selectedGalleryImage,
+    MAIN_GALLERY_IMAGE_WIDTHS
+  );
   const displayedPrimaryImage = getCloudinaryImageUrl(displayedImage, {
     width: MAIN_GALLERY_IMAGE_WIDTH,
-    dpr: "auto",
   });
   const displayedPrimaryImageSrcSet = getCloudinarySrcSet(
     displayedImage,
     MAIN_GALLERY_IMAGE_WIDTHS
   );
 
-  const preloadMainGalleryImage = useCallback((imageSource) => {
+  if (product && selectedPrimaryImage && selectedGalleryImage !== FALLBACK_IMAGE) {
+    preload(selectedPrimaryImage, {
+      as: "image",
+      fetchPriority: "high",
+      imageSrcSet: selectedPrimaryImageSrcSet || undefined,
+      imageSizes: MAIN_GALLERY_IMAGE_SIZES,
+    });
+  }
+
+  useEffect(() => {
+    const thumbnailImages = [];
+
+    galleryImages.forEach((imageSource) => {
+      const thumbnailUrl = getCloudinaryImageUrl(imageSource, {
+        width: GALLERY_THUMBNAIL_WIDTH,
+      });
+
+      if (
+        !thumbnailUrl ||
+        thumbnailUrl === FALLBACK_IMAGE ||
+        preloadedThumbnailImagesRef.current.has(thumbnailUrl)
+      ) {
+        return;
+      }
+
+      const thumbnailImage = new Image();
+      thumbnailImages.push(thumbnailImage);
+      thumbnailImage.decoding = "async";
+      thumbnailImage.fetchPriority = "auto";
+
+      const rememberThumbnail = () => {
+        preloadedThumbnailImagesRef.current.add(thumbnailUrl);
+      };
+
+      thumbnailImage.onload = () => {
+        if (thumbnailImage.decode) {
+          thumbnailImage.decode().then(rememberThumbnail).catch(rememberThumbnail);
+          return;
+        }
+
+        rememberThumbnail();
+      };
+      thumbnailImage.onerror = rememberThumbnail;
+      thumbnailImage.src = thumbnailUrl;
+    });
+
+    return () => {
+      thumbnailImages.forEach((thumbnailImage) => {
+        thumbnailImage.onload = null;
+        thumbnailImage.onerror = null;
+      });
+    };
+  }, [galleryImages]);
+
+  const preloadMainGalleryImage = useCallback((imageSource, fetchPriority = "auto") => {
     const imageKey = String(imageSource || "");
 
     if (!imageKey || imageKey === FALLBACK_IMAGE) {
@@ -253,7 +322,6 @@ export default function ProductDetailClient({
     const imageUrl =
       getCloudinaryImageUrl(imageSource, {
         width: MAIN_GALLERY_IMAGE_WIDTH,
-        dpr: "auto",
       }) || imageSource;
     const imageSrcSet = getCloudinarySrcSet(
       imageSource,
@@ -273,6 +341,7 @@ export default function ProductDetailClient({
       };
 
       image.decoding = "async";
+      image.fetchPriority = fetchPriority;
       if (imageSrcSet) {
         image.srcset = imageSrcSet;
         image.sizes = MAIN_GALLERY_IMAGE_SIZES;
@@ -308,7 +377,7 @@ export default function ProductDetailClient({
     if (preloadedPrimaryImagesRef.current.has(String(selectedGalleryImage))) {
       commit();
     } else {
-      preloadMainGalleryImage(selectedGalleryImage).then(commit);
+      preloadMainGalleryImage(selectedGalleryImage, "high").then(commit);
     }
 
     return () => {
@@ -643,10 +712,10 @@ export default function ProductDetailClient({
                   srcSet={displayedPrimaryImageSrcSet || undefined}
                   sizes={MAIN_GALLERY_IMAGE_SIZES}
                   alt={product.name}
-                  className="h-full w-full object-contain transition-opacity duration-150"
-                  loading={displayedImage === galleryImages[0] ? "eager" : "lazy"}
-                  fetchPriority={displayedImage === galleryImages[0] ? "high" : "auto"}
-                  decoding="async"
+                  className="h-full w-full object-contain"
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="sync"
                   onLoad={() => {
                     preloadedPrimaryImagesRef.current.add(String(displayedImage || ""));
                   }}
@@ -718,15 +787,15 @@ export default function ProductDetailClient({
                     ].join(" ")}
                     aria-label={`Show image ${index + 1}`}
                   >
-                    <img
-                      src={getCloudinaryImageUrl(image, { width: 420 })}
-                      srcSet={getCloudinarySrcSet(image, [240, 360, 480, 640]) || undefined}
-                      sizes="96px"
-                      alt={`${product.name} view ${index + 1}`}
-                      className="h-full w-full object-contain transition-opacity duration-200"
-                      loading="lazy"
-                      fetchPriority="low"
-                      decoding="async"
+                          <img
+                            src={getCloudinaryImageUrl(image, {
+                              width: GALLERY_THUMBNAIL_WIDTH,
+                            })}
+                            alt={`${product.name} view ${index + 1}`}
+                            className="h-full w-full object-contain"
+                            loading="eager"
+                            fetchPriority={selectedImage === index ? "high" : "auto"}
+                            decoding="sync"
                       onError={(event) => {
                         event.currentTarget.onerror = null;
                         event.currentTarget.src = FALLBACK_IMAGE;
@@ -783,15 +852,15 @@ export default function ProductDetailClient({
                     ].join(" ")}
                     aria-label={`Show image ${index + 1}`}
                   >
-                    <img
-                      src={getCloudinaryImageUrl(image, { width: 420 })}
-                      srcSet={getCloudinarySrcSet(image, [240, 360, 480, 640]) || undefined}
-                      sizes="120px"
-                      alt={`${product.name} view ${index + 1}`}
-                      className="h-full w-full object-contain transition-opacity duration-200"
-                      loading="lazy"
-                      fetchPriority="low"
-                      decoding="async"
+                          <img
+                            src={getCloudinaryImageUrl(image, {
+                              width: GALLERY_THUMBNAIL_WIDTH,
+                            })}
+                            alt={`${product.name} view ${index + 1}`}
+                            className="h-full w-full object-contain"
+                            loading="eager"
+                            fetchPriority={selectedImage === index ? "high" : "auto"}
+                            decoding="sync"
                       onError={(event) => {
                         event.currentTarget.onerror = null;
                         event.currentTarget.src = FALLBACK_IMAGE;
@@ -830,15 +899,15 @@ export default function ProductDetailClient({
                       ].join(" ")}
                       aria-label={`Show image ${index + 1}`}
                     >
-                      <img
-                        src={getCloudinaryImageUrl(image, { width: 420 })}
-                        srcSet={getCloudinarySrcSet(image, [240, 360, 480, 640]) || undefined}
-                        sizes="132px"
-                        alt={`${product.name} view ${index + 1}`}
-                        className="h-full w-full object-contain transition-opacity duration-200"
-                        loading="lazy"
-                        fetchPriority="low"
-                        decoding="async"
+                          <img
+                            src={getCloudinaryImageUrl(image, {
+                              width: GALLERY_THUMBNAIL_WIDTH,
+                            })}
+                            alt={`${product.name} view ${index + 1}`}
+                            className="h-full w-full object-contain"
+                            loading="eager"
+                            fetchPriority={selectedImage === index ? "high" : "auto"}
+                            decoding="sync"
                         onError={(event) => {
                           event.currentTarget.onerror = null;
                           event.currentTarget.src = FALLBACK_IMAGE;

@@ -74,6 +74,8 @@ export default async function RootLayout({ children }) {
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <meta name="theme-color" content="#000000" />
           <link rel="icon" href={APP_ICON_PATH} />
+          <link rel="preconnect" href="https://res.cloudinary.com" />
+          <link rel="dns-prefetch" href="https://res.cloudinary.com" />
         </head>
         <body>
           <Script id="meta-pixel" strategy="afterInteractive">
@@ -112,6 +114,8 @@ export default async function RootLayout({ children }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#ffffff" />
         <link rel="icon" href={APP_ICON_PATH} />
+        <link rel="preconnect" href="https://res.cloudinary.com" />
+        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
       </head>
       <body>
         <Script id="meta-pixel" strategy="afterInteractive">

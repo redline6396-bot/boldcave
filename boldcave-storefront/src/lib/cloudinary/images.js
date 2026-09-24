@@ -54,10 +54,11 @@ export function getCloudinaryImageUrl(image, options = {}) {
   }
 
   const width = Math.max(1, Math.round(Number(options.width) || 0));
-  const quality = options.quality || "q_auto:best";
+  const quality = options.quality || "q_auto:good";
   const transforms = [
     "f_auto",
     quality,
+    width ? "c_limit" : "",
     width ? `w_${width}` : "",
     options.dpr === "auto" ? "dpr_auto" : "",
   ].filter(Boolean);
@@ -77,10 +78,13 @@ export function getCloudinaryImageUrl(image, options = {}) {
     .join("/");
 }
 
-export function getCloudinarySrcSet(image, widths = []) {
+export function getCloudinarySrcSet(image, widths = [], options = {}) {
   return widths
     .map((width) => {
-      const url = getCloudinaryImageUrl(image, { width });
+      const url = getCloudinaryImageUrl(image, {
+        ...options,
+        width,
+      });
       return url ? `${url} ${width}w` : "";
     })
     .filter(Boolean)

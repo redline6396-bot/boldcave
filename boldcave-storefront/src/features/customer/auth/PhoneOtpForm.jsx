@@ -42,6 +42,7 @@ export default function PhoneOtpForm({
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(RESEND_SECONDS);
   const [offersOptIn, setOffersOptIn] = useState(true);
+  const [otpRequestedPhone, setOtpRequestedPhone] = useState("");
 
   const phoneRef = useRef(null);
   const otpRefs = useRef([]);
@@ -128,14 +129,14 @@ export default function PhoneOtpForm({
   }, [compactMobile, keyboardOpen, step]);
 
   useEffect(() => {
-    if (step !== "otp" || resendIn <= 0) return undefined;
+    if (!otpRequestedPhone || resendIn <= 0) return undefined;
 
     const timer = window.setInterval(() => {
       setResendIn((current) => Math.max(0, current - 1));
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [step, resendIn]);
+  }, [otpRequestedPhone, resendIn]);
 
   useEffect(() => {
     if (step !== "otp") {
@@ -165,6 +166,13 @@ export default function PhoneOtpForm({
       return;
     }
 
+    if (otpRequestedPhone === cleanPhone) {
+      setError("");
+      setMessage("");
+      setStep("otp");
+      return;
+    }
+
     setLoading(true);
     setError("");
     setMessage("");
@@ -173,6 +181,7 @@ export default function PhoneOtpForm({
     try {
       const result = await sendLoginOtp(cleanPhone);
       setPhone(result.phone || cleanPhone);
+      setOtpRequestedPhone(normalizePhone(result.phone || cleanPhone));
       setDemoOtp(result.demoOtp || "");
       setResendIn(RESEND_SECONDS);
       setStep("otp");
@@ -195,6 +204,7 @@ export default function PhoneOtpForm({
     try {
       const result = await sendLoginOtp(cleanPhone);
       setPhone(result.phone || cleanPhone);
+      setOtpRequestedPhone(normalizePhone(result.phone || cleanPhone));
       setDemoOtp(result.demoOtp || "");
       setResendIn(RESEND_SECONDS);
       resetOtp();
@@ -219,6 +229,7 @@ export default function PhoneOtpForm({
 
     try {
       await verifyLoginOtp({ phone: cleanPhone, otp });
+      setOtpRequestedPhone("");
       await completeAuth(redirectTo);
       onDone?.();
     } catch (verifyError) {
@@ -230,11 +241,8 @@ export default function PhoneOtpForm({
 
   const editPhone = () => {
     setStep("phone");
-    setOtpDigits(Array.from({ length: OTP_LENGTH }, () => ""));
     setError("");
     setMessage("");
-    setDemoOtp("");
-    setResendIn(RESEND_SECONDS);
   };
 
   const updateOtpDigit = (index, rawValue) => {

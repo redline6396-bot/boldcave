@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  getCloudinaryImageUrl,
+  getCloudinarySrcSet,
+} from "@/lib/cloudinary/images";
 
 const REVIEW_SWIPE_THRESHOLD = 42;
 
@@ -268,7 +272,14 @@ function ReviewItem({
         ].join(" ")}
       >
         <img
-          src={review.image}
+          src={getCloudinaryImageUrl(review.image, { width: 900 })}
+          srcSet={
+            getCloudinarySrcSet(
+              review.image,
+              [360, 600, 900, 1200],
+            ) || undefined
+          }
+          sizes="(min-width: 1024px) 32vw, (min-width: 640px) 560px, 84vw"
           alt=""
           className={[
             "h-full w-full object-cover object-center transition-opacity duration-200",

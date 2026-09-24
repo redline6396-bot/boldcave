@@ -119,6 +119,8 @@ export default function CartDrawer({ isOpen, onClose }) {
     useState(false);
   const [areCartActionsVisible, setAreCartActionsVisible] =
     useState(false);
+  const [isCheckoutVisible, setIsCheckoutVisible] =
+    useState(false);
 
   const {
     cart,
@@ -311,6 +313,25 @@ export default function CartDrawer({ isOpen, onClose }) {
   }, [isKeyboardMode, isOpen, isResolving, items.length]);
 
   useEffect(() => {
+    if (
+      !isOpen ||
+      isKeyboardMode ||
+      isResolving ||
+      items.length === 0
+    ) {
+      setIsCheckoutVisible(false);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(
+      () => setIsCheckoutVisible(true),
+      320,
+    );
+
+    return () => window.clearTimeout(timer);
+  }, [isKeyboardMode, isOpen, isResolving, items.length]);
+
+  useEffect(() => {
     if (isOpen && cartViewport.isKeyboardOpen) {
       window.requestAnimationFrame(keepCouponInputVisible);
     }
@@ -494,16 +515,16 @@ export default function CartDrawer({ isOpen, onClose }) {
                           src={getCloudinaryImageUrl(
                             image,
                             {
-                              width: 180,
+                              width: 176,
                             },
                           )}
                           srcSet={
                             getCloudinarySrcSet(
                               image,
                               [
-                                120,
-                                180,
-                                240,
+                                88,
+                                176,
+                                264,
                               ],
                             ) ||
                             undefined
@@ -511,8 +532,8 @@ export default function CartDrawer({ isOpen, onClose }) {
                           sizes="88px"
                           alt={product.name}
                           className="h-full w-full object-contain"
-                          loading="eager"
-                          fetchPriority={index === 0 ? "high" : "auto"}
+                          loading={index === 0 ? "eager" : "lazy"}
+                          fetchPriority={index === 0 ? "high" : "low"}
                           decoding="async"
                         />
                       </Link>
@@ -850,12 +871,9 @@ export default function CartDrawer({ isOpen, onClose }) {
           <div
             className={[
               "fixed bottom-auto right-0 z-[122] w-full max-w-[420px] transition-[transform,opacity] duration-300 ease-out sm:max-w-[430px]",
-              isOpen
-                ? "translate-x-0"
-                : "translate-x-[calc(100%+2px)] opacity-0",
-              areCartActionsVisible
-                ? "opacity-100"
-                : "pointer-events-none opacity-0",
+              isCheckoutVisible
+                ? "translate-y-0 opacity-100"
+                : "pointer-events-none translate-y-full opacity-0",
             ].join(" ")}
             style={{
               top: cartViewport.bottom

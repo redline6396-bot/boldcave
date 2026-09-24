@@ -276,6 +276,7 @@ export default function CheckoutPage({
   const [otpError, setOtpError] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [resendIn, setResendIn] = useState(RESEND_SECONDS);
+  const [otpRequestedPhone, setOtpRequestedPhone] = useState("");
   const otpRefs = useRef([]);
   const checkoutPhoneRef = useRef(null);
   const checkoutPhoneInitializedRef = useRef(false);
@@ -541,7 +542,7 @@ export default function CheckoutPage({
   }, [user]);
 
   useEffect(() => {
-    if (!otpOpen || resendIn <= 0) {
+    if (!otpRequestedPhone || resendIn <= 0) {
       return undefined;
     }
 
@@ -550,7 +551,7 @@ export default function CheckoutPage({
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [otpOpen, resendIn]);
+  }, [otpRequestedPhone, resendIn]);
 
   useEffect(() => {
     if (!otpOpen) return undefined;
@@ -855,6 +856,9 @@ export default function CheckoutPage({
       const result = await sendLoginOtp(cleanPhone);
       setOtpDemoCode(result.demoOtp || "");
       setCheckoutPhone(result.phone || cleanPhone);
+      setOtpRequestedPhone(
+        normalizePhone(result.phone || cleanPhone),
+      );
       setResendIn(RESEND_SECONDS);
       resetOtp();
       setOtpOpen(true);
@@ -884,11 +888,19 @@ export default function CheckoutPage({
       return;
     }
 
+    if (otpRequestedPhone === cleanPhone) {
+      setOtpError("");
+      setError("");
+      setOtpOpen(true);
+      return;
+    }
+
     await openOtpForPhone();
   }, [
     checkoutPhone,
     isAuthenticated,
     openOtpForPhone,
+    otpRequestedPhone,
     user?.phone,
     user?.phoneVerified,
   ]);
@@ -904,6 +916,7 @@ export default function CheckoutPage({
         normalizePhone(checkoutPhone)
       );
       setOtpDemoCode(result.demoOtp || "");
+      setOtpRequestedPhone(normalizePhone(checkoutPhone));
       setResendIn(RESEND_SECONDS);
       resetOtp();
     } catch (sendError) {
@@ -951,6 +964,7 @@ export default function CheckoutPage({
       }
 
       setPhoneVerified(true);
+      setOtpRequestedPhone("");
       setOtpOpen(false);
       setOtpDemoCode("");
       resetOtp();
@@ -1047,7 +1061,6 @@ export default function CheckoutPage({
     if (otpOpen) {
       setOtpOpen(false);
       setOtpError("");
-      setOtpDemoCode("");
       return;
     }
 
@@ -1085,6 +1098,7 @@ export default function CheckoutPage({
     setPhoneVerified(false);
     setPhoneVerificationToken("");
     setOtpOpen(false);
+    setOtpRequestedPhone("");
     setOtpDemoCode("");
 
     if (onSuccess) {
@@ -1826,14 +1840,12 @@ export default function CheckoutPage({
           onEdit={() => {
             setOtpOpen(false);
             setOtpError("");
-            setOtpDemoCode("");
             setPhoneVerified(false);
             setPhoneVerificationToken("");
           }}
           onClose={() => {
             setOtpOpen(false);
             setOtpError("");
-            setOtpDemoCode("");
           }}
           resendIn={resendIn}
           onResend={handleResendOtp}

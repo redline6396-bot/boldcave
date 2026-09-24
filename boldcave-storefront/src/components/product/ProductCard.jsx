@@ -145,12 +145,11 @@ export default function ProductCard({ product, priority = false }) {
   const productImageSourceUrl = getProductImageUrl(productImageSource);
   const productImage =
     getCloudinaryImageUrl(productImageSource, {
-      width: 960,
-      dpr: "auto",
+      width: 640,
     }) || PLACEHOLDER_IMAGE;
   const productImageSrcSet = getCloudinarySrcSet(
     productImageSource,
-    [480, 640, 800, 960, 1200]
+    [240, 360, 480, 640, 800]
   );
 
   const selectedVariantGallery = getVariantProductGalleryUrls(
@@ -158,24 +157,23 @@ export default function ProductCard({ product, priority = false }) {
     selectedVariant
   );
 
-  const hoverImageSource =
-    selectedVariant?.images?.[1] ||
-    selectedVariantGallery.find((image) => image !== productImageSourceUrl) ||
-    product?.images?.[1] ||
-    "";
-  const hoverImage =
-    getCloudinaryImageUrl(hoverImageSource, { width: 960, dpr: "auto" }) ||
-    getProductImageUrl(product?.images?.[1]) ||
-    "";
-  const hoverImageSrcSet = getCloudinarySrcSet(hoverImageSource, [
-    480,
-    800,
-    960,
-    1200,
-  ]);
+  const hoverImageSource = isCombo
+    ? ""
+    : selectedVariant?.images?.[1] ||
+      selectedVariantGallery.find((image) => image !== productImageSourceUrl) ||
+      product?.images?.[1] ||
+      "";
+  const hoverImage = isCombo
+    ? ""
+    : getCloudinaryImageUrl(hoverImageSource, { width: 640 }) ||
+      getProductImageUrl(product?.images?.[1]) ||
+      "";
+  const hoverImageSrcSet = isCombo
+    ? ""
+    : getCloudinarySrcSet(hoverImageSource, [240, 360, 480, 640, 800]);
 
   const hasHoverImage = Boolean(hoverImage);
-  const shouldRenderHoverImage = hasHoverImage && isHoverRequested;
+  const shouldRenderHoverImage = !isCombo && hasHoverImage && isHoverRequested;
   const productUrl = `/product/${product.slug}`;
 
   const profileLine = getProductNotesLine(product);
@@ -217,8 +215,12 @@ export default function ProductCard({ product, priority = false }) {
   return (
     <article
       onClick={handleCardClick}
-      onPointerEnter={() => setIsHoverRequested(true)}
-      onFocusCapture={() => setIsHoverRequested(true)}
+      onPointerEnter={() => {
+        if (!isCombo) setIsHoverRequested(true);
+      }}
+      onFocusCapture={() => {
+        if (!isCombo) setIsHoverRequested(true);
+      }}
       className="group mx-auto w-full max-w-[388px] cursor-pointer border border-[#e8e2d9] bg-white"
     >
       <button

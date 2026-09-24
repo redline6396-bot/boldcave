@@ -18,6 +18,10 @@ import {
   fetchProductReviews,
   updateProductReview,
 } from "@/lib/clientApi";
+import {
+  getCloudinaryImageUrl,
+  getCloudinarySrcSet,
+} from "@/lib/cloudinary/images";
 
 const emptyForm = {
   rating: 0,
@@ -642,7 +646,7 @@ export default function ProductReviews({ productId }) {
           </button>
 
           <img
-            src={lightboxImage}
+            src={getCloudinaryImageUrl(lightboxImage, { width: 1600 })}
             alt="Customer review full size"
             onClick={(event) => event.stopPropagation()}
             onError={() => setLightboxImage("")}
@@ -997,7 +1001,14 @@ function ReviewRow({ review, saving, onEdit, onDelete, onPhotoClick }) {
                 aria-label={`View review photo ${index + 1}`}
               >
                 <img
-                  src={photoUrl}
+                  src={getCloudinaryImageUrl(photoUrl, { width: 224 })}
+                  srcSet={
+                    getCloudinarySrcSet(
+                      photoUrl,
+                      [112, 168, 224, 336],
+                    ) || undefined
+                  }
+                  sizes="(min-width: 640px) 112px, 82px"
                   alt={`Review photo ${index + 1}`}
                   onError={() =>
                     setBrokenPhotos((current) => ({
@@ -1005,6 +1016,8 @@ function ReviewRow({ review, saving, onEdit, onDelete, onPhotoClick }) {
                       [photoKey]: true,
                     }))
                   }
+                  loading="lazy"
+                  decoding="async"
                   className="h-auto max-h-[82px] w-auto max-w-full object-contain sm:max-h-[112px]"
                 />
               </button>
