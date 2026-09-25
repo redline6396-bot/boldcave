@@ -311,7 +311,7 @@ export default function CheckoutSheet({
           .checkout-sheet-panel {
             position: fixed;
             left: 50%;
-            bottom: calc(50% - min(380px, 45svh));
+            bottom: max(20px, calc((100dvh - 760px) / 2));
             margin-bottom: 0;
             width: 450px;
             height: var(--sheet-desktop-height);
