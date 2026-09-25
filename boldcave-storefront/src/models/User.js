@@ -21,21 +21,11 @@ const userSchema = new mongoose.Schema(
     phoneVerified: { type: Boolean, default: false },
     firstName: { type: String, trim: true },
     lastName: { type: String, trim: true },
-    email: { type: String, trim: true, lowercase: true },
+    email: { type: String, trim: true, lowercase: true, index: true },
     addresses: { type: [addressSchema], default: [] },
     status: { type: String, enum: ["active", "suspended"], default: "active", index: true },
   },
   { timestamps: true }
-);
-
-userSchema.index(
-  { email: 1 },
-  {
-    unique: true,
-    partialFilterExpression: {
-      email: { $gt: "" },
-    },
-  }
 );
 
 export const UserSchema = userSchema;

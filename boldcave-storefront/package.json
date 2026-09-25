@@ -9,6 +9,7 @@
     "start:next": "next start",
     "start:milesweb": "node server.js",
     "lint": "eslint",
+    "migrate:user-email-profile": "node scripts/migrate-user-email-profile.js",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",

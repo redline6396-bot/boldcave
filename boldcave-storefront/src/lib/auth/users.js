@@ -79,37 +79,36 @@ export async function syncUserProfileFromCheckoutAddress(user, address = {}) {
   if (!user) return;
 
   const profile = checkoutProfileFromAddress(address);
-  const updates = {};
+  const userId = user?._id || user;
+  const candidates = Object.entries(profile).filter(([, value]) => Boolean(value));
 
-  if (profile.firstName && !cleanString(user.firstName, 100)) {
-    updates.firstName = profile.firstName;
-  }
+  if (!userId || !candidates.length) return [];
 
-  if (profile.lastName && !cleanString(user.lastName, 100)) {
-    updates.lastName = profile.lastName;
-  }
+  const updatedFields = [];
 
-  if (profile.email && !cleanString(user.email, 160)) {
-    updates.email = profile.email;
-  }
+  // Keep checkout hydration fill-only. Each field has its own atomic blank check,
+  // so an address/order can never overwrite a profile edit made at the same time.
+  for (const [field, value] of candidates) {
+    const result = await User.updateOne(
+      {
+        _id: userId,
+        $or: [
+          { [field]: { $exists: false } },
+          { [field]: null },
+          { [field]: "" },
+        ],
+      },
+      { $set: { [field]: value } }
+    );
 
-  if (!Object.keys(updates).length) return;
+    if (result.modifiedCount > 0) {
+      updatedFields.push(field);
 
-  try {
-    await User.updateOne({ _id: user._id }, { $set: updates });
-    Object.assign(user, updates);
-  } catch (error) {
-    if (error?.code === 11000 && updates.email) {
-      delete updates.email;
-
-      if (Object.keys(updates).length) {
-        await User.updateOne({ _id: user._id }, { $set: updates });
-        Object.assign(user, updates);
+      if (user?._id) {
+        user[field] = value;
       }
-
-      return;
     }
-
-    throw error;
   }
+
+  return updatedFields;
 }

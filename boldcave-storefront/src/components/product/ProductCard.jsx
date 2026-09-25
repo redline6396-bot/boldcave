@@ -14,6 +14,9 @@ import { getCloudinaryImageUrl, getCloudinarySrcSet } from "@/lib/cloudinary/ima
 const CURRENCY = "\u20b9";
 const PLACEHOLDER_IMAGE =
   "https://upload.wikimedia.org/wikipedia/commons/a/a3/Image-not-found.png";
+const PRODUCT_CARD_IMAGE_SIZES =
+  "(min-width: 1024px) 360px, (min-width: 640px) calc((100vw - 72px) / 2), calc((100vw - 30px) / 2)";
+const PRODUCT_CARD_IMAGE_WIDTHS = [240, 360, 480, 640, 800];
 
 const formatPrice = (value) =>
   new Intl.NumberFormat("en-IN", {
@@ -103,7 +106,11 @@ function getVariantProductImageSource(product, variant) {
   return variant?.images?.[0] || variant?.image || product?.images?.[0];
 }
 
-export default function ProductCard({ product, priority = false }) {
+export default function ProductCard({
+  product,
+  priority = false,
+  preloadVariantImages = false,
+}) {
   const router = useRouter();
   const { addToCart } = useCart();
 
@@ -138,6 +145,45 @@ export default function ProductCard({ product, priority = false }) {
     setSelectedSize(getDefaultVariant(variants)?.size || "");
   }, [selectedSize, variants]);
 
+  useEffect(() => {
+    if (!preloadVariantImages || isCombo || displayVariants.length < 2) {
+      return undefined;
+    }
+
+    const initialVariant = getDefaultVariant(displayVariants);
+    const initialImageUrl = getProductImageUrl(
+      getVariantProductImageSource(product, initialVariant)
+    );
+    const seenUrls = new Set([initialImageUrl]);
+
+    const timerId = window.setTimeout(() => {
+      displayVariants.forEach((variant) => {
+        const imageSource = getVariantProductImageSource(product, variant);
+        const sourceUrl = getProductImageUrl(imageSource);
+
+        if (!sourceUrl || seenUrls.has(sourceUrl)) {
+          return;
+        }
+
+        seenUrls.add(sourceUrl);
+
+        const image = new window.Image();
+        const srcSet = getCloudinarySrcSet(
+          imageSource,
+          PRODUCT_CARD_IMAGE_WIDTHS
+        );
+
+        image.fetchPriority = "low";
+        image.sizes = PRODUCT_CARD_IMAGE_SIZES;
+        if (srcSet) image.srcset = srcSet;
+        image.src =
+          getCloudinaryImageUrl(imageSource, { width: 640 }) || sourceUrl;
+      });
+    }, 400);
+
+    return () => window.clearTimeout(timerId);
+  }, [displayVariants, isCombo, preloadVariantImages, product]);
+
   const isSelectedOutOfStock =
     !selectedVariant || Number(selectedVariant.stock) <= 0;
 
@@ -149,7 +195,7 @@ export default function ProductCard({ product, priority = false }) {
     }) || PLACEHOLDER_IMAGE;
   const productImageSrcSet = getCloudinarySrcSet(
     productImageSource,
-    [240, 360, 480, 640, 800]
+    PRODUCT_CARD_IMAGE_WIDTHS
   );
 
   const selectedVariantGallery = getVariantProductGalleryUrls(
@@ -170,7 +216,7 @@ export default function ProductCard({ product, priority = false }) {
       "";
   const hoverImageSrcSet = isCombo
     ? ""
-    : getCloudinarySrcSet(hoverImageSource, [240, 360, 480, 640, 800]);
+    : getCloudinarySrcSet(hoverImageSource, PRODUCT_CARD_IMAGE_WIDTHS);
 
   const hasHoverImage = Boolean(hoverImage);
   const shouldRenderHoverImage = !isCombo && hasHoverImage && isHoverRequested;
@@ -233,7 +279,7 @@ export default function ProductCard({ product, priority = false }) {
           <img
             src={productImage}
             srcSet={productImageSrcSet || undefined}
-            sizes="(min-width: 1024px) 360px, (min-width: 640px) calc((100vw - 72px) / 2), calc((100vw - 30px) / 2)"
+            sizes={PRODUCT_CARD_IMAGE_SIZES}
             alt={product.name}
             className={[
               "absolute inset-0 h-full w-full object-contain transition-[opacity,transform] duration-300 ease-out group-hover:scale-[1.025]",
@@ -257,7 +303,7 @@ export default function ProductCard({ product, priority = false }) {
             <img
               src={hoverImage}
               srcSet={hoverImageSrcSet || undefined}
-              sizes="(min-width: 1024px) 360px, (min-width: 640px) calc((100vw - 72px) / 2), calc((100vw - 30px) / 2)"
+              sizes={PRODUCT_CARD_IMAGE_SIZES}
               alt={`${product.name} alternate view`}
               className={[
                 "absolute inset-0 h-full w-full object-contain transition-[opacity,transform] duration-200 ease-out group-hover:scale-[1.025]",

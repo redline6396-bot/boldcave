@@ -2,6 +2,7 @@ import {
   consumeCouponUsageForOrder,
   deductStock,
 } from "@/lib/orders/pricing";
+import { syncUserProfileFromCheckoutAddress } from "@/lib/auth/users";
 import { syncShipment } from "@/lib/shipping";
 import Order from "@/models/Order";
 import RazorpayAttempt from "@/models/RazorpayAttempt";
@@ -147,6 +148,21 @@ async function findExistingOrderForAttempt(attempt) {
   });
 }
 
+async function syncAttemptUserProfile(attempt) {
+  try {
+    await syncUserProfileFromCheckoutAddress(
+      attempt.user,
+      attempt.deliveryAddress
+    );
+  } catch (error) {
+    console.error("Checkout profile sync failed", {
+      userId: String(attempt.user || ""),
+      attemptId: String(attempt._id || ""),
+      code: error?.code,
+    });
+  }
+}
+
 async function markAttemptPaid(attempt, { order, payment, razorpaySignature }) {
   const snapshot = getPaymentSnapshot(payment);
   attempt.status = "paid";
@@ -207,7 +223,10 @@ export async function finalizeCapturedRazorpayAttempt({
 }) {
   if (FINAL_ATTEMPT_STATUSES.includes(attempt.status) && attempt.finalOrder) {
     const existingFinalOrder = await findExistingOrderForAttempt(attempt);
-    if (existingFinalOrder) return { order: existingFinalOrder, idempotent: true };
+    if (existingFinalOrder) {
+      await syncAttemptUserProfile(attempt);
+      return { order: existingFinalOrder, idempotent: true };
+    }
   }
 
   const existingOrder = await findExistingOrderForAttempt(attempt);
@@ -217,6 +236,7 @@ export async function finalizeCapturedRazorpayAttempt({
       payment,
       razorpaySignature,
     });
+    await syncAttemptUserProfile(attempt);
     return { order: existingOrder, idempotent: true };
   }
 
@@ -307,6 +327,8 @@ export async function finalizeCapturedRazorpayAttempt({
     userId: claimedAttempt.user,
     order,
   });
+
+  await syncAttemptUserProfile(claimedAttempt);
 
   if (!runShipping) {
     return { order, idempotent: false };

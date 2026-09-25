@@ -1,7 +1,6 @@
 import connectDB from "@/lib/db";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { requireUser } from "@/lib/auth/session";
-import { syncUserProfileFromCheckoutAddress } from "@/lib/auth/users";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import {
   finalizeCapturedRazorpayAttempt,
@@ -122,16 +121,6 @@ async function verifyRazorpayOrderRoute(request) {
       shippingProvider:
         attempt.shippingProvider || SHIPPING_PROVIDERS.DELHIVERY,
     });
-
-    try {
-      await syncUserProfileFromCheckoutAddress(auth.user, attempt.deliveryAddress);
-    } catch (error) {
-      console.error("Checkout profile sync failed", {
-        userId: String(auth.user._id),
-        orderId: String(result.order._id),
-        code: error?.code,
-      });
-    }
 
     return success({
       order: result.order,

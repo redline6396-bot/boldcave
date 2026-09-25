@@ -139,7 +139,11 @@ export default function CollectionSection({
                         : "",
                     ].join(" ")}
                   >
-                    <ProductCard product={product} priority={index < 2} />
+                    <ProductCard
+                      product={product}
+                      priority={index < 2}
+                      preloadVariantImages
+                    />
                   </div>
                 );
               })}
@@ -163,6 +167,7 @@ export default function CollectionSection({
                       key={product.id}
                       product={product}
                       priority={rowIndex === 0 && productIndex < 3}
+                      preloadVariantImages
                     />
                   ))}
                 </div>

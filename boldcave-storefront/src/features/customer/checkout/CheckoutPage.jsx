@@ -1094,6 +1094,7 @@ export default function CheckoutPage({
   const completeSuccess = useCallback(() => {
     clearCart();
     removeCoupon();
+    refreshUser().catch(() => {});
     setPhoneTouched(false);
     setPhoneVerified(false);
     setPhoneVerificationToken("");
@@ -1107,7 +1108,7 @@ export default function CheckoutPage({
     }
 
     router.push("/orders");
-  }, [clearCart, onSuccess, removeCoupon, router]);
+  }, [clearCart, onSuccess, refreshUser, removeCoupon, router]);
 
   const ensureReady = useCallback(async () => {
     setError("");
