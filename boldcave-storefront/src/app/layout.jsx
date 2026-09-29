@@ -6,6 +6,7 @@ import CouponProvider from '@/context/CouponContext';
 import NotificationProvider from '@/context/NotificationContext';
 import { StoreSettingsProvider } from '@/context/StoreSettingsContext';
 import ComingSoonScreen from '@/components/ComingSoonScreen';
+import MetaPixelAdvancedMatching from '@/components/MetaPixelAdvancedMatching';
 import RootLayoutClient from '@/components/RootLayoutClient';
 import { withRuntimeDatabase } from '@/lib/cloudflareMongoose';
 import appIcon from './icon-new.png';
@@ -89,6 +90,7 @@ export default async function RootLayout({ children }) {
               s.parentNode.insertBefore(t,s)}(window, document,'script',
               'https://connect.facebook.net/en_US/fbevents.js');
               fbq('init', '1061596686650693');
+              window.dispatchEvent(new Event('boldcave:meta-pixel-ready'));
               fbq('track', 'PageView');
             `}
           </Script>
@@ -129,6 +131,7 @@ export default async function RootLayout({ children }) {
             s.parentNode.insertBefore(t,s)}(window, document,'script',
             'https://connect.facebook.net/en_US/fbevents.js');
             fbq('init', '1061596686650693');
+            window.dispatchEvent(new Event('boldcave:meta-pixel-ready'));
             fbq('track', 'PageView');
           `}
         </Script>
@@ -143,6 +146,7 @@ export default async function RootLayout({ children }) {
         </noscript>
         <NotificationProvider>
           <AuthProvider>
+            <MetaPixelAdvancedMatching />
             <CartProvider>
               <CouponProvider>
                 <StoreSettingsProvider initialSettings={storeSettings}>
