@@ -1,68 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import CollectionCategoryNav from "@/components/collection/CollectionCategoryNav";
 import ProductCard from "@/components/product/ProductCard";
 import { useCart } from "@/context/CartContext";
-
-const categoryLinks = [
-  { label: "SHOP ALL", value: "all", href: "/collection" },
-  { label: "MEN", value: "men", apiValue: "Men", href: "/collection?category=Men" },
-  {
-    label: "UNISEX",
-    value: "unisex",
-    apiValue: "Unisex",
-    href: "/collection?category=Unisex",
-  },
-  {
-    label: "WOMEN",
-    value: "women",
-    apiValue: "Women",
-    href: "/collection?category=Women",
-  },
-];
-
-const normalizeCategory = (value) => String(value || "").trim().toLowerCase();
-
-const normalizeAudienceList = (product) => {
-  const rawAudience = product?.audienceTags ?? [];
-
-  const values = Array.isArray(rawAudience) ? rawAudience : [rawAudience];
-
-  return values
-    .flatMap((value) =>
-      typeof value === "string" ? value.split(/[,/|]/) : [value]
-    )
-    .map((value) => String(value || "").trim().toLowerCase())
-    .filter(Boolean);
-};
-
-const matchesSelectedCategory = (product, selectedCategory) => {
-  if (selectedCategory === "all") {
-    return true;
-  }
-
-  const audiences = normalizeAudienceList(product);
-  const hasMen = audiences.includes("men");
-  const hasWomen = audiences.includes("women");
-  const hasUnisex = audiences.includes("unisex");
-  const isPureUnisex = hasUnisex && !hasMen && !hasWomen;
-
-  if (selectedCategory === "men") {
-    return hasMen || isPureUnisex;
-  }
-
-  if (selectedCategory === "unisex") {
-    return hasUnisex;
-  }
-
-  if (selectedCategory === "women") {
-    return hasWomen || isPureUnisex;
-  }
-
-  return true;
-};
+import {
+  matchesProductCategory,
+  normalizeProductCategory,
+} from "@/lib/products/categories";
 
 const chunkProducts = (items, size) => {
   const rows = [];
@@ -78,7 +25,7 @@ function CollectionContent({ initialProducts = [], initialError = "" }) {
   const searchParams = useSearchParams();
   const { rememberProducts } = useCart();
   const selectedCategory =
-    normalizeCategory(searchParams.get("category")) || "all";
+    normalizeProductCategory(searchParams.get("category")) || "all";
 
   useEffect(() => {
     rememberProducts(initialProducts);
@@ -87,7 +34,7 @@ function CollectionContent({ initialProducts = [], initialError = "" }) {
   const visibleProducts = useMemo(
     () =>
       initialProducts.filter((product) =>
-        matchesSelectedCategory(product, selectedCategory)
+        matchesProductCategory(product, selectedCategory)
       ),
     [initialProducts, selectedCategory]
   );
@@ -97,10 +44,6 @@ function CollectionContent({ initialProducts = [], initialError = "" }) {
     () => chunkProducts(visibleProducts, 3),
     [visibleProducts]
   );
-  const activeCategory =
-    categoryLinks.find((category) => category.value === selectedCategory) ||
-    categoryLinks[0];
-
   return (
     <main className="min-h-screen bg-[#ffffff] text-neutral-950">
       <section className="bg-[#ffffff] px-4 pb-3 pt-7 sm:px-6 sm:pb-6 sm:pt-11 lg:px-8 lg:pb-4 lg:pt-10">
@@ -115,31 +58,10 @@ function CollectionContent({ initialProducts = [], initialError = "" }) {
             </p>
           </div>
 
-          <nav
-            aria-label="Collection categories"
-            className="mx-auto mt-5 flex max-w-[580px] flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:mt-8 sm:gap-x-8 lg:mt-7 lg:gap-x-9"
-          >
-            {categoryLinks.map((category) => {
-              const isActive = activeCategory.value === category.value;
-
-              return (
-                <Link
-                  key={category.value}
-                  href={category.href}
-                  scroll={false}
-                  aria-current={isActive ? "page" : undefined}
-                  className={[
-                    "flex h-8 shrink-0 cursor-pointer items-center justify-center px-1 text-[11px] font-semibold uppercase leading-none tracking-[0.11em] transition-colors duration-200 sm:h-9 sm:text-[12px] lg:h-8 lg:text-[11px]",
-                    isActive
-                      ? "bg-[#ffffff] text-neutral-950 underline decoration-neutral-950 decoration-1 underline-offset-[6px]"
-                      : "bg-[#ffffff] text-neutral-500 hover:text-neutral-950",
-                  ].join(" ")}
-                >
-                  {category.label}
-                </Link>
-              );
-            })}
-          </nav>
+          <CollectionCategoryNav
+            activeCategory={selectedCategory}
+            className="mt-5 sm:mt-8 lg:mt-7"
+          />
         </div>
       </section>
 

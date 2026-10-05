@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import CollectionCategoryNav from "@/components/collection/CollectionCategoryNav";
 import ProductCard from "@/components/product/ProductCard";
 import { useCart } from "@/context/CartContext";
+import { matchesProductCategory } from "@/lib/products/categories";
 
 const sortFeaturedProducts = (products) =>
   [...products]
@@ -55,6 +57,7 @@ export default function CollectionSection({
   const { rememberProducts } = useCart();
   const [products] = useState(() => sortFeaturedProducts(initialProducts));
   const [settings] = useState(initialSettings);
+  const [selectedCategory, setSelectedCategory] = useState("all");
 
   useEffect(() => {
     rememberProducts(products);
@@ -83,8 +86,18 @@ export default function CollectionSection({
     };
   }, [products]);
 
-  const desktopRows = useMemo(() => buildDesktopRows(products), [products]);
-  const hasOddMobileProduct = products.length % 2 === 1;
+  const visibleProducts = useMemo(
+    () =>
+      products.filter((product) =>
+        matchesProductCategory(product, selectedCategory)
+      ),
+    [products, selectedCategory]
+  );
+  const desktopRows = useMemo(
+    () => buildDesktopRows(visibleProducts),
+    [visibleProducts]
+  );
+  const hasOddMobileProduct = visibleProducts.length % 2 === 1;
 
   const fallbackCount = products.filter(
     (product) => product.productType !== "combo"
@@ -120,14 +133,20 @@ export default function CollectionSection({
           >
             View all
           </Link>
+
+          <CollectionCategoryNav
+            activeCategory={selectedCategory}
+            onCategoryChange={setSelectedCategory}
+            className="mt-5 sm:mt-6 lg:mt-3"
+          />
         </div>
 
-        {products.length > 0 ? (
+        {visibleProducts.length > 0 ? (
           <>
-            <div className="mt-9 grid grid-cols-2 gap-x-2.5 gap-y-8 sm:mt-14 sm:gap-x-8 sm:gap-y-10 lg:hidden">
-              {products.map((product, index) => {
+            <div className="mt-7 grid grid-cols-2 gap-x-2.5 gap-y-8 sm:mt-9 sm:gap-x-8 sm:gap-y-10 lg:hidden">
+              {visibleProducts.map((product, index) => {
                 const isCenteredLast =
-                  hasOddMobileProduct && index === products.length - 1;
+                  hasOddMobileProduct && index === visibleProducts.length - 1;
 
                 return (
                   <div
@@ -149,7 +168,7 @@ export default function CollectionSection({
               })}
             </div>
 
-            <div className="mt-14 hidden space-y-10 lg:mt-11 lg:block lg:space-y-8">
+            <div className="mt-14 hidden space-y-10 lg:mt-6 lg:block lg:space-y-8">
               {desktopRows.map((row, rowIndex) => (
                 <div
                   key={`featured-row-${rowIndex}`}
