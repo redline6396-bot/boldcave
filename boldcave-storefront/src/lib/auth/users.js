@@ -26,40 +26,36 @@ export async function findUserByPhone(phone) {
 }
 
 export async function findOrCreateUserForPhone(phone) {
+  const result = await findOrCreateUserForPhoneWithStatus(phone);
+  return result.user;
+}
+
+export async function findOrCreateUserForPhoneWithStatus(phone) {
   const normalizedPhone = normalizePhone(phone);
 
   if (!normalizedPhone) {
-    return null;
+    return { user: null, created: false };
   }
 
   const existingUser = await findUserByPhone(normalizedPhone);
 
   if (existingUser) {
-    return existingUser;
+    return { user: existingUser, created: false };
   }
 
   try {
-    return await User.findOneAndUpdate(
-      { phone: normalizedPhone },
-      {
-        $setOnInsert: {
-          phone: normalizedPhone,
-          phoneVerified: true,
-          status: "active",
-        },
-      },
-      {
-        returnDocument: "after",
-        upsert: true,
-        setDefaultsOnInsert: true,
-      }
-    );
+    const user = await User.create({
+      phone: normalizedPhone,
+      phoneVerified: true,
+      status: "active",
+    });
+    return { user, created: true };
   } catch (error) {
     if (error?.code !== 11000) {
       throw error;
     }
 
-    return findUserByPhone(normalizedPhone);
+    return { user: await findUserByPhone(normalizedPhone), created: false };
   }
 }
 

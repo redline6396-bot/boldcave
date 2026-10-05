@@ -11,9 +11,27 @@ const DEFAULT_COD_CHARGE = {
   chargeValue: 0,
 };
 
+export const DEFAULT_CUSTOMER_MESSAGE = `Hi {{name}},
+
+We've got something special for you from Bold Cave.
+
+Use code {{coupon_code}} on your next order and enjoy the offer.
+
+Shop now: {{site_url}}
+
+Thank you for choosing Bold Cave.`;
+
+const DEFAULT_ADMIN_NOTIFICATIONS = {
+  email: "",
+  newCustomer: true,
+  newOrder: true,
+  orderCancelled: true,
+};
+
 const cacheStore =
   globalThis.__storeSettingsCache || {
-    entry: null,
+    publicEntry: null,
+    privateEntry: null,
   };
 
 globalThis.__storeSettingsCache = cacheStore;
@@ -27,10 +45,8 @@ function getEnvOtpMode() {
     : "live";
 }
 
-export function serializeStoreSettings(
-  settings,
-) {
-  return {
+export function serializeStoreSettings(settings, { includePrivate = false } = {}) {
+  const serialized = {
     acceptingOrders:
       settings?.acceptingOrders !== false,
 
@@ -47,6 +63,64 @@ export function serializeStoreSettings(
 
     updatedAt:
       settings?.updatedAt || null,
+  };
+
+  if (includePrivate) {
+    serialized.customerMessaging = serializeCustomerMessaging(
+      settings?.customerMessaging
+    );
+    serialized.adminNotifications = serializeAdminNotifications(
+      settings?.adminNotifications
+    );
+  }
+
+  return serialized;
+}
+
+export function serializeCustomerMessaging(value = {}) {
+  const configuredSiteUrl =
+    String(value?.siteUrl || "").trim() ||
+    String(process.env.STOREFRONT_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").trim();
+
+  return {
+    defaultMessage:
+      String(value?.defaultMessage || "").trim() || DEFAULT_CUSTOMER_MESSAGE,
+    siteUrl: formatStorefrontUrlForDisplay(configuredSiteUrl),
+  };
+}
+
+export function formatStorefrontUrlForDisplay(value) {
+  return normalizeStorefrontUrl(value).replace(/^https?:\/\//i, "");
+}
+
+export function normalizeStorefrontUrl(value) {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) return "";
+
+  const hasProtocol = /^[a-z][a-z\d+.-]*:\/\//i.test(rawValue);
+  const domainWithoutProtocol = /^(?:www\.)?[a-z\d-]+(?:\.[a-z\d-]+)+(?::\d+)?(?:[/?#].*)?$/i;
+  const candidate = hasProtocol
+    ? rawValue
+    : domainWithoutProtocol.test(rawValue)
+      ? `https://${rawValue}`
+      : "";
+
+  if (!candidate) return "";
+  try {
+    const url = new URL(candidate);
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return "";
+  }
+}
+
+export function serializeAdminNotifications(value = {}) {
+  return {
+    email: String(value?.email || "").trim().toLowerCase(),
+    newCustomer: value?.newCustomer !== false,
+    newOrder: value?.newOrder !== false,
+    orderCancelled: value?.orderCancelled !== false,
   };
 }
 
@@ -95,6 +169,13 @@ export async function getStoreSettings({
         comingSoonMode: false,
         codCharge:
           DEFAULT_COD_CHARGE,
+        customerMessaging: {
+          defaultMessage: DEFAULT_CUSTOMER_MESSAGE,
+          siteUrl: String(
+            process.env.STOREFRONT_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
+          ).trim(),
+        },
+        adminNotifications: DEFAULT_ADMIN_NOTIFICATIONS,
       },
     },
     {
@@ -106,19 +187,22 @@ export async function getStoreSettings({
 }
 
 export function clearStoreSettingsCache() {
-  cacheStore.entry = null;
+  cacheStore.publicEntry = null;
+  cacheStore.privateEntry = null;
 }
 
 export async function getSerializedStoreSettings({
   cache = true,
   StoreSettingsModel = StoreSettings,
+  includePrivate = false,
 } = {}) {
+  const cacheKey = includePrivate ? "privateEntry" : "publicEntry";
   if (
     cache &&
-    cacheStore.entry?.expiresAt >
+    cacheStore[cacheKey]?.expiresAt >
       Date.now()
   ) {
-    return cacheStore.entry.value;
+    return cacheStore[cacheKey].value;
   }
 
   const settings =
@@ -127,10 +211,10 @@ export async function getSerializedStoreSettings({
     });
 
   const value =
-    serializeStoreSettings(settings);
+    serializeStoreSettings(settings, { includePrivate });
 
   if (cache) {
-    cacheStore.entry = {
+    cacheStore[cacheKey] = {
       value,
       expiresAt:
         Date.now() +
@@ -145,6 +229,9 @@ export async function updateStoreSettings({
   acceptingOrders,
   comingSoonMode,
   codCharge,
+  autoApproveReviews,
+  customerMessaging,
+  adminNotifications,
   StoreSettingsModel = StoreSettings,
 } = {}) {
   const updates = {};
@@ -159,9 +246,17 @@ export async function updateStoreSettings({
       comingSoonMode === true;
   }
 
-  if (arguments[0].autoApproveReviews !== undefined) {
+  if (autoApproveReviews !== undefined) {
     updates.autoApproveReviews =
-      arguments[0].autoApproveReviews === true;
+      autoApproveReviews === true;
+  }
+
+  if (customerMessaging && typeof customerMessaging === "object") {
+    updates.customerMessaging = serializeCustomerMessaging(customerMessaging);
+  }
+
+  if (adminNotifications && typeof adminNotifications === "object") {
+    updates.adminNotifications = serializeAdminNotifications(adminNotifications);
   }
 
   if (
@@ -184,6 +279,13 @@ export async function updateStoreSettings({
       comingSoonMode: false,
       codCharge:
         DEFAULT_COD_CHARGE,
+      customerMessaging: {
+        defaultMessage: DEFAULT_CUSTOMER_MESSAGE,
+        siteUrl: String(
+          process.env.STOREFRONT_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
+        ).trim(),
+      },
+      adminNotifications: DEFAULT_ADMIN_NOTIFICATIONS,
     },
   };
 
@@ -210,13 +312,17 @@ export async function updateStoreSettings({
       },
     ).exec();
 
-  cacheStore.entry = {
+  cacheStore.publicEntry = {
     value:
       serializeStoreSettings(settings),
 
     expiresAt:
       Date.now() +
       STORE_SETTINGS_CACHE_TTL_MS,
+  };
+  cacheStore.privateEntry = {
+    value: serializeStoreSettings(settings, { includePrivate: true }),
+    expiresAt: Date.now() + STORE_SETTINGS_CACHE_TTL_MS,
   };
 
   return settings;

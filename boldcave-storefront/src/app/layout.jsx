@@ -11,7 +11,6 @@ import RootLayoutClient from '@/components/RootLayoutClient';
 import { withRuntimeDatabase } from '@/lib/cloudflareMongoose';
 import appIcon from './icon-new.png';
 import {
-  BRAND_ICON_PATH,
   DEFAULT_DESCRIPTION,
   DEFAULT_TITLE,
   SITE_NAME,
@@ -47,12 +46,20 @@ export const metadata = {
     siteName: SITE_NAME,
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
+    images: [
+      {
+        url: APP_ICON_PATH,
+        width: 512,
+        height: 512,
+        alt: 'Bold Cave logo',
+      },
+    ],
   },
   twitter: {
     card: 'summary',
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
-    images: [BRAND_ICON_PATH],
+    images: [APP_ICON_PATH],
   },
 };
 

@@ -3,8 +3,10 @@ import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, noStoreHeaders, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
+import { cleanString, isValidEmail } from "@/lib/validation";
 import {
   getSerializedStoreSettings,
+  normalizeStorefrontUrl,
   serializeStoreSettings,
   updateStoreSettings,
 } from "@/lib/storeSettings";
@@ -27,7 +29,7 @@ async function getAdminStoreSettingsRoute(request) {
     await connectDB();
     return applyAdminCors(
       request,
-      success(await getSerializedStoreSettings(), 200, {
+      success(await getSerializedStoreSettings({ includePrivate: true }), 200, {
         headers: noStoreHeaders,
       })
     );
@@ -46,6 +48,21 @@ async function updateAdminStoreSettingsRoute(request) {
     if (auth.response) return applyAdminCors(request, auth.response);
 
     const body = await readJson(request);
+    const customerMessaging = validateCustomerMessaging(body.customerMessaging);
+    if (customerMessaging?.error) {
+      return applyAdminCors(
+        request,
+        failure("INVALID_CUSTOMER_MESSAGING", customerMessaging.error, 400)
+      );
+    }
+    const adminNotifications = validateAdminNotifications(body.adminNotifications);
+    if (adminNotifications?.error) {
+      return applyAdminCors(
+        request,
+        failure("INVALID_ADMIN_NOTIFICATIONS", adminNotifications.error, 400)
+      );
+    }
+
     await connectDB();
     const settings = await updateStoreSettings({
       ...(body.acceptingOrders !== undefined
@@ -60,11 +77,17 @@ async function updateAdminStoreSettingsRoute(request) {
       ...(body.autoApproveReviews !== undefined
         ? { autoApproveReviews: body.autoApproveReviews === true }
         : {}),
+      ...(customerMessaging?.value
+        ? { customerMessaging: customerMessaging.value }
+        : {}),
+      ...(adminNotifications?.value
+        ? { adminNotifications: adminNotifications.value }
+        : {}),
     });
 
     return applyAdminCors(
       request,
-      success(serializeStoreSettings(settings), 200, {
+      success(serializeStoreSettings(settings, { includePrivate: true }), 200, {
         headers: noStoreHeaders,
       })
     );
@@ -91,4 +114,43 @@ async function updateAdminStoreSettingsRoute(request) {
       )
     );
   }
+}
+
+function validateCustomerMessaging(value) {
+  if (value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { error: "Customer messaging settings are invalid." };
+  }
+
+  const defaultMessage = cleanString(value.defaultMessage, 5001);
+  const siteUrlInput = cleanString(value.siteUrl, 501);
+  const siteUrl = normalizeStorefrontUrl(siteUrlInput);
+  if (!defaultMessage) return { error: "Default message is required." };
+  if (defaultMessage.length > 5000) return { error: "Default message is too long." };
+  if (!siteUrl || siteUrlInput.length > 500) {
+    return { error: "Enter a valid storefront URL, for example www.boldcave.com." };
+  }
+
+  return { value: { defaultMessage, siteUrl } };
+}
+
+function validateAdminNotifications(value) {
+  if (value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { error: "Owner notification settings are invalid." };
+  }
+
+  const email = cleanString(value.email, 321).toLowerCase();
+  if (email && (email.length > 320 || !isValidEmail(email))) {
+    return { error: "Enter a valid notification email address." };
+  }
+
+  return {
+    value: {
+      email,
+      newCustomer: value.newCustomer !== false,
+      newOrder: value.newOrder !== false,
+      orderCancelled: value.orderCancelled !== false,
+    },
+  };
 }

@@ -28,10 +28,12 @@ const CLOUDFLARE_MONGOOSE_OPTIONS = {
 
 async function getConnectionModels(connection) {
   const [
+    { AdminNotificationSchema },
     { CouponSchema },
     { CouponUsageSchema },
     { DelhiveryPickupRecordSchema },
     { HomepageSettingsSchema },
+    { MessageDeliverySchema },
     { OrderSchema },
     { OtpRateLimitSchema },
     { OtpVerificationSchema },
@@ -42,10 +44,12 @@ async function getConnectionModels(connection) {
     { StoreSettingsSchema },
     { UserSchema },
   ] = await Promise.all([
+    import("@/models/AdminNotification"),
     import("@/models/Coupon"),
     import("@/models/CouponUsage"),
     import("@/models/DelhiveryPickupRecord"),
     import("@/models/HomepageSettings"),
+    import("@/models/MessageDelivery"),
     import("@/models/Order"),
     import("@/models/OtpRateLimit"),
     import("@/models/OtpVerification"),
@@ -58,10 +62,12 @@ async function getConnectionModels(connection) {
   ]);
 
   const modelDefinitions = {
+    AdminNotification: AdminNotificationSchema,
     Coupon: CouponSchema,
     CouponUsage: CouponUsageSchema,
     DelhiveryPickupRecord: DelhiveryPickupRecordSchema,
     HomepageSettings: HomepageSettingsSchema,
+    MessageDelivery: MessageDeliverySchema,
     Order: OrderSchema,
     OtpRateLimit: OtpRateLimitSchema,
     OtpVerification: OtpVerificationSchema,

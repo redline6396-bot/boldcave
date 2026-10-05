@@ -26,6 +26,7 @@ async function getAdminUsersRoute(request) {
     const status = searchParams.get("status");
     const limit = Math.min(Number(searchParams.get("limit")) || 50, 100);
     const skip = Math.max(Number(searchParams.get("skip")) || 0, 0);
+    const sort = searchParams.get("sort") === "oldest" ? "oldest" : "newest";
 
     const filter = {};
     if (status) filter.status = status;
@@ -57,7 +58,10 @@ async function getAdminUsersRoute(request) {
 
     await connectDB();
     const [users, total] = await Promise.all([
-      User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      User.find(filter)
+        .sort({ createdAt: sort === "oldest" ? 1 : -1, _id: sort === "oldest" ? 1 : -1 })
+        .skip(skip)
+        .limit(limit),
       User.countDocuments(filter),
     ]);
 

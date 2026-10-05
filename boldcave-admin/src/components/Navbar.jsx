@@ -5,6 +5,7 @@ import { LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { NotificationContext } from '@/context/NotificationContext';
 import { api, getErrorMessage } from '@/lib/api';
+import AdminNotificationPanel from './AdminNotificationPanel';
 
 const Navbar = ({ onLogout }) => {
   const router = useRouter();
@@ -32,15 +33,18 @@ const Navbar = ({ onLogout }) => {
         <p className='text-sm font-semibold text-gray-900'>Bold Cave Admin</p>
         <p className='text-xs text-gray-500'>Perfume store operations</p>
       </div>
-      <button
-        onClick={logout}
-        disabled={loading}
-        className='inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50'
-        title='Logout'
-      >
-        <LogOut size={16} />
-        {loading ? 'Logging out...' : 'Logout'}
-      </button>
+      <div className='flex items-center gap-2'>
+        <AdminNotificationPanel />
+        <button
+          onClick={logout}
+          disabled={loading}
+          className='inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50'
+          title='Logout'
+        >
+          <LogOut size={16} />
+          {loading ? 'Logging out...' : 'Logout'}
+        </button>
+      </div>
     </div>
   );
 };

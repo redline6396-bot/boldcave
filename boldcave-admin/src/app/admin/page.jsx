@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { NotificationContext } from '@/context/NotificationContext';
 import { api, formatDateTime, getErrorMessage } from '@/lib/api';
+import MessagingSettings from '@/features/admin/settings/MessagingSettings';
 
 const RANGE_OPTIONS = [
   { label: 'Last 7 days', value: '7d' },
@@ -316,6 +317,8 @@ const Dashboard = () => {
           onSave={saveCodCharge}
         />
       </section>
+
+      <MessagingSettings />
 
       <section className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>
         {cards.map((card) => (

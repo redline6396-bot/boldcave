@@ -31,6 +31,7 @@ import {
 import { isAcceptingOrders } from "@/lib/storeSettings";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
 import Order from "@/models/Order";
+import { safeSendOwnerNotification } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 
@@ -289,7 +290,13 @@ async function createCodOrderRoute(request) {
       shippingSyncStatus === "created" &&
       hasProviderShipmentIdentity(syncedOrder)
     ) {
-      return success({ order: await markCodOrderConfirmed(syncedOrder) }, 201);
+      const confirmedOrder = await markCodOrderConfirmed(syncedOrder);
+      await safeSendOwnerNotification({
+        kind: "new_order",
+        eventId: confirmedOrder._id,
+        order: confirmedOrder,
+      });
+      return success({ order: confirmedOrder }, 201);
     }
 
     if (shippingSyncStatus === "failed" || shippingSyncStatus === "not_configured") {

@@ -20,6 +20,7 @@ import {
 } from "@/lib/orders/cancellationEligibility";
 import { cleanString, isObjectId } from "@/lib/validation";
 import Order from "@/models/Order";
+import { safeSendOwnerNotification } from "@/lib/notifications";
 
 export class CancellationError extends Error {
   constructor(code, message, status = 400, details = undefined) {
@@ -195,6 +196,14 @@ async function finalizeCancellation({
     });
   } finally {
     await session.endSession();
+  }
+
+  if (finalOrder) {
+    await safeSendOwnerNotification({
+      kind: "order_cancelled",
+      eventId: finalOrder._id,
+      order: finalOrder,
+    });
   }
 
   return finalOrder;

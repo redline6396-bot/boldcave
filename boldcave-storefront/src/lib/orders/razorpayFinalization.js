@@ -6,6 +6,7 @@ import { syncUserProfileFromCheckoutAddress } from "@/lib/auth/users";
 import { syncShipment } from "@/lib/shipping";
 import Order from "@/models/Order";
 import RazorpayAttempt from "@/models/RazorpayAttempt";
+import { safeSendOwnerNotification } from "@/lib/notifications";
 
 export const PAYMENT_CONFIRMATION_PENDING_MESSAGE =
   "We're confirming your payment. Please don't make another payment right now.";
@@ -329,6 +330,12 @@ export async function finalizeCapturedRazorpayAttempt({
   });
 
   await syncAttemptUserProfile(claimedAttempt);
+
+  await safeSendOwnerNotification({
+    kind: "new_order",
+    eventId: order._id,
+    order,
+  });
 
   if (!runShipping) {
     return { order, idempotent: false };

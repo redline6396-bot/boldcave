@@ -2,9 +2,10 @@ import connectDB from "@/lib/db";
 import { failure, handleRouteError, readJson, success } from "@/lib/api/response";
 import { setUserSessionCookie, signUserSession, safeUser } from "@/lib/auth/session";
 import { OtpTestPhoneNotAllowedError, verifyOtp } from "@/lib/auth/otpProvider";
-import { findOrCreateUserForPhone } from "@/lib/auth/users";
+import { findOrCreateUserForPhoneWithStatus } from "@/lib/auth/users";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
 import { isValidPhone, normalizePhone } from "@/lib/validation";
+import { safeSendOwnerNotification } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,7 @@ async function verifyOtpRoute(request) {
     }
 
     await connectDB();
-    const user = await findOrCreateUserForPhone(phone);
+    const { user, created } = await findOrCreateUserForPhoneWithStatus(phone);
 
     if (!user) {
       return failure("USER_LOGIN_FAILED", "Something went wrong. Please try again.", 500);
@@ -49,6 +50,14 @@ async function verifyOtpRoute(request) {
     if (!user.phoneVerified) {
       user.phoneVerified = true;
       await user.save();
+    }
+
+    if (created) {
+      await safeSendOwnerNotification({
+        kind: "new_customer",
+        eventId: user._id,
+        user,
+      });
     }
 
     const token = signUserSession(user);

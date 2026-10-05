@@ -59,6 +59,16 @@ const storeSettingsSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    customerMessaging: {
+      defaultMessage: { type: String, trim: true, maxlength: 5000 },
+      siteUrl: { type: String, trim: true, maxlength: 500 },
+    },
+    adminNotifications: {
+      email: { type: String, trim: true, lowercase: true, maxlength: 320 },
+      newCustomer: { type: Boolean, default: true },
+      newOrder: { type: Boolean, default: true },
+      orderCancelled: { type: Boolean, default: true },
+    },
   },
   { timestamps: true }
 );
@@ -69,7 +79,9 @@ if (
     !mongoose.models.StoreSettings.schema?.path("comingSoonMode") ||
     !mongoose.models.StoreSettings.schema?.path("delhiveryPickup.autoPickupEnabled") ||
     !mongoose.models.StoreSettings.schema?.path("delhiveryPickup.cancelledAt") ||
-    !mongoose.models.StoreSettings.schema?.path("autoApproveReviews"))
+    !mongoose.models.StoreSettings.schema?.path("autoApproveReviews") ||
+    !mongoose.models.StoreSettings.schema?.path("customerMessaging.defaultMessage") ||
+    !mongoose.models.StoreSettings.schema?.path("adminNotifications.email"))
 ) {
   delete mongoose.models.StoreSettings;
 }
