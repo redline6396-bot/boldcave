@@ -62,6 +62,14 @@ const storeSettingsSchema = new mongoose.Schema(
     customerMessaging: {
       defaultMessage: { type: String, trim: true, maxlength: 5000 },
       siteUrl: { type: String, trim: true, maxlength: 500 },
+      promotionalImage: {
+        url: { type: String, trim: true, maxlength: 1000 },
+        publicId: { type: String, trim: true, maxlength: 300 },
+        width: { type: Number, min: 0 },
+        height: { type: Number, min: 0 },
+        format: { type: String, trim: true, maxlength: 20 },
+        bytes: { type: Number, min: 0 },
+      },
     },
     adminNotifications: {
       email: { type: String, trim: true, lowercase: true, maxlength: 320 },
@@ -81,6 +89,7 @@ if (
     !mongoose.models.StoreSettings.schema?.path("delhiveryPickup.cancelledAt") ||
     !mongoose.models.StoreSettings.schema?.path("autoApproveReviews") ||
     !mongoose.models.StoreSettings.schema?.path("customerMessaging.defaultMessage") ||
+    !mongoose.models.StoreSettings.schema?.path("customerMessaging.promotionalImage.publicId") ||
     !mongoose.models.StoreSettings.schema?.path("adminNotifications.email"))
 ) {
   delete mongoose.models.StoreSettings;

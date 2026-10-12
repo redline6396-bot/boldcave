@@ -25,6 +25,8 @@ const messageDeliverySchema = new mongoose.Schema(
     subject: { type: String, required: true, trim: true, maxlength: 300 },
     message: { type: String, required: true, maxlength: 10000 },
     couponCode: { type: String, trim: true, uppercase: true },
+    promotionalImageUrl: { type: String, trim: true, maxlength: 1000 },
+    promotionalImagePublicId: { type: String, trim: true, maxlength: 300 },
     status: { type: String, enum: ["sent", "failed"], required: true },
     providerMessageId: { type: String, trim: true },
     errorCode: { type: String, trim: true, maxlength: 100 },
@@ -38,6 +40,13 @@ messageDeliverySchema.index({ userId: 1, audience: 1, createdAt: -1 });
 messageDeliverySchema.index({ orderId: 1, kind: 1, createdAt: -1 });
 
 export const MessageDeliverySchema = messageDeliverySchema;
+
+if (
+  mongoose.models.MessageDelivery &&
+  !mongoose.models.MessageDelivery.schema?.path("promotionalImageUrl")
+) {
+  delete mongoose.models.MessageDelivery;
+}
 
 const MessageDeliveryModel =
   mongoose.models.MessageDelivery ||

@@ -1,9 +1,16 @@
 'use client';
 
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, Mail, MessageCircle, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, ImageUp, Mail, MessageCircle, Search, Trash2, X } from 'lucide-react';
 import { NotificationContext } from '@/context/NotificationContext';
 import { api, formatDate, formatDateTime, getErrorMessage, getId, money } from '@/lib/api';
+import {
+  copyPromotionalImageToClipboard,
+  deleteTemporaryPromotionalImage,
+  PROMOTIONAL_IMAGE_ACCEPT,
+  uploadPromotionalImage,
+  validatePromotionalImageFile,
+} from '@/lib/promotionalImages';
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -17,6 +24,10 @@ export default function UsersPage() {
   const [messageUser, setMessageUser] = useState(null);
   const [messageData, setMessageData] = useState(null);
   const [messageTemplate, setMessageTemplate] = useState('');
+  const [messageImage, setMessageImage] = useState(null);
+  const [messageImageOrigin, setMessageImageOrigin] = useState('none');
+  const [messageImageUpload, setMessageImageUpload] = useState({ status: '', progress: 0, message: '' });
+  const [copyingImage, setCopyingImage] = useState(false);
   const [couponId, setCouponId] = useState('');
   const [messageLoading, setMessageLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -87,6 +98,10 @@ export default function UsersPage() {
     setMessageUser(user);
     setMessageData(null);
     setMessageTemplate('');
+    setMessageImage(null);
+    setMessageImageOrigin('none');
+    setMessageImageUpload({ status: '', progress: 0, message: '' });
+    setCopyingImage(false);
     setCouponId('');
     try {
       setMessageLoading(true);
@@ -94,6 +109,8 @@ export default function UsersPage() {
       const data = response.data.data;
       setMessageData(data);
       setMessageTemplate(data.customerMessaging?.defaultMessage || '');
+      setMessageImage(data.customerMessaging?.promotionalImage || null);
+      setMessageImageOrigin(data.customerMessaging?.promotionalImage ? 'global' : 'none');
     } catch (err) {
       showError(getErrorMessage(err, 'Unable to load message details'));
       setMessageUser(null);
@@ -123,6 +140,82 @@ export default function UsersPage() {
     }
   };
 
+  const uploadMessageImage = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    const validationError = validatePromotionalImageFile(file);
+    if (validationError) {
+      setMessageImageUpload({ status: 'error', progress: 0, message: validationError });
+      showError(validationError);
+      return;
+    }
+
+    const previousOverride = messageImageOrigin === 'override'
+      ? messageImage?.publicId
+      : '';
+    try {
+      setMessageImageUpload({ status: 'uploading', progress: 0, message: 'Uploading image...' });
+      const image = await uploadPromotionalImage(file, (progress) => {
+        setMessageImageUpload({ status: 'uploading', progress, message: `Uploading image... ${progress}%` });
+      });
+      setMessageImage(image);
+      setMessageImageOrigin('override');
+      setMessageImageUpload({ status: 'success', progress: 100, message: 'Customer-specific image uploaded.' });
+      if (previousOverride && previousOverride !== image.publicId) {
+        void deleteTemporaryPromotionalImage(previousOverride).catch(() => {});
+      }
+    } catch (error) {
+      const message = getErrorMessage(error, 'Unable to upload promotional image');
+      setMessageImageUpload({ status: 'error', progress: 0, message });
+      showError(message);
+    }
+  };
+
+  const removeMessageImage = () => {
+    if (messageImageOrigin === 'override' && messageImage?.publicId) {
+      void deleteTemporaryPromotionalImage(messageImage.publicId).catch(() => {});
+    }
+    setMessageImage(null);
+    setMessageImageOrigin('none');
+    setMessageImageUpload({ status: 'success', progress: 0, message: 'Image removed for this customer only.' });
+  };
+
+  const restoreGlobalMessageImage = () => {
+    if (messageImageOrigin === 'override' && messageImage?.publicId) {
+      void deleteTemporaryPromotionalImage(messageImage.publicId).catch(() => {});
+    }
+    const globalImage = messageData?.customerMessaging?.promotionalImage || null;
+    setMessageImage(globalImage);
+    setMessageImageOrigin(globalImage ? 'global' : 'none');
+    setMessageImageUpload({ status: '', progress: 0, message: '' });
+  };
+
+  const closeMessage = () => {
+    if (sending || messageImageUpload.status === 'uploading') return;
+    if (messageImageOrigin === 'override' && messageImage?.publicId) {
+      void deleteTemporaryPromotionalImage(messageImage.publicId).catch(() => {});
+    }
+    setMessageUser(null);
+    setMessageData(null);
+    setMessageImage(null);
+    setMessageImageOrigin('none');
+    setMessageImageUpload({ status: '', progress: 0, message: '' });
+    setCopyingImage(false);
+  };
+
+  const copyMessageImage = async () => {
+    if (!messageImage?.url || copyingImage) return;
+    try {
+      setCopyingImage(true);
+      await copyPromotionalImageToClipboard(messageImage.url);
+      success('Image copied. Paste it into WhatsApp or Gmail.');
+    } catch (error) {
+      showError(error?.message || 'Unable to copy image');
+    } finally {
+      setCopyingImage(false);
+    }
+  };
+
   const selectedCoupon = useMemo(
     () => messageData?.coupons?.find((coupon) => coupon.id === couponId) || null,
     [couponId, messageData?.coupons]
@@ -137,8 +230,8 @@ export default function UsersPage() {
     [messageData?.customerMessaging?.siteUrl, messageData?.user, messageTemplate, selectedCoupon?.code]
   );
   const whatsappUrl = useMemo(
-    () => buildWhatsAppUrl(messageData?.user?.phone, preview),
-    [messageData?.user?.phone, preview]
+    () => buildWhatsAppUrl(messageData?.user?.phone, preview, selectedCoupon?.code),
+    [messageData?.user?.phone, preview, selectedCoupon?.code]
   );
   const gmailUrl = useMemo(
     () => buildGmailUrl(messageData?.user?.email, preview, selectedCoupon?.code),
@@ -276,18 +369,27 @@ export default function UsersPage() {
           couponId={couponId}
           setCouponId={setCouponId}
           preview={preview}
+          image={messageImage}
+          imageOrigin={messageImageOrigin}
+          globalImage={messageData?.customerMessaging?.promotionalImage || null}
+          imageUpload={messageImageUpload}
+          onImageUpload={uploadMessageImage}
+          onImageRemove={removeMessageImage}
+          onRestoreGlobalImage={restoreGlobalMessageImage}
+          copyingImage={copyingImage}
+          onCopyImage={copyMessageImage}
           whatsappUrl={whatsappUrl}
           gmailUrl={gmailUrl}
           sending={sending}
           onSend={sendMessage}
-          onClose={() => !sending && setMessageUser(null)}
+          onClose={closeMessage}
         />
       )}
     </div>
   );
 }
 
-function MessageModal({ loading, data, template, setTemplate, couponId, setCouponId, preview, whatsappUrl, gmailUrl, sending, onSend, onClose }) {
+function MessageModal({ loading, data, template, setTemplate, couponId, setCouponId, preview, image, imageOrigin, globalImage, imageUpload, onImageUpload, onImageRemove, onRestoreGlobalImage, copyingImage, onCopyImage, whatsappUrl, gmailUrl, sending, onSend, onClose }) {
   const user = data?.user;
   const lastMessage = data?.lastMessage;
   return (
@@ -295,7 +397,7 @@ function MessageModal({ loading, data, template, setTemplate, couponId, setCoupo
       <div className='max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded bg-white p-6 shadow-xl'>
         <div className='flex items-center justify-between gap-4'>
           <h2 className='text-xl font-bold text-gray-950'>Send Message</h2>
-          <button type='button' onClick={onClose} disabled={sending} className='rounded p-1 hover:bg-gray-100 disabled:opacity-50' aria-label='Close'><X size={20} /></button>
+          <button type='button' onClick={onClose} disabled={sending || imageUpload.status === 'uploading'} className='rounded p-1 hover:bg-gray-100 disabled:opacity-50' aria-label='Close'><X size={20} /></button>
         </div>
         {loading || !data ? (
           <p className='mt-6 text-sm text-gray-500'>Loading customer message...</p>
@@ -323,12 +425,55 @@ function MessageModal({ loading, data, template, setTemplate, couponId, setCoupo
               <textarea value={template} onChange={(event) => setTemplate(event.target.value)} rows={9} maxLength={5000} className='mt-1 w-full rounded border border-gray-300 px-3 py-2 font-normal outline-none focus:border-black' />
             </label>
 
-            <div className='rounded border border-gray-200 p-4'>
-              <p className='text-xs font-semibold uppercase text-gray-500'>Preview</p>
-              <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-800'>{preview || 'Message preview is empty.'}</p>
+            <div>
+              <div className='flex flex-wrap items-center justify-between gap-2'>
+                <p className='text-sm font-semibold text-gray-700'>Promotional Image <span className='font-normal text-gray-400'>(optional)</span></p>
+                {image && (
+                  <button type='button' onClick={onCopyImage} disabled={copyingImage} className='inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50'>
+                    <Copy size={14} /> {copyingImage ? 'Copying...' : 'Copy Image'}
+                  </button>
+                )}
+              </div>
+              {image ? (
+                <div className='mt-2 flex flex-col gap-3 rounded border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-center'>
+                  <img src={image.url} alt='Selected promotional preview' className='h-24 w-full rounded border border-gray-200 bg-white object-cover sm:w-24' />
+                  <div className='min-w-0 flex-1'>
+                    <p className='text-sm font-medium text-gray-800'>{imageOrigin === 'global' ? 'Global default image' : 'Customer-specific image'}</p>
+                    <p className='mt-1 text-xs text-gray-500'>JPG, PNG, or WebP · maximum 5 MB</p>
+                  </div>
+                  <button type='button' onClick={onImageRemove} disabled={imageUpload.status === 'uploading'} className='inline-flex items-center justify-center gap-1 rounded border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-50'>
+                    <Trash2 size={14} /> Remove
+                  </button>
+                </div>
+              ) : (
+                <p className='mt-2 rounded border border-dashed border-gray-300 bg-gray-50 p-4 text-center text-xs text-gray-500'>No image selected. Text-only messaging remains available.</p>
+              )}
+              <div className='mt-2 flex flex-wrap items-center gap-2'>
+                <label className={`inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 ${imageUpload.status === 'uploading' ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}>
+                  <ImageUp size={15} /> {image ? 'Replace image' : 'Upload image'}
+                  <input type='file' accept={PROMOTIONAL_IMAGE_ACCEPT} onChange={onImageUpload} disabled={imageUpload.status === 'uploading'} className='hidden' />
+                </label>
+                {globalImage && image?.publicId !== globalImage.publicId && (
+                  <button type='button' onClick={onRestoreGlobalImage} disabled={imageUpload.status === 'uploading'} className='rounded border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50'>Use global default</button>
+                )}
+                {imageUpload.message && (
+                  <span className={`text-xs ${imageUpload.status === 'error' ? 'text-red-600' : imageUpload.status === 'success' ? 'text-green-700' : 'text-gray-500'}`}>{imageUpload.message}</span>
+                )}
+              </div>
+              {imageUpload.status === 'uploading' && (
+                <div className='mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100' aria-label={`Upload progress ${imageUpload.progress}%`}>
+                  <div className='h-full rounded-full bg-black transition-[width]' style={{ width: `${imageUpload.progress}%` }} />
+                </div>
+              )}
             </div>
 
-            {lastMessage && (
+            <div className='rounded border border-gray-200 p-4'>
+              <p className='text-xs font-semibold uppercase text-gray-500'>Preview</p>
+              {image && <img src={image.url} alt='Promotional image preview' className='mt-3 max-h-64 w-full rounded border border-gray-200 bg-gray-50 object-contain' />}
+              <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-800'>{preview ? renderMessagePreview(preview, couponId ? data.coupons?.find((coupon) => coupon.id === couponId)?.code : '') : 'Message preview is empty.'}</p>
+            </div>
+
+            {data.emailDeliveryConfigured && lastMessage && (
               <div className={`rounded border p-3 text-sm ${lastMessage.status === 'sent' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
                 <p className='font-semibold'>{lastMessage.status === 'sent' ? 'Sent via Email' : 'Failed - Retry available'}</p>
                 <p className='mt-1 text-xs'>{formatDateTime(lastMessage.sentAt || lastMessage.createdAt)} IST</p>
@@ -346,8 +491,8 @@ function MessageModal({ loading, data, template, setTemplate, couponId, setCoupo
               <p className='text-xs text-gray-500'>Gmail opens a compose window with the customer, subject, and final message prefilled. Send confirmation happens inside Gmail.</p>
             )}
             <div className='flex flex-wrap justify-end gap-3 pt-1'>
-              <button type='button' onClick={onClose} disabled={sending} className='rounded border border-gray-300 px-4 py-2 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50'>Cancel</button>
-              {whatsappUrl ? (
+              <button type='button' onClick={onClose} disabled={sending || imageUpload.status === 'uploading'} className='rounded border border-gray-300 px-4 py-2 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50'>Cancel</button>
+              {whatsappUrl && imageUpload.status !== 'uploading' ? (
                 <a href={whatsappUrl} target='_blank' rel='noreferrer' className='inline-flex items-center gap-2 rounded bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700'>
                   <MessageCircle size={16} />
                   Open WhatsApp
@@ -359,11 +504,11 @@ function MessageModal({ loading, data, template, setTemplate, couponId, setCoupo
                 </button>
               )}
               {data.emailDeliveryConfigured ? (
-                <button type='button' onClick={onSend} disabled={sending || !user.email || !template.trim() || !preview} className='inline-flex items-center gap-2 rounded bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50'>
+                <button type='button' onClick={onSend} disabled={sending || imageUpload.status === 'uploading' || !user.email || !template.trim() || !preview} className='inline-flex items-center gap-2 rounded bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50'>
                   <Mail size={16} />
                   {sending ? 'Sending...' : lastMessage?.status === 'sent' ? 'Send Again' : 'Send Email'}
                 </button>
-              ) : gmailUrl ? (
+              ) : gmailUrl && imageUpload.status !== 'uploading' ? (
                 <a href={gmailUrl} target='_blank' rel='noreferrer' className='inline-flex items-center gap-2 rounded bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800'>
                   <Mail size={16} />
                   Open Gmail
@@ -396,7 +541,7 @@ function resolvePreview({ template, user, couponCode, siteUrl }) {
     .trim();
 }
 
-function buildWhatsAppUrl(phone, message) {
+function buildWhatsAppUrl(phone, message, couponCode) {
   const digits = String(phone || '').replace(/\D/g, '');
   const normalizedPhone = /^91[6-9]\d{9}$/.test(digits)
     ? digits
@@ -405,7 +550,33 @@ function buildWhatsAppUrl(phone, message) {
       : '';
 
   if (!normalizedPhone || !message) return '';
-  return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(formatWhatsAppCoupon(message, couponCode))}`;
+}
+
+function formatWhatsAppCoupon(message, couponCode) {
+  const code = String(couponCode || '').trim();
+  if (!code) return message;
+  const pattern = new RegExp(escapeRegExp(code), 'gi');
+  return String(message).replace(pattern, (match, offset, source) => (
+    source[offset - 1] === '*' && source[offset + match.length] === '*'
+      ? match
+      : `*${match}*`
+  ));
+}
+
+function renderMessagePreview(message, couponCode) {
+  const code = String(couponCode || '').trim();
+  if (!code) return message;
+  const pattern = new RegExp(`(${escapeRegExp(code)})`, 'gi');
+  return String(message).split(pattern).map((part, index) => (
+    part.toLowerCase() === code.toLowerCase()
+      ? <strong key={`${part}-${index}`} className='font-bold text-gray-950'>{part}</strong>
+      : part
+  ));
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function buildGmailUrl(email, message, couponCode) {

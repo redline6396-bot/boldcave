@@ -86,6 +86,22 @@ export function serializeCustomerMessaging(value = {}) {
     defaultMessage:
       String(value?.defaultMessage || "").trim() || DEFAULT_CUSTOMER_MESSAGE,
     siteUrl: formatStorefrontUrlForDisplay(configuredSiteUrl),
+    promotionalImage: serializePromotionalImage(value?.promotionalImage),
+  };
+}
+
+export function serializePromotionalImage(value) {
+  const url = String(value?.url || "").trim();
+  const publicId = String(value?.publicId || "").trim();
+  if (!url || !publicId) return null;
+
+  return {
+    url,
+    publicId,
+    width: Math.max(0, Number(value?.width || 0)),
+    height: Math.max(0, Number(value?.height || 0)),
+    format: String(value?.format || "").trim().toLowerCase(),
+    bytes: Math.max(0, Number(value?.bytes || 0)),
   };
 }
 
@@ -174,6 +190,7 @@ export async function getStoreSettings({
           siteUrl: String(
             process.env.STOREFRONT_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
           ).trim(),
+          promotionalImage: null,
         },
         adminNotifications: DEFAULT_ADMIN_NOTIFICATIONS,
       },
@@ -284,6 +301,7 @@ export async function updateStoreSettings({
         siteUrl: String(
           process.env.STOREFRONT_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
         ).trim(),
+        promotionalImage: null,
       },
       adminNotifications: DEFAULT_ADMIN_NOTIFICATIONS,
     },

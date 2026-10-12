@@ -3,6 +3,7 @@ import { applyAdminCors, adminPreflight } from "@/lib/api/cors";
 import { failure, handleRouteError, noStoreHeaders, readJson, success } from "@/lib/api/response";
 import { requireAdmin } from "@/lib/auth/session";
 import { withRuntimeDatabase } from "@/lib/cloudflareMongoose";
+import { isOwnedPromotionalImagePublicId, verifyPromotionalImage } from "@/lib/cloudinary/server";
 import { isEmailDeliveryConfigured, sendEmail } from "@/lib/email";
 import { hasPreviousOrder } from "@/lib/orders/pricing";
 import {
@@ -87,6 +88,7 @@ async function sendMessageRoute(request, { params }) {
     const body = await readJson(request);
     const template = cleanString(body.message, 5001);
     const couponId = cleanString(body.couponId, 100);
+    const requestedImagePublicId = cleanString(body.promotionalImage?.publicId, 301);
     if (!template) {
       return applyAdminCors(request, failure("MESSAGE_REQUIRED", "Message is required.", 400));
     }
@@ -147,6 +149,28 @@ async function sendMessageRoute(request, { params }) {
       );
     }
 
+    let promotionalImage = null;
+    if (requestedImagePublicId) {
+      if (!isOwnedPromotionalImagePublicId(requestedImagePublicId)) {
+        return applyAdminCors(
+          request,
+          failure("PROMOTIONAL_IMAGE_INVALID", "Select a valid promotional image.", 400)
+        );
+      }
+      if (requestedImagePublicId === messaging.promotionalImage?.publicId) {
+        promotionalImage = messaging.promotionalImage;
+      } else {
+        try {
+          promotionalImage = await verifyPromotionalImage(requestedImagePublicId);
+        } catch {
+          return applyAdminCors(
+            request,
+            failure("PROMOTIONAL_IMAGE_INVALID", "The promotional image could not be verified.", 400)
+          );
+        }
+      }
+    }
+
     const subject = selectedCoupon
       ? `${selectedCoupon.code} - a special offer from Bold Cave`
       : "A message from Bold Cave";
@@ -159,6 +183,8 @@ async function sendMessageRoute(request, { params }) {
       subject,
       message: resolvedMessage,
       couponCode: selectedCoupon?.code || undefined,
+      promotionalImageUrl: promotionalImage?.url || undefined,
+      promotionalImagePublicId: promotionalImage?.publicId || undefined,
       status: "failed",
       errorCode: "DELIVERY_PENDING",
       errorSummary: "Delivery has not completed.",
@@ -269,6 +295,7 @@ function serializeDelivery(delivery) {
     recipient: delivery.recipient,
     status: delivery.status,
     couponCode: delivery.couponCode || "",
+    promotionalImageUrl: delivery.promotionalImageUrl || "",
     sentAt: delivery.sentAt || null,
     createdAt: delivery.createdAt || null,
     errorSummary: delivery.status === "failed" ? delivery.errorSummary || "Email delivery failed." : "",
