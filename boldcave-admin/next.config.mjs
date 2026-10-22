@@ -33,6 +33,7 @@ function getStorefrontApiOrigin(value) {
 const storefrontApiOrigin = getStorefrontApiOrigin(
   configuredStorefrontApiOrigin
 );
+const adminProxyBasePath = "/backend-v2";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -45,10 +46,33 @@ const nextConfig = {
     root: appRoot,
   },
 
+  async headers() {
+    return [
+      {
+        source: "/login",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, max-age=0",
+          },
+        ],
+      },
+      {
+        source: `${adminProxyBasePath}/:path*`,
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, max-age=0",
+          },
+        ],
+      },
+    ];
+  },
+
   async rewrites() {
     return [
       {
-        source: "/backend/:path*",
+        source: `${adminProxyBasePath}/:path*`,
         destination: `${storefrontApiOrigin}/:path*`,
       },
     ];

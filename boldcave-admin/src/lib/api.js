@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const ADMIN_PROXY_BASE_PATH = "/backend";
+// Versioned to bypass permanent redirects cached by browsers for /backend.
+const ADMIN_PROXY_BASE_PATH = "/backend-v2";
 
 const directApiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
