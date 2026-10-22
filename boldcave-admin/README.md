@@ -10,6 +10,6 @@ Admin panel for Bold Cave operations.
 - `npm run upload` builds the Cloudflare worker bundle and uploads it.
 - `npm run deploy` builds and deploys through OpenNext Cloudflare.
 
-For production admin deployments, set `STOREFRONT_API_ORIGIN` to the deployed storefront/API origin.
+For production admin deployments, set `STOREFRONT_API_ORIGIN` to the canonical HTTPS storefront/API origin (currently `https://boldcave.com`).
 Browser API requests use the same-origin `/backend` rewrite in production.
 `NEXT_PUBLIC_API_BASE_URL` is still supported for local development.
